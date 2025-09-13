@@ -465,9 +465,12 @@ function App() {
                 />
                 <Lock className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
-              <p className="text-green-400 text-sm mt-1 hover:underline cursor-pointer">
+              <button
+                onClick={() => handleScreenTransition('recovery')}
+                className="text-green-400 text-sm mt-1 hover:underline"
+              >
                 Esqueceu a senha?
-              </p>
+              </button>
             </div>
 
             <div className="flex items-center">
