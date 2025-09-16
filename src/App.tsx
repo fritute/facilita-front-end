@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, User, Phone } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft } from 'lucide-react';
 
 interface UserData {
   nome: string;
@@ -10,8 +10,16 @@ interface UserData {
   telefone: string;
 }
 
+interface RegisterData {
+  nome: string;
+  senha_hash: string;
+  email: string;
+  telefone: string;
+  tipo_conta: 'CONTRATANTE' | 'PRESTADOR';
+}
+
 function App() {
-  const [currentScreen, setCurrentScreen] = useState<'login' | 'cadastro' | 'success' | 'recovery' | 'verification'>('login');
+  const [currentScreen, setCurrentScreen] = useState<'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider'>('login');
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -20,6 +28,8 @@ function App() {
   const [recoveryContact, setRecoveryContact] = useState('');
   const [verificationCode, setVerificationCode] = useState(['', '', '', '', '']);
   const [countdown, setCountdown] = useState(27);
+  const [selectedAccountType, setSelectedAccountType] = useState<'CONTRATANTE' | 'PRESTADOR' | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   const [loginData, setLoginData] = useState({
     email: 'seuemeil@gmail.com',
@@ -35,7 +45,7 @@ function App() {
     telefone: '(11) 90000-1234'
   });
 
-  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification') => {
+  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider') => {
     setIsTransitioning(true);
     setTimeout(() => {
       setCurrentScreen(newScreen);
@@ -60,10 +70,105 @@ function App() {
   };
 
   const handleCadastro = () => {
-    handleScreenTransition('success');
-    setTimeout(() => {
-      handleScreenTransition('login');
-    }, 2000);
+    // Validações básicas
+    if (userData.email !== userData.confirmarEmail) {
+      alert('Os e-mails não coincidem');
+      return;
+    }
+    if (userData.senha !== userData.confirmarSenha) {
+      alert('As senhas não coincidem');
+      return;
+    }
+    if (!userData.nome || !userData.email || !userData.senha || !userData.telefone) {
+      alert('Todos os campos são obrigatórios');
+      return;
+    }
+
+    handleScreenTransition('account-type');
+  };
+
+  const handleAccountTypeSubmit = async () => {
+    if (!selectedAccountType) {
+      alert('Selecione um tipo de conta');
+      return;
+    }
+
+    if (selectedAccountType === 'PRESTADOR') {
+      handleScreenTransition('service-provider');
+      return;
+    }
+
+    setIsLoading(true);
+
+    const registerData: RegisterData = {
+      nome: userData.nome,
+      senha_hash: userData.senha,
+      email: userData.email,
+      telefone: userData.telefone.replace(/\D/g, ''), // Remove formatação do telefone
+      tipo_conta: selectedAccountType
+    };
+
+    try {
+      const response = await fetch('http://localhost:8080/v1/facilita/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(registerData)
+      });
+
+      if (response.ok) {
+        handleScreenTransition('success');
+        setTimeout(() => {
+          handleScreenTransition('login');
+        }, 2000);
+      } else {
+        const errorData = await response.json();
+        alert(`Erro no cadastro: ${errorData.message || 'Erro desconhecido'}`);
+      }
+    } catch (error) {
+      console.error('Erro na requisição:', error);
+      alert('Erro de conexão. Verifique se o servidor está rodando.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleServiceProviderSubmit = async () => {
+    setIsLoading(true);
+
+    const registerData: RegisterData = {
+      nome: userData.nome,
+      senha_hash: userData.senha,
+      email: userData.email,
+      telefone: userData.telefone.replace(/\D/g, ''),
+      tipo_conta: 'PRESTADOR'
+    };
+
+    try {
+      const response = await fetch('http://localhost:8080/v1/facilita/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(registerData)
+      });
+
+      if (response.ok) {
+        handleScreenTransition('success');
+        setTimeout(() => {
+          handleScreenTransition('login');
+        }, 2000);
+      } else {
+        const errorData = await response.json();
+        alert(`Erro no cadastro: ${errorData.message || 'Erro desconhecido'}`);
+      }
+    } catch (error) {
+      console.error('Erro na requisição:', error);
+      alert('Erro de conexão. Verifique se o servidor está rodando.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleRecoverySubmit = () => {
@@ -120,6 +225,120 @@ function App() {
       </div>
     </div>
   );
+
+  const UserIcon = () => (
+    <div className="w-24 h-24 bg-green-200 rounded-full flex items-center justify-center mb-4">
+      <div className="w-16 h-16 bg-green-400 rounded-full flex items-center justify-center">
+        <User className="w-8 h-8 text-green-800" />
+      </div>
+    </div>
+  );
+
+  if (currentScreen === 'service-provider') {
+    return (
+      <div className={`min-h-screen bg-gray-100 flex flex-col transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        <div className="bg-green-500 text-white p-6 text-center">
+          <button
+            onClick={() => handleScreenTransition('account-type')}
+            className="absolute left-6 top-6 text-white hover:text-gray-200"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-xl font-bold">Tipo de conta</h1>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Prestador de Serviço</h2>
+          <p className="text-gray-600 mb-2">
+            Este aplicativo de delivery foi desenvolvido exclusivamente para uso em dispositivos
+          </p>
+          <p className="text-gray-600 mb-2">móveis (celulares).</p>
+          <p className="text-gray-600 mb-8">
+            Por favor, acesse pelo seu{' '}
+            <span className="text-green-500 font-semibold">smartphone</span>{' '}
+            para continuar utilizando.
+          </p>
+
+          <UserIcon />
+
+          <button
+            onClick={handleServiceProviderSubmit}
+            disabled={isLoading}
+            className="bg-green-500 text-white px-12 py-3 rounded-full font-semibold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Cadastrando...' : 'Voltar'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentScreen === 'account-type') {
+    return (
+      <div className={`min-h-screen bg-gray-100 flex flex-col transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        <div className="bg-green-500 text-white p-6 text-center">
+          <button
+            onClick={() => handleScreenTransition('cadastro')}
+            className="absolute left-6 top-6 text-white hover:text-gray-200"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-2xl font-bold">Qual tipo de conta deseja criar?</h1>
+          <p className="text-green-100 mt-2">Escolha a opção que mais combina com seu perfil.</p>
+        </div>
+
+        <div className="flex-1 flex flex-col justify-center p-8 space-y-6">
+          <div
+            onClick={() => setSelectedAccountType('CONTRATANTE')}
+            className={`bg-white rounded-lg p-6 shadow-md cursor-pointer transition-all hover:shadow-lg ${
+              selectedAccountType === 'CONTRATANTE' ? 'ring-2 ring-green-500 bg-green-50' : ''
+            }`}
+          >
+            <div className="flex items-center space-x-4">
+              <UserIcon />
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Contratante</h3>
+                <p className="text-gray-600">
+                  Quero contratar prestadores de serviço para minhas necessidades.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div
+            onClick={() => setSelectedAccountType('PRESTADOR')}
+            className={`bg-white rounded-lg p-6 shadow-md cursor-pointer transition-all hover:shadow-lg ${
+              selectedAccountType === 'PRESTADOR' ? 'ring-2 ring-green-500 bg-green-50' : ''
+            }`}
+          >
+            <div className="flex items-center space-x-4">
+              <UserIcon />
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-gray-800 mb-2">Prestador de Serviço</h3>
+                <p className="text-gray-600">
+                  Quero oferecer meus serviços e encontrar clientes.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8">
+          <button
+            onClick={handleAccountTypeSubmit}
+            disabled={!selectedAccountType || isLoading}
+            className="w-full bg-green-500 text-white py-4 rounded-full text-lg font-semibold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Processando...' : 'Entrar'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (currentScreen === 'verification') {
     return (
@@ -253,6 +472,7 @@ function App() {
       </div>
     );
   }
+
   if (currentScreen === 'success') {
     return (
       <div className={`min-h-screen bg-gray-800 flex items-center justify-center transition-all duration-300 ${
