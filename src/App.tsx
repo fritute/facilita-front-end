@@ -128,7 +128,11 @@ function App() {
       }
     } catch (error) {
       console.error('Erro na requisição:', error);
-      alert('Erro de conexão. Verifique se o servidor está rodando.');
+      if (error instanceof Error && error.message === 'Failed to fetch') {
+        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando em http://localhost:8080');
+      } else {
+        alert('Erro de conexão. Verifique se o servidor está rodando.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -165,7 +169,11 @@ function App() {
       }
     } catch (error) {
       console.error('Erro na requisição:', error);
-      alert('Erro de conexão. Verifique se o servidor está rodando.');
+      if (error instanceof Error && error.message === 'Failed to fetch') {
+        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando em http://localhost:8080');
+      } else {
+        alert('Erro de conexão. Verifique se o servidor está rodando.');
+      }
     } finally {
       setIsLoading(false);
     }
