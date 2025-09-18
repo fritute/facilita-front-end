@@ -499,10 +499,10 @@ function App() {
 
   if (currentScreen === 'cadastro') {
     return (
-      <div className={`min-h-screen bg-gray-800 flex flex-col xl:flex-row transition-all duration-300 ${
+      <div className={`min-h-screen bg-gray-800 flex flex-col lg:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="flex-1 p-4 md:p-8 w-full xl:max-w-lg xl:ml-[35%] order-2 xl:order-1">
+        <div className="flex-1 p-4 md:p-8 w-full lg:max-w-md lg:ml-[30%] order-2 lg:order-1">
           <h2 className="text-xl md:text-2xl text-white font-bold mb-6 md:mb-8">Cadastro</h2>
           
           <div className="space-y-4 md:space-y-6">
@@ -545,7 +545,7 @@ function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-gray-400 text-sm mb-2">Senha</label>
                 <div className="relative">
@@ -617,11 +617,11 @@ function App() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col justify-end items-end p-4 md:p-8 order-1 xl:order-2">
+        <div className="flex-1 flex flex-col justify-end items-end p-4 md:p-8 order-1 lg:order-2">
           <div className="absolute top-4 right-4 md:top-8 md:right-8">
             <FacilitaLogo />
           </div>
-          <div className="flex-1 flex items-center justify-center mt-8 xl:mt-0">
+          <div className="flex-1 flex items-center justify-center mt-8 lg:mt-0">
             <div className="relative max-w-xs md:max-w-sm">
               <img 
                 src="/undraw_order-delivered_puaw 3.png" 
@@ -738,14 +738,7 @@ function App() {
 
       {/* Modal de Termos */}
       {showTermsModal && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fadeIn"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowTermsModal(false);
-            }
-          }}
-        >
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] md:max-h-[80vh] overflow-hidden animate-slideUp relative">
             <div className="p-4 md:p-6">
               <div className="flex justify-between items-center mb-4">
@@ -754,7 +747,7 @@ function App() {
                 </h2>
                 <button
                   onClick={() => setShowTermsModal(false)}
-                  className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+                  className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
                 >
                   ×
                 </button>
@@ -795,14 +788,14 @@ function App() {
               <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-3">
                 <button
                   onClick={() => setShowTermsModal(false)}
-                  className="flex-1 py-3 rounded-lg font-semibold transition-colors bg-gray-300 text-gray-700 hover:bg-gray-400 text-sm md:text-base"
+                  className="flex-1 py-2 md:py-3 rounded-lg font-semibold transition-colors bg-gray-300 text-gray-700 hover:bg-gray-400 text-sm md:text-base"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleTermsAccept}
                   disabled={!termsAccepted}
-                  className={`flex-1 py-3 rounded-lg font-semibold transition-colors text-sm md:text-base ${
+                  className={`flex-1 py-2 md:py-3 rounded-lg font-semibold transition-colors text-sm md:text-base ${
                     termsAccepted 
                       ? 'bg-green-500 text-white hover:bg-green-600' 
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -816,8 +809,6 @@ function App() {
         </div>
       )}
     </div>
-  );
-}
   );
 }
 
