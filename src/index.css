@@ -29,3 +29,49 @@
 .animate-slideUp {
   animation: slideUp 0.3s ease-out;
 }
+
+/* Melhorias de responsividade */
+@media (max-width: 640px) {
+  .grid-cols-1.sm\:grid-cols-2 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .max-h-\[90vh\] {
+    max-height: 95vh;
+  }
+}
+
+/* Ajustes para telas muito pequenas */
+@media (max-width: 375px) {
+  .p-4 {
+    padding: 1rem;
+  }
+  
+  .space-y-4 > * + * {
+    margin-top: 0.75rem;
+  }
+  
+  .text-xl {
+    font-size: 1.125rem;
+  }
+}
+
+/* Melhor controle do modal em dispositivos móveis */
+@media (max-height: 600px) {
+  .max-h-\[90vh\] {
+    max-height: 100vh;
+  }
+}
+
+/* Ajustes específicos para o formulário de cadastro */
+@media (min-width: 1280px) {
+  .xl\:ml-\[35\%\] {
+    margin-left: 35%;
+  }
+  
+  .xl\:max-w-lg {
+    max-width: 32rem;
+  }
+}
