@@ -247,23 +247,23 @@ function App() {
       <div className={`min-h-screen bg-gray-100 flex flex-col transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="bg-green-500 text-white p-6 text-center">
+        <div className="bg-green-500 text-white p-4 md:p-6 text-center relative">
           <button
             onClick={() => handleScreenTransition('account-type')}
-            className="absolute left-6 top-6 text-white hover:text-gray-200"
+            className="absolute left-4 top-4 md:left-6 md:top-6 text-white hover:text-gray-200"
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-xl font-bold">Tipo de conta</h1>
+          <h1 className="text-lg md:text-xl font-bold">Tipo de conta</h1>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Prestador de Serviço</h2>
-          <p className="text-gray-600 mb-2">
+        <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 text-center">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-4">Prestador de Serviço</h2>
+          <p className="text-sm md:text-base text-gray-600 mb-2 px-4">
             Este aplicativo de delivery foi desenvolvido exclusivamente para uso em dispositivos
           </p>
-          <p className="text-gray-600 mb-2">móveis (celulares).</p>
-          <p className="text-gray-600 mb-8">
+          <p className="text-sm md:text-base text-gray-600 mb-2 px-4">móveis (celulares).</p>
+          <p className="text-sm md:text-base text-gray-600 mb-8 px-4">
             Por favor, acesse pelo seu{' '}
             <span className="text-green-500 font-semibold">smartphone</span>{' '}
             para continuar utilizando.
@@ -274,7 +274,7 @@ function App() {
           <button
             onClick={handleServiceProviderSubmit}
             disabled={isLoading}
-            className="bg-green-500 text-white px-12 py-3 rounded-full font-semibold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-green-500 text-white px-8 md:px-12 py-3 rounded-full font-semibold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? 'Cadastrando...' : 'Voltar'}
           </button>
@@ -288,29 +288,29 @@ function App() {
       <div className={`min-h-screen bg-gray-100 flex flex-col transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="bg-green-500 text-white p-6 text-center">
+        <div className="bg-green-500 text-white p-4 md:p-6 text-center relative">
           <button
             onClick={() => handleScreenTransition('cadastro')}
-            className="absolute left-6 top-6 text-white hover:text-gray-200"
+            className="absolute left-4 top-4 md:left-6 md:top-6 text-white hover:text-gray-200"
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-2xl font-bold">Qual tipo de conta deseja criar?</h1>
-          <p className="text-green-100 mt-2">Escolha a opção que mais combina com seu perfil.</p>
+          <h1 className="text-lg md:text-2xl font-bold px-4">Qual tipo de conta deseja criar?</h1>
+          <p className="text-green-100 mt-2 text-sm md:text-base px-4">Escolha a opção que mais combina com seu perfil.</p>
         </div>
 
-        <div className="flex-1 flex flex-col justify-center p-8 space-y-6">
+        <div className="flex-1 flex flex-col justify-center p-4 md:p-8 space-y-4 md:space-y-6">
           <div
             onClick={() => setSelectedAccountType('CONTRATANTE')}
-            className={`bg-white rounded-lg p-6 shadow-md cursor-pointer transition-all hover:shadow-lg ${
+            className={`bg-white rounded-lg p-4 md:p-6 shadow-md cursor-pointer transition-all hover:shadow-lg ${
               selectedAccountType === 'CONTRATANTE' ? 'ring-2 ring-green-500 bg-green-50' : ''
             }`}
           >
-            <div className="flex items-center space-x-4">
+            <div className="flex flex-col md:flex-row items-center md:space-x-4 space-y-4 md:space-y-0">
               <UserIcon />
               <div className="flex-1">
-                <h3 className="text-xl font-bold text-gray-800 mb-2">Contratante</h3>
-                <p className="text-gray-600">
+                <h3 className="text-lg md:text-xl font-bold text-gray-800 mb-2 text-center md:text-left">Contratante</h3>
+                <p className="text-sm md:text-base text-gray-600 text-center md:text-left">
                   Quero contratar prestadores de serviço para minhas necessidades.
                 </p>
               </div>
@@ -319,15 +319,15 @@ function App() {
 
           <div
             onClick={() => setSelectedAccountType('PRESTADOR')}
-            className={`bg-white rounded-lg p-6 shadow-md cursor-pointer transition-all hover:shadow-lg ${
+            className={`bg-white rounded-lg p-4 md:p-6 shadow-md cursor-pointer transition-all hover:shadow-lg ${
               selectedAccountType === 'PRESTADOR' ? 'ring-2 ring-green-500 bg-green-50' : ''
             }`}
           >
-            <div className="flex items-center space-x-4">
+            <div className="flex flex-col md:flex-row items-center md:space-x-4 space-y-4 md:space-y-0">
               <UserIcon />
               <div className="flex-1">
-                <h3 className="text-xl font-bold text-gray-800 mb-2">Prestador de Serviço</h3>
-                <p className="text-gray-600">
+                <h3 className="text-lg md:text-xl font-bold text-gray-800 mb-2 text-center md:text-left">Prestador de Serviço</h3>
+                <p className="text-sm md:text-base text-gray-600 text-center md:text-left">
                   Quero oferecer meus serviços e encontrar clientes.
                 </p>
               </div>
@@ -335,11 +335,11 @@ function App() {
           </div>
         </div>
 
-        <div className="p-8">
+        <div className="p-4 md:p-8">
           <button
             onClick={handleAccountTypeSubmit}
             disabled={!selectedAccountType || isLoading}
-            className="w-full bg-green-500 text-white py-4 rounded-full text-lg font-semibold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-green-500 text-white py-3 md:py-4 rounded-full text-base md:text-lg font-semibold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? 'Processando...' : 'Entrar'}
           </button>
@@ -350,14 +350,14 @@ function App() {
 
   if (currentScreen === 'verification') {
     return (
-      <div className={`min-h-screen bg-gray-800 flex transition-all duration-300 ${
+      <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="flex-1 flex items-center justify-center p-8 relative">
-          <div className="absolute top-8 left-8">
+        <div className="flex-1 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
+          <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
-          <div className="max-w-md mt-16">
+          <div className="max-w-xs md:max-w-md mt-8 md:mt-16">
             <img 
               src="/undraw_order-delivered_puaw 3.png" 
               alt="Ilustração de entrega" 
@@ -366,17 +366,17 @@ function App() {
           </div>
         </div>
         
-        <div className="flex-1 bg-gray-700 p-8 max-w-md flex flex-col justify-center">
-          <div className="bg-green-500 absolute top-0 right-0 w-48 h-48 rounded-bl-full"></div>
+        <div className="flex-1 bg-gray-700 p-4 md:p-8 w-full md:max-w-md flex flex-col justify-center relative order-1 md:order-2">
+          <div className="bg-green-500 absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 rounded-bl-full"></div>
           
           <div className="relative z-10 text-center">
-            <h2 className="text-2xl text-white font-bold mb-2">Recuperação de senha</h2>
-            <p className="text-gray-400 mb-8">
+            <h2 className="text-xl md:text-2xl text-white font-bold mb-2">Recuperação de senha</h2>
+            <p className="text-sm md:text-base text-gray-400 mb-6 md:mb-8 px-4">
               Informe o código de 5 dígitos que foi<br />
               enviado para o sms *********
             </p>
 
-            <div className="flex justify-center space-x-3 mb-4">
+            <div className="flex justify-center space-x-2 md:space-x-3 mb-4 px-4">
               {verificationCode.map((digit, index) => (
                 <input
                   key={index}
@@ -385,26 +385,26 @@ function App() {
                   maxLength={1}
                   value={digit}
                   onChange={(e) => handleCodeChange(index, e.target.value)}
-                  className="w-12 h-12 bg-gray-600 text-white text-center text-xl rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-10 h-10 md:w-12 md:h-12 bg-gray-600 text-white text-center text-lg md:text-xl rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               ))}
             </div>
 
             <p className="text-red-400 text-sm mb-2">Código não foi enviado?</p>
-            <p className="text-gray-400 text-sm mb-8">
+            <p className="text-gray-400 text-sm mb-6 md:mb-8">
               Reenviar o código em {countdown} segundos.
             </p>
 
-            <div className="flex space-x-4">
+            <div className="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-4 px-4">
               <button
                 onClick={() => handleScreenTransition('recovery')}
-                className="flex-1 bg-transparent border border-green-500 text-green-500 py-3 rounded-lg font-semibold hover:bg-green-500 hover:text-white transition-colors"
+                className="flex-1 bg-transparent border border-green-500 text-green-500 py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-500 hover:text-white transition-colors"
               >
                 Tentar outro método
               </button>
               <button
                 onClick={handleVerification}
-                className="flex-1 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
+                className="flex-1 bg-green-500 text-white py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-600 transition-colors"
               >
                 Verificar
               </button>
@@ -417,14 +417,14 @@ function App() {
 
   if (currentScreen === 'recovery') {
     return (
-      <div className={`min-h-screen bg-gray-800 flex transition-all duration-300 ${
+      <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="flex-1 flex items-center justify-center p-8 relative">
-          <div className="absolute top-8 left-8">
+        <div className="flex-1 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
+          <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
-          <div className="max-w-md mt-16">
+          <div className="max-w-xs md:max-w-md mt-8 md:mt-16">
             <img 
               src="/undraw_order-delivered_puaw 3.png" 
               alt="Ilustração de entrega" 
@@ -433,17 +433,17 @@ function App() {
           </div>
         </div>
         
-        <div className="flex-1 bg-gray-700 p-8 max-w-md flex flex-col justify-center">
-          <div className="bg-green-500 absolute top-0 right-0 w-48 h-48 rounded-bl-full"></div>
+        <div className="flex-1 bg-gray-700 p-4 md:p-8 w-full md:max-w-md flex flex-col justify-center relative order-1 md:order-2">
+          <div className="bg-green-500 absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 rounded-bl-full"></div>
           
           <div className="relative z-10">
-            <h2 className="text-2xl text-white font-bold mb-2">Recuperar senha</h2>
-            <p className="text-gray-400 mb-8">
+            <h2 className="text-xl md:text-2xl text-white font-bold mb-2">Recuperar senha</h2>
+            <p className="text-sm md:text-base text-gray-400 mb-6 md:mb-8">
               Digite seu e-mail ou telefone para<br />
               recuperar sua senha
             </p>
 
-            <div className="space-y-6">
+            <div className="space-y-4 md:space-y-6">
               <div>
                 <label className="block text-gray-400 text-sm mb-2">E-mail ou Telefone</label>
                 <div className="relative">
@@ -452,7 +452,7 @@ function App() {
                     value={recoveryContact}
                     onChange={(e) => setRecoveryContact(e.target.value)}
                     placeholder="Digite seu e-mail ou telefone"
-                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
                 </div>
@@ -460,7 +460,7 @@ function App() {
 
               <button
                 onClick={handleRecoverySubmit}
-                className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
+                className="w-full bg-green-500 text-white py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-600 transition-colors"
               >
                 Enviar código
               </button>
@@ -499,13 +499,13 @@ function App() {
 
   if (currentScreen === 'cadastro') {
     return (
-      <div className={`min-h-screen bg-gray-800 flex transition-all duration-300 ${
+      <div className={`min-h-screen bg-gray-800 flex flex-col lg:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="flex-1 p-8 max-w-md">
-          <h2 className="text-2xl text-white font-bold mb-8">Cadastro</h2>
+        <div className="flex-1 p-4 md:p-8 w-full lg:max-w-md lg:ml-[30%] order-2 lg:order-1">
+          <h2 className="text-xl md:text-2xl text-white font-bold mb-6 md:mb-8">Cadastro</h2>
           
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <div>
               <label className="block text-gray-400 text-sm mb-2">Nome</label>
               <div className="relative">
@@ -513,7 +513,7 @@ function App() {
                   type="text"
                   value={userData.nome}
                   onChange={(e) => setUserData({...userData, nome: e.target.value})}
-                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <User className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
@@ -526,7 +526,7 @@ function App() {
                   type="email"
                   value={userData.email}
                   onChange={(e) => setUserData({...userData, email: e.target.value})}
-                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
@@ -539,13 +539,13 @@ function App() {
                   type="email"
                   value={userData.confirmarEmail}
                   onChange={(e) => setUserData({...userData, confirmarEmail: e.target.value})}
-                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-gray-400 text-sm mb-2">Senha</label>
                 <div className="relative">
@@ -553,7 +553,7 @@ function App() {
                     type={showPassword ? "text" : "password"}
                     value={userData.senha}
                     onChange={(e) => setUserData({...userData, senha: e.target.value})}
-                    className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <button
                     type="button"
@@ -572,7 +572,7 @@ function App() {
                     type={showConfirmPassword ? "text" : "password"}
                     value={userData.confirmarSenha}
                     onChange={(e) => setUserData({...userData, confirmarSenha: e.target.value})}
-                    className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <button
                     type="button"
@@ -592,7 +592,7 @@ function App() {
                   type="tel"
                   value={userData.telefone}
                   onChange={(e) => setUserData({...userData, telefone: e.target.value})}
-                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Phone className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
@@ -600,7 +600,7 @@ function App() {
 
             <button
               onClick={handleCadastro}
-              className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
+              className="w-full bg-green-500 text-white py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-600 transition-colors"
             >
               Próximo
             </button>
@@ -617,12 +617,12 @@ function App() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col justify-end items-end p-8">
-          <div className="absolute top-8 right-8">
+        <div className="flex-1 flex flex-col justify-end items-end p-4 md:p-8 order-1 lg:order-2">
+          <div className="absolute top-4 right-4 md:top-8 md:right-8">
             <FacilitaLogo />
           </div>
-          <div className="flex-1 flex items-center justify-center">
-            <div className="relative max-w-sm">
+          <div className="flex-1 flex items-center justify-center mt-8 lg:mt-0">
+            <div className="relative max-w-xs md:max-w-sm">
               <img 
                 src="/undraw_order-delivered_puaw 3.png" 
                 alt="Ilustração de entrega" 
@@ -636,28 +636,28 @@ function App() {
   }
 
   return (
-    <div className={`min-h-screen bg-gray-800 flex transition-all duration-300 ${
+    <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
       isTransitioning ? 'opacity-0 -translate-x-full' : 'opacity-100 translate-x-0'
     }`}>
-      <div className="flex-1 flex items-center justify-center p-8 relative">
-        <div className="absolute top-8 left-8">
+      <div className="flex-1 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
+        <div className="absolute top-4 left-4 md:top-8 md:left-8">
           <FacilitaLogo />
         </div>
-        <div className="max-w-md mt-16">
+        <div className="max-w-xs md:max-w-md mt-8 md:mt-16">
           <img 
             src="/undraw_order-delivered_puaw 3.png" 
             alt="Ilustração de entrega" 
-            className="w-full h-auto max-w-lg"
+            className="w-full h-auto"
           />
         </div>
       </div>
       
-      <div className="flex-1 bg-gray-700 p-8 max-w-md flex flex-col justify-center">
-        <div className="bg-green-500 absolute top-0 right-0 w-48 h-48 rounded-bl-full"></div>
+      <div className="flex-1 bg-gray-700 p-4 md:p-8 w-full md:max-w-md flex flex-col justify-center relative order-1 md:order-2">
+        <div className="bg-green-500 absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 rounded-bl-full"></div>
         
         <div className="relative z-10">
-          <h2 className="text-3xl text-white font-bold mb-2">Entrar no Facilita</h2>
-          <p className="text-gray-400 mb-8">
+          <h2 className="text-2xl md:text-3xl text-white font-bold mb-2">Entrar no Facilita</h2>
+          <p className="text-sm md:text-base text-gray-400 mb-6 md:mb-8">
             Não possui uma conta?{' '}
             <button
               onClick={() => handleScreenTransition('cadastro')}
@@ -667,7 +667,7 @@ function App() {
             </button>
           </p>
 
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             <div>
               <label className="block text-gray-400 text-sm mb-2">E-mail</label>
               <div className="relative">
@@ -675,7 +675,7 @@ function App() {
                   type="email"
                   value={loginData.email}
                   onChange={(e) => setLoginData({...loginData, email: e.target.value})}
-                  className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
@@ -688,7 +688,7 @@ function App() {
                   type="password"
                   value={loginData.senha}
                   onChange={(e) => setLoginData({...loginData, senha: e.target.value})}
-                  className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="••••••••••"
                 />
                 <Lock className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -728,7 +728,7 @@ function App() {
 
             <button
               onClick={handleLogin}
-              className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
+              className="w-full bg-green-500 text-white py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-600 transition-colors"
             >
               Entrar
             </button>
@@ -739,13 +739,21 @@ function App() {
       {/* Modal de Termos */}
       {showTermsModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-hidden animate-slideUp">
-            <div className="p-6">
-              <h2 className="text-xl font-bold text-center mb-4">
-                Termos de Uso e Política de Privacidade
-              </h2>
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] md:max-h-[80vh] overflow-hidden animate-slideUp relative">
+            <div className="p-4 md:p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg md:text-xl font-bold">
+                  Termos de Uso e Política de Privacidade
+                </h2>
+                <button
+                  onClick={() => setShowTermsModal(false)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+                >
+                  ×
+                </button>
+              </div>
               
-              <div className="max-h-96 overflow-y-auto text-sm text-gray-700 leading-relaxed space-y-4 mb-6">
+              <div className="max-h-60 md:max-h-96 overflow-y-auto text-xs md:text-sm text-gray-700 leading-relaxed space-y-3 md:space-y-4 mb-4 md:mb-6 pr-2">
                 <p>
                   O presente Termo tem por finalidade estabelecer as regras de comportamento e de utilização dos Termos de Uso da aplicação Facilita, bem como suas funcionalidades, sendo reconhecido como parte de uma solução tecnológica que permite o controle de recebimento e expedição dos serviços oferecidos, contratados e destinados a facilitar o sistema e utilizar as funcionalidades da aplicação, sendo livre para aceitar as condições e utilizar os serviços oferecidos. Neste, as condições são apresentadas, portanto, o sistema solicitará se o usuário concorda ou não com os presentes termos.
                 </p>
@@ -763,36 +771,46 @@ function App() {
                 </p>
               </div>
 
-              <div className="flex items-center mb-4">
+              <div className="flex items-center mb-4 space-x-2">
                 <input
                   type="checkbox"
                   checked={termsAccepted}
                   onChange={(e) => setTermsAccepted(e.target.checked)}
-                  className="mr-2 accent-green-500"
+                  className="accent-green-500 w-4 h-4"
                 />
-                <span className="text-sm text-gray-700">
+                <span className="text-xs md:text-sm text-gray-700">
                   Li e estou de acordo com{' '}
                   <span className="text-green-500">Termo de Uso</span> e{' '}
                   <span className="text-green-500">Política de Privacidade</span>
                 </span>
               </div>
 
-              <button
-                onClick={handleTermsAccept}
-                disabled={!termsAccepted}
-                className={`w-full py-3 rounded-lg font-semibold transition-colors ${
-                  termsAccepted 
-                    ? 'bg-green-500 text-white hover:bg-green-600' 
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                Continuar
-              </button>
+              <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-3">
+                <button
+                  onClick={() => setShowTermsModal(false)}
+                  className="flex-1 py-2 md:py-3 rounded-lg font-semibold transition-colors bg-gray-300 text-gray-700 hover:bg-gray-400 text-sm md:text-base"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleTermsAccept}
+                  disabled={!termsAccepted}
+                  className={`flex-1 py-2 md:py-3 rounded-lg font-semibold transition-colors text-sm md:text-base ${
+                    termsAccepted 
+                      ? 'bg-green-500 text-white hover:bg-green-600' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  Continuar
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
     </div>
+  );
+}
   );
 }
 
