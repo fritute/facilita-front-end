@@ -217,14 +217,14 @@ function App() {
   const FacilitaLogo = () => (
     <div className="flex items-center justify-center mb-8">
       <div className="flex items-center">
-        <img src="/logotcc 1.png" alt="Facilita Logo" className="h-16" />
+        <img src="/logotcc 1.png" alt="Facilita Logo" className="h-24 md:h-28" />
       </div>
     </div>
   );
 
   const Illustration = () => (
     <div className="flex-1 flex items-center justify-center p-8">
-      <div className="relative max-w-md">
+      <div className="relative max-w-lg">
         <img 
           src="/undraw_order-delivered_puaw 3.png" 
           alt="Ilustração de entrega" 
@@ -647,7 +647,7 @@ function App() {
           <img 
             src="/undraw_order-delivered_puaw 3.png" 
             alt="Ilustração de entrega" 
-            className="w-full h-auto"
+            className="w-full h-auto max-w-lg"
           />
         </div>
       </div>
