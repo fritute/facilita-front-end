@@ -344,9 +344,9 @@ function App() {
   };
 
   const FacilitaLogo = () => (
-    <div className=" flex items-center justify-center mt-8 xl:mt-0">
+    <div className="flex items-center justify-center mt-8 xl:mt-0">
       <div className="flex items-center">
-        <img src="/logotcc 1.png" alt="Facilita Logo" className="w-[400px] h-auto" />
+        <img src="/logotcc 1.png" alt="Facilita Logo" className="facilita-logo w-[400px] h-auto" />
       </div>
     </div>
   );
@@ -472,7 +472,7 @@ function App() {
       <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="flex-1 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
+        <div className="w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
           <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
@@ -486,8 +486,15 @@ function App() {
           </div>
         </div>
         
-        <div className="flex-1 bg-gray-700 p-4 md:p-8 w-full md:max-w-md flex flex-col justify-center relative order-1 md:order-2">
-          <div className="bg-green-500 absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 rounded-bl-full"></div>
+        <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2">
+          <div className="bg-green-500 absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 rounded-bl-full">
+          <img
+                       src="./Vector.png"
+                        alt="Decoração"
+                       className="absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 object-contain"
+            />
+
+          </div>
           
           <div className="relative z-10 text-center">
             <h2 className="text-xl md:text-2xl text-white font-bold mb-2">Recuperação de senha</h2>
@@ -546,7 +553,7 @@ function App() {
       <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="flex-1 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
+        <div className="w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
           <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
@@ -561,7 +568,7 @@ function App() {
           </div>
         </div>
         
-        <div className="flex-1 bg-gray-700 p-4 md:p-8 w-full md:max-w-md flex flex-col justify-center relative order-1 md:order-2">
+        <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2">
           <div className="bg-green-500 absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 rounded-bl-full"></div>
           
           <div className="relative z-10">
@@ -791,7 +798,7 @@ function App() {
           <div className="absolute top-4 right-4 md:top-8 md:right-8">
             <FacilitaLogo />
           </div>
-          <div className=" flex-1 flex items-center justify-center p-8 transform translate-x-[-300px] translate-y-[10px]">
+          <div className=" flex-1 flex items-center justify-center p-8 transform translate-x-[-300px] translate-y-[10px] cadastro-image">
             <div className="relative max-w-xs md:max-w-sm">
               <img 
                 src="/undraw_order-delivered_puaw 3.png" 
@@ -809,7 +816,7 @@ function App() {
     <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
       isTransitioning ? 'opacity-0 -translate-x-full' : 'opacity-100 translate-x-0'
     }`}>
-      <div className="flex-1 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
+      <div className="w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1 ">
         <div className="absolute top-4 left-4 md:top-8 md:left-8">
           <FacilitaLogo />
         </div>
@@ -817,12 +824,12 @@ function App() {
           <img 
             src="/undraw_order-delivered_puaw 3.png" 
             alt="Ilustração de entrega" 
-            className="w-[700px] h-auto"
+            className="w-[700px] h-auto move-down"
           />
         </div>
       </div>
       
-      <div className="flex-1 bg-gray-700 p-4 md:p-8 w-full md:max-w-md flex flex-col justify-center relative order-1 md:order-2">
+      <div className="flex-1 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 move-right">
         <div className="bg-green-500 absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 rounded-bl-full"></div>
         
         <div className="relative z-10">
