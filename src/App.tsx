@@ -1,6 +1,19 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft } from 'lucide-react';
 
+interface ValidationErrors {
+  nome?: string;
+  email?: string;
+  confirmarEmail?: string;
+  senha?: string;
+  confirmarSenha?: string;
+  telefone?: string;
+  loginEmail?: string;
+  loginSenha?: string;
+  recoveryContact?: string;
+  verificationCode?: string;
+}
+
 interface UserData {
   nome: string;
   email: string;
@@ -30,6 +43,7 @@ function App() {
   const [countdown, setCountdown] = useState(27);
   const [selectedAccountType, setSelectedAccountType] = useState<'CONTRATANTE' | 'PRESTADOR' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<ValidationErrors>({});
   
   const [loginData, setLoginData] = useState({
     email: 'seuemeil@gmail.com',
@@ -45,6 +59,37 @@ function App() {
     telefone: '(11) 90000-1234'
   });
 
+  // Função para validar email
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Função para validar nome (não pode conter números)
+  const validateName = (name: string): boolean => {
+    const nameRegex = /^[a-zA-ZÀ-ÿ\s]+$/;
+    return nameRegex.test(name) && name.trim().length > 0;
+  };
+
+  // Função para validar telefone
+  const validatePhone = (phone: string): boolean => {
+    const phoneRegex = /^\(\d{2}\)\s\d{4,5}-\d{4}$/;
+    return phoneRegex.test(phone);
+  };
+
+  // Função para validar senha
+  const validatePassword = (password: string): boolean => {
+    return password.length >= 6 && password.length <= 20;
+  };
+
+  // Função para limpar erro específico
+  const clearError = (field: keyof ValidationErrors) => {
+    setErrors(prev => ({
+      ...prev,
+      [field]: undefined
+    }));
+  };
+
   const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider') => {
     setIsTransitioning(true);
     setTimeout(() => {
@@ -56,10 +101,29 @@ function App() {
   };
 
   const handleLogin = () => {
+    const newErrors: ValidationErrors = {};
+
+    // Validar email
+    if (!validateEmail(loginData.email)) {
+      newErrors.loginEmail = 'Endereço de e-mail inválido';
+    }
+
+    // Validar senha
+    if (!loginData.senha) {
+      newErrors.loginSenha = 'Senha incorreta';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     if (!termsAccepted) {
       setShowTermsModal(true);
       return;
     }
+
+    setErrors({});
     // Lógica de login aqui
     console.log('Login realizado');
   };
@@ -70,6 +134,43 @@ function App() {
   };
 
   const handleCadastro = () => {
+    const newErrors: ValidationErrors = {};
+
+    // Validar nome
+    if (!validateName(userData.nome)) {
+      newErrors.nome = 'Nome inexistente';
+    }
+
+    // Validar email
+    if (!validateEmail(userData.email)) {
+      newErrors.email = 'Email inválido';
+    }
+
+    // Validar confirmação de email
+    if (userData.email !== userData.confirmarEmail) {
+      newErrors.confirmarEmail = 'Os e-mails não coincidem';
+    }
+
+    // Validar senha
+    if (!validatePassword(userData.senha)) {
+      newErrors.senha = 'Sua senha tem que ser de 6 a 20 caracteres';
+    }
+
+    // Validar confirmação de senha
+    if (userData.senha !== userData.confirmarSenha) {
+      newErrors.confirmarSenha = 'As senhas não coincidem';
+    }
+
+    // Validar telefone
+    if (!validatePhone(userData.telefone)) {
+      newErrors.telefone = 'Telefone inválido';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     // Validações básicas
     if (userData.email !== userData.confirmarEmail) {
       alert('Os e-mails não coincidem');
@@ -84,6 +185,7 @@ function App() {
       return;
     }
 
+    setErrors({});
     handleScreenTransition('account-type');
   };
 
@@ -104,12 +206,12 @@ function App() {
       nome: userData.nome,
       senha_hash: userData.senha,
       email: userData.email,
-      telefone: userData.telefone.replace(/\D/g, ''), // Remove formatação do telefone
+      telefone: userData.telefone.replace(/\D/g, ''), 
       tipo_conta: selectedAccountType
     };
 
     try {
-      const response = await fetch('http://localhost:8080/v1/facilita/register', {
+      const response = await fetch('http://localhost:8080/v1/facilita/usuario/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -180,6 +282,25 @@ function App() {
   };
 
   const handleRecoverySubmit = () => {
+    const newErrors: ValidationErrors = {};
+
+    // Validar se é email ou telefone
+    const isEmail = recoveryContact.includes('@');
+    const isPhone = /^\(\d{2}\)\s\d{4,5}-\d{4}$/.test(recoveryContact);
+
+    if (!isEmail && !isPhone) {
+      newErrors.recoveryContact = 'Digite um e-mail ou telefone válido';
+      setErrors(newErrors);
+      return;
+    }
+
+    if (isEmail && !validateEmail(recoveryContact)) {
+      newErrors.recoveryContact = 'Endereço de e-mail inválido';
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
     // Simular envio do código
     handleScreenTransition('verification');
     // Iniciar countdown
@@ -209,30 +330,28 @@ function App() {
   };
 
   const handleVerification = () => {
+    const code = verificationCode.join('');
+    
+    if (code.length !== 5 || !/^\d{5}$/.test(code)) {
+      setErrors({ verificationCode: 'Código inválido' });
+      return;
+    }
+
+    setErrors({});
     // Lógica de verificação
     console.log('Código verificado:', verificationCode.join(''));
     handleScreenTransition('login');
   };
 
   const FacilitaLogo = () => (
-    <div className="flex items-center justify-center mb-8">
+    <div className=" flex items-center justify-center mt-8 xl:mt-0">
       <div className="flex items-center">
-        <img src="/logotcc 1.png" alt="Facilita Logo" className="h-24 md:h-28" />
+        <img src="/logotcc 1.png" alt="Facilita Logo" className="w-[400px] h-auto" />
       </div>
     </div>
   );
 
-  const Illustration = () => (
-    <div className="flex-1 flex items-center justify-center p-8">
-      <div className="relative max-w-lg">
-        <img 
-          src="/undraw_order-delivered_puaw 3.png" 
-          alt="Ilustração de entrega" 
-          className="w-full h-auto"
-        />
-      </div>
-    </div>
-  );
+
 
   const UserIcon = () => (
     <div className="w-24 h-24 bg-green-200 rounded-full flex items-center justify-center mb-4">
@@ -357,11 +476,12 @@ function App() {
           <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
-          <div className="max-w-xs md:max-w-md mt-8 md:mt-16">
+          <div className=" flex-1 flex items-center justify-center p-8
+">
             <img 
               src="/undraw_order-delivered_puaw 3.png" 
               alt="Ilustração de entrega" 
-              className="w-full h-auto"
+              className="w-[700px] h-auto"
             />
           </div>
         </div>
@@ -384,11 +504,17 @@ function App() {
                   type="text"
                   maxLength={1}
                   value={digit}
-                  onChange={(e) => handleCodeChange(index, e.target.value)}
+                 onChange={(e) => {
+                   handleCodeChange(index, e.target.value);
+                   clearError('verificationCode');
+                 }}
                   className="w-10 h-10 md:w-12 md:h-12 bg-gray-600 text-white text-center text-lg md:text-xl rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               ))}
             </div>
+           {errors.verificationCode && (
+             <p className="text-red-500 text-sm mb-2 text-center">{errors.verificationCode}</p>
+           )}
 
             <p className="text-red-400 text-sm mb-2">Código não foi enviado?</p>
             <p className="text-gray-400 text-sm mb-6 md:mb-8">
@@ -424,11 +550,13 @@ function App() {
           <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
-          <div className="max-w-xs md:max-w-md mt-8 md:mt-16">
+          <div className=" flex-1 flex items-center justify-center p-8 
+">
             <img 
               src="/undraw_order-delivered_puaw 3.png" 
               alt="Ilustração de entrega" 
-              className="w-full h-auto"
+              className="w-[700px] h-auto
+"
             />
           </div>
         </div>
@@ -450,12 +578,18 @@ function App() {
                   <input
                     type="text"
                     value={recoveryContact}
-                    onChange={(e) => setRecoveryContact(e.target.value)}
+                   onChange={(e) => {
+                     setRecoveryContact(e.target.value);
+                     clearError('recoveryContact');
+                   }}
                     placeholder="Digite seu e-mail ou telefone"
                     className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
                 </div>
+               {errors.recoveryContact && (
+                 <p className="text-red-500 text-sm mt-1">{errors.recoveryContact}</p>
+               )}
               </div>
 
               <button
@@ -502,7 +636,7 @@ function App() {
       <div className={`min-h-screen bg-gray-800 flex flex-col xl:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="flex-1 p-4 md:p-8 w-full xl:max-w-lg xl:ml-[35%] order-2 xl:order-1">
+        <div className="flex-1 p-4 md:p-8 w-full xl:max-w-lg xl:ml-[15%] xl:mt-[5%]  order-2 xl:order-1">
           <h2 className="text-xl md:text-2xl text-white font-bold mb-6 md:mb-8">Cadastro</h2>
           
           <div className="space-y-4 md:space-y-6">
@@ -512,11 +646,17 @@ function App() {
                 <input
                   type="text"
                   value={userData.nome}
-                  onChange={(e) => setUserData({...userData, nome: e.target.value})}
+                 onChange={(e) => {
+                   setUserData({...userData, nome: e.target.value});
+                   clearError('nome');
+                 }}
                   className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <User className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
+             {errors.nome && (
+               <p className="text-red-500 text-sm mt-1">{errors.nome}</p>
+             )}
             </div>
 
             <div>
@@ -525,11 +665,17 @@ function App() {
                 <input
                   type="email"
                   value={userData.email}
-                  onChange={(e) => setUserData({...userData, email: e.target.value})}
+                 onChange={(e) => {
+                   setUserData({...userData, email: e.target.value});
+                   clearError('email');
+                 }}
                   className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
+             {errors.email && (
+               <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+             )}
             </div>
 
             <div>
@@ -538,11 +684,17 @@ function App() {
                 <input
                   type="email"
                   value={userData.confirmarEmail}
-                  onChange={(e) => setUserData({...userData, confirmarEmail: e.target.value})}
+                 onChange={(e) => {
+                   setUserData({...userData, confirmarEmail: e.target.value});
+                   clearError('confirmarEmail');
+                 }}
                   className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
+             {errors.confirmarEmail && (
+               <p className="text-red-500 text-sm mt-1">{errors.confirmarEmail}</p>
+             )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -552,7 +704,10 @@ function App() {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={userData.senha}
-                    onChange={(e) => setUserData({...userData, senha: e.target.value})}
+                   onChange={(e) => {
+                     setUserData({...userData, senha: e.target.value});
+                     clearError('senha');
+                   }}
                     className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <button
@@ -563,6 +718,9 @@ function App() {
                     {showPassword ? <EyeOff /> : <Eye />}
                   </button>
                 </div>
+               {errors.senha && (
+                 <p className="text-red-500 text-sm mt-1">{errors.senha}</p>
+               )}
               </div>
 
               <div>
@@ -571,7 +729,10 @@ function App() {
                   <input
                     type={showConfirmPassword ? "text" : "password"}
                     value={userData.confirmarSenha}
-                    onChange={(e) => setUserData({...userData, confirmarSenha: e.target.value})}
+                   onChange={(e) => {
+                     setUserData({...userData, confirmarSenha: e.target.value});
+                     clearError('confirmarSenha');
+                   }}
                     className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <button
@@ -582,6 +743,9 @@ function App() {
                     {showConfirmPassword ? <EyeOff /> : <Eye />}
                   </button>
                 </div>
+               {errors.confirmarSenha && (
+                 <p className="text-red-500 text-sm mt-1">{errors.confirmarSenha}</p>
+               )}
               </div>
             </div>
 
@@ -591,11 +755,17 @@ function App() {
                 <input
                   type="tel"
                   value={userData.telefone}
-                  onChange={(e) => setUserData({...userData, telefone: e.target.value})}
+                 onChange={(e) => {
+                   setUserData({...userData, telefone: e.target.value});
+                   clearError('telefone');
+                 }}
                   className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Phone className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
+             {errors.telefone && (
+               <p className="text-red-500 text-sm mt-1">{errors.telefone}</p>
+             )}
             </div>
 
             <button
@@ -617,16 +787,16 @@ function App() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col justify-end items-end p-4 md:p-8 order-1 xl:order-2">
+        <div className="flex-1 flex flex-col justify-end items-end p-8 order-1 xl:order-2">
           <div className="absolute top-4 right-4 md:top-8 md:right-8">
             <FacilitaLogo />
           </div>
-          <div className="flex-1 flex items-center justify-center mt-8 xl:mt-0">
+          <div className=" flex-1 flex items-center justify-center p-8 transform translate-x-[-300px] translate-y-[10px]">
             <div className="relative max-w-xs md:max-w-sm">
               <img 
                 src="/undraw_order-delivered_puaw 3.png" 
                 alt="Ilustração de entrega" 
-                className="w-full h-auto"
+                className="w-[1000px] h-auto"
               />
             </div>
           </div>
@@ -643,11 +813,11 @@ function App() {
         <div className="absolute top-4 left-4 md:top-8 md:left-8">
           <FacilitaLogo />
         </div>
-        <div className="max-w-xs md:max-w-md mt-8 md:mt-16">
+        <div className=" flex-1 flex items-center justify-center p-8">
           <img 
             src="/undraw_order-delivered_puaw 3.png" 
             alt="Ilustração de entrega" 
-            className="w-full h-auto"
+            className="w-[700px] h-auto"
           />
         </div>
       </div>
@@ -674,11 +844,17 @@ function App() {
                 <input
                   type="email"
                   value={loginData.email}
-                  onChange={(e) => setLoginData({...loginData, email: e.target.value})}
+                 onChange={(e) => {
+                   setLoginData({...loginData, email: e.target.value});
+                   clearError('loginEmail');
+                 }}
                   className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
+             {errors.loginEmail && (
+               <p className="text-red-500 text-sm mt-1">{errors.loginEmail}</p>
+             )}
             </div>
 
             <div>
@@ -687,12 +863,18 @@ function App() {
                 <input
                   type="password"
                   value={loginData.senha}
-                  onChange={(e) => setLoginData({...loginData, senha: e.target.value})}
+                 onChange={(e) => {
+                   setLoginData({...loginData, senha: e.target.value});
+                   clearError('loginSenha');
+                 }}
                   className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="••••••••••"
                 />
                 <Lock className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
+             {errors.loginSenha && (
+               <p className="text-red-500 text-sm mt-1">{errors.loginSenha}</p>
+             )}
               <button
                 onClick={() => handleScreenTransition('recovery')}
                 className="text-green-400 text-sm mt-1 hover:underline"
@@ -736,7 +918,7 @@ function App() {
         </div>
       </div>
 
-      {/* Modal de Termos */}
+      
       {showTermsModal && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fadeIn"

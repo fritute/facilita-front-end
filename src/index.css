@@ -75,3 +75,12 @@
     max-width: 32rem;
   }
 }
+/* Ajuste da posição da logo para telas pequenas */
+@media (max-width: 640px) {
+  .facilita-logo {
+    margin: 0 auto; /* Centraliza horizontalmente */
+    padding-top: 2rem; /* Adiciona espaçamento superior */
+    width: 80%; /* Ajusta o tamanho da logo */
+    max-width: 200px; /* Define um limite máximo para o tamanho */
+  }
+}
