@@ -487,14 +487,11 @@ function App() {
         </div>
         
         <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2">
-          <div className="bg-green-500 absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 rounded-bl-full">
           <img
-                       src="./Vector.png"
-                        alt="Decoração"
-                       className="absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 object-contain"
-            />
-
-          </div>
+            src="./Vector copy.png"
+            alt="Decoração"
+            className="absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 object-contain"
+          />
           
           <div className="relative z-10 text-center">
             <h2 className="text-xl md:text-2xl text-white font-bold mb-2">Recuperação de senha</h2>
@@ -569,7 +566,11 @@ function App() {
         </div>
         
         <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2">
-          <div className="bg-green-500 absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 rounded-bl-full"></div>
+          <img
+            src="./Vector copy.png"
+            alt="Decoração"
+            className="absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 object-contain"
+          />
           
           <div className="relative z-10">
             <h2 className="text-xl md:text-2xl text-white font-bold mb-2">Recuperar senha</h2>
@@ -830,7 +831,11 @@ function App() {
       </div>
       
       <div className="flex-1 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 move-right">
-        <div className="bg-green-500 absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 rounded-bl-full"></div>
+        <img
+          src="./Vector copy.png"
+          alt="Decoração"
+          className="absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 object-contain"
+        />
         
         <div className="relative z-10">
           <h2 className="text-2xl md:text-3xl text-white font-bold mb-2">Entrar no Facilita</h2>
