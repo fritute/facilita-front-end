@@ -490,7 +490,7 @@ function App() {
           <img
             src="./Vector copy.png"
             alt="Decoração"
-            className="absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 object-contain"
+            className="absolute top-0 right-0 w-48 h-32 md:w-64 md:h-40 object-cover"
           />
           
           <div className="relative z-10 text-center">
@@ -569,7 +569,7 @@ function App() {
           <img
             src="./Vector copy.png"
             alt="Decoração"
-            className="absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 object-contain"
+            className="absolute top-0 right-0 w-48 h-32 md:w-64 md:h-40 object-cover"
           />
           
           <div className="relative z-10">
@@ -834,7 +834,7 @@ function App() {
         <img
           src="./Vector copy.png"
           alt="Decoração"
-          className="absolute top-0 right-0 w-32 h-32 md:w-48 md:h-48 object-contain"
+          className="absolute top-0 right-0 w-48 h-32 md:w-64 md:h-40 object-cover"
         />
         
         <div className="relative z-10">
