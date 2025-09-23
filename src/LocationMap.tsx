@@ -1,23 +1,27 @@
 // LocationMap.tsx
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useState, useEffect } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 
 // Fix para ícones do Leaflet
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+})
 
 export interface Location {
-  lat: number;
-  lng: number;
-  address: string;
+  lat: number
+  lng: number
+  address: string
 }
 
+export interface LocationMapProps {
+  onLocationSelect: (address: string) => void
+  onScreenChange: (screen: string) => void
+}
 
   
 
@@ -25,67 +29,67 @@ export interface Location {
 function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
   useMapEvents({
     click: (e) => {
-      onMapClick(e.latlng.lat, e.latlng.lng);
+      onMapClick(e.latlng.lat, e.latlng.lng)
     },
-  });
-  return null;
+  })
+  return null
 }
 
 const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenChange }) => {
-  const [userLocation, setUserLocation] = useState<Location | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([-23.5505, -46.6333]);
-  const [nearbyAddresses, setNearbyAddresses] = useState<Location[]>([]);
-  const [isLocating, setIsLocating] = useState(false);
+  const [userLocation, setUserLocation] = useState<Location | null>(null)
+  const [mapCenter, setMapCenter] = useState<[number, number]>([-23.5505, -46.6333])
+  const [nearbyAddresses, setNearbyAddresses] = useState<Location[]>([])
+  const [isLocating, setIsLocating] = useState(false)
 
   // Função para obter a localização do usuário
   const getUserLocation = () => {
-    setIsLocating(true);
+    setIsLocating(true)
     
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
-          const { latitude, longitude } = position.coords;
-          setMapCenter([latitude, longitude]);
-          setUserLocation({ lat: latitude, lng: longitude, address: '' });
+          const { latitude, longitude } = position.coords
+          setMapCenter([latitude, longitude])
+          setUserLocation({ lat: latitude, lng: longitude, address: '' })
           
-          await getAddressFromCoords(latitude, longitude);
-          setIsLocating(false);
+          await getAddressFromCoords(latitude, longitude)
+          setIsLocating(false)
         },
         (error) => {
-          console.error('Erro ao obter localização:', error);
-          alert('Não foi possível obter sua localização. Usando localização padrão.');
-          setIsLocating(false);
+          console.error('Erro ao obter localização:', error)
+          alert('Não foi possível obter sua localização. Usando localização padrão.')
+          setIsLocating(false)
         },
         {
           enableHighAccuracy: true,
           timeout: 10000,
           maximumAge: 60000
         }
-      );
+      )
     } else {
-      alert('Geolocalização não suportada pelo navegador.');
-      setIsLocating(false);
+      alert('Geolocalização não suportada pelo navegador.')
+      setIsLocating(false)
     }
-  };
+  }
 
   // Função para obter endereço a partir de coordenadas
   const getAddressFromCoords = async (lat: number, lng: number) => {
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
-      );
+      )
       
       if (response.ok) {
-        const data = await response.json();
-        const address = data.display_name || 'Endereço não encontrado';
+        const data = await response.json()
+        const address = data.display_name || 'Endereço não encontrado'
         
-        setUserLocation(prev => prev ? { ...prev, address } : { lat, lng, address });
-        await getNearbyAddresses(lat, lng);
+        setUserLocation(prev => prev ? { ...prev, address } : { lat, lng, address })
+        await getNearbyAddresses(lat, lng)
       }
     } catch (error) {
-      console.error('Erro ao buscar endereço:', error);
+      console.error('Erro ao buscar endereço:', error)
     }
-  };
+  }
 
   // Função para buscar endereços próximos
   const getNearbyAddresses = async (lat: number, lng: number) => {
@@ -95,46 +99,46 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
         { lat: lat + 0.002, lng: lng - 0.001, address: 'Rua Manaus, cohab 2, Carapicuíba' },
         { lat: lat - 0.001, lng: lng + 0.002, address: 'Rua Belém, cohab 2, Carapicuíba' },
         { lat: lat - 0.002, lng: lng - 0.002, address: 'Rua Paraná, cohab 1, Carapicuíba' },
-      ];
+      ]
       
-      setNearbyAddresses(mockNearbyAddresses);
+      setNearbyAddresses(mockNearbyAddresses)
     } catch (error) {
-      console.error('Erro ao buscar endereços próximos:', error);
+      console.error('Erro ao buscar endereços próximos:', error)
     }
-  };
+  }
 
   // Função para buscar endereço por texto
   const searchAddress = async (query: string) => {
-    if (!query.trim()) return;
+    if (!query.trim()) return
     
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
-      );
+      )
       
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json()
         const addresses: Location[] = data.map((item: any) => ({
           lat: parseFloat(item.lat),
           lng: parseFloat(item.lon),
           address: item.display_name
-        }));
+        }))
         
-        setNearbyAddresses(addresses);
+        setNearbyAddresses(addresses)
         
         if (addresses.length > 0) {
-          setMapCenter([addresses[0].lat, addresses[0].lng]);
+          setMapCenter([addresses[0].lat, addresses[0].lng])
         }
       }
     } catch (error) {
-      console.error('Erro ao buscar endereço:', error);
+      console.error('Erro ao buscar endereço:', error)
     }
-  };
+  }
 
   // Efeito para obter localização quando o componente montar
   useEffect(() => {
-    getUserLocation();
-  }, []);
+    getUserLocation()
+  }, [])
 
   // Ícones SVG inline (ou você pode importar de um arquivo separado)
   const MapPin = () => (
@@ -142,19 +146,19 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
-  );
+  )
 
   const Search = () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
     </svg>
-  );
+  )
 
   const FileText = () => (
     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
-  );
+  )
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -167,7 +171,7 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
           className="z-0"
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            attribution='&copy <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           
@@ -211,7 +215,7 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
           ))}
           
           <MapClickHandler onMapClick={async (lat, lng) => {
-            await getAddressFromCoords(lat, lng);
+            await getAddressFromCoords(lat, lng)
           }} />
         </MapContainer>
         
@@ -245,9 +249,9 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
             type="text"
             placeholder="Buscar endereço..."
             onChange={(e) => {
-              const query = e.target.value;
+              const query = e.target.value
               if (query.length > 2) {
-                searchAddress(query);
+                searchAddress(query)
               }
             }}
             className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -312,7 +316,7 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default LocationMap;
+export default LocationMap

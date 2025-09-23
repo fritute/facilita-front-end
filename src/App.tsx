@@ -1,87 +1,96 @@
-import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, UserIcon as UserIconLucide, ShoppingCart, Truck, Package, Users } from 'lucide-react';
-import QRCode from 'qrcode';
-import LocationMap from './LocationMap';
+import React, { useState, useEffect } from 'react'
+import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, UserIcon as UserIconLucide, ShoppingCart, Truck, Package, Users } from 'lucide-react'
+import QRCode from 'qrcode'
+import LocationMap from './LocationMap'
+import AddressInput from './components/AddressInput'
 
-type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select";
+type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select"
+
 
 
 interface ValidationErrors {
-  nome?: string;
-  email?: string;
-  confirmarEmail?: string;
-  senha?: string;
-  confirmarSenha?: string;
-  telefone?: string;
-  loginEmail?: string;
-  loginSenha?: string;
-  recoveryContact?: string;
-  verificationCode?: string;
+  nome?: string
+  email?: string
+  confirmarEmail?: string
+  senha?: string
+  confirmarSenha?: string
+  telefone?: string
+  loginEmail?: string
+  loginSenha?: string
+  recoveryContact?: string
+  verificationCode?: string
 }
 
 interface UserData {
-  nome: string;
-  email: string;
-  confirmarEmail: string;
-  senha: string;
-  confirmarSenha: string;
-  telefone: string;
+  nome: string
+  email: string
+  confirmarEmail: string
+  senha: string
+  confirmarSenha: string
+  telefone: string
 }
 
 interface RegisterData {
-  nome: string;
-  senha_hash: string;
-  email: string;
-  telefone: string;
-  tipo_conta: 'CONTRATANTE' | 'PRESTADOR';
+  nome: string
+  senha_hash: string
+  email: string
+  telefone: string
+  tipo_conta: 'CONTRATANTE' | 'PRESTADOR'
 }
 
 interface LoggedUser {
-  nome: string;
-  email: string;
-  telefone: string;
-  tipo_conta: 'CONTRATANTE' | 'PRESTADOR';
-  foto?: string;
+  nome: string
+  email: string
+  telefone: string
+  tipo_conta: 'CONTRATANTE' | 'PRESTADOR'
+  foto?: string
 }
 
 interface ServiceRequest {
-  id: string;
-  description: string;
-  location: string;
-  price: number;
-  status: 'pending' | 'accepted' | 'in_progress' | 'completed';
+  id: string
+  description: string
+  location: string
+  price: number
+  status: 'pending' | 'accepted' | 'in_progress' | 'completed'
 }
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment'>('login')
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [recoveryContact, setRecoveryContact] = useState('');
-  const [verificationCode, setVerificationCode] = useState(['', '', '', '', '']);
-  const [countdown, setCountdown] = useState(27);
-  const [selectedAccountType, setSelectedAccountType] = useState<'CONTRATANTE' | 'PRESTADOR' | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errors, setErrors] = useState<ValidationErrors>({});
-  const [loggedUser, setLoggedUser] = useState<LoggedUser | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [showTermsModal, setShowTermsModal] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [recoveryContact, setRecoveryContact] = useState('')
+  const [verificationCode, setVerificationCode] = useState(['', '', '', '', ''])
+  const [countdown, setCountdown] = useState(27)
+  const [selectedAccountType, setSelectedAccountType] = useState<'CONTRATANTE' | 'PRESTADOR' | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [errors, setErrors] = useState<ValidationErrors>({})
+  const [loggedUser, setLoggedUser] = useState<LoggedUser | null>(null)
   const [profileData, setProfileData] = useState({
     endereco: '',
     mercado: '',
     necessidades: ''
-  });
-  const [selectedLocation, setSelectedLocation] = useState<string>('');
-  const [serviceDescription, setServiceDescription] = useState('');
-  const [selectedServiceType, setSelectedServiceType] = useState<string>('');
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
-  const [pixCode, setPixCode] = useState<string>('');
-  const [driverFound, setDriverFound] = useState(false);
+  })
+  const [selectedLocation, setSelectedLocation] = useState<string>('')
+  const [serviceDescription, setServiceDescription] = useState('')
+  const [selectedServiceType, setSelectedServiceType] = useState<string>('')
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
+  const [pixCode, setPixCode] = useState<string>('')
+  const [driverFound, setDriverFound] = useState(false)
+  const [selectedAddress, setSelectedAddress] = useState<any>(null);
   
+  const handleAddressSelection = (address: any) => {
+    setSelectedAddress(address);
+    console.log("Endereço selecionado:", address);
+  };
+
+
   const [loginData, setLoginData] = useState({
     email: '',
     senha: ''
-  });
+  })
 
   const [userData, setUserData] = useState<UserData>({
     nome: 'Katiê Bueno',
@@ -90,7 +99,7 @@ function App() {
     senha: '',
     confirmarSenha: '',
     telefone: '(11) 90000-1234'
-  });
+  })
 
   // Mock data for recent addresses
   const recentAddresses = [
@@ -98,7 +107,7 @@ function App() {
     'Rua Manaus, cohab 2, Carapicuíba',
     'Rua Belém, cohab 2, Carapicuíba',
     'Rua Paraná, cohab 1, Carapicuíba'
-  ];
+  ]
 
   // Mock service cards
   const serviceCards = [
@@ -106,111 +115,111 @@ function App() {
     { id: 'mercado', name: 'Mercado', icon: '🛒' },
     { id: 'correios', name: 'Correios', icon: '📦' },
     { id: 'shopping', name: 'Shopping', icon: '🛍️' }
-  ];
+  ]
 
   // Predefined service options
   const predefinedServices = [
     { id: 'ir-mercado', text: 'Ir ao mercado', category: 'Compras' },
     { id: 'buscar-remedios', text: 'Buscar remédios na farmácia', category: 'Saúde' },
     { id: 'acompanhar-consulta', text: 'Acompanhar em consultas médicas', category: 'Saúde' }
-  ];
+  ]
 
   const generateQRCode = async (pixKey: string, amount: number) => {
     try {
-      const pixString = `00020126580014BR.GOV.BCB.PIX0136${pixKey}520400005303986540${amount.toFixed(2)}5802BR5925FACILITA SERVICOS LTDA6009SAO PAULO62070503***6304`;
-      const qrCodeDataUrl = await QRCode.toDataURL(pixString);
-      setQrCodeUrl(qrCodeDataUrl);
-      setPixCode(pixString);
+      const pixString = `00020126580014BR.GOV.BCB.PIX0136${pixKey}520400005303986540${amount.toFixed(2)}5802BR5925FACILITA SERVICOS LTDA6009SAO PAULO62070503***6304`
+      const qrCodeDataUrl = await QRCode.toDataURL(pixString)
+      setQrCodeUrl(qrCodeDataUrl)
+      setPixCode(pixString)
     } catch (error) {
-      console.error('Error generating QR code:', error);
+      console.error('Error generating QR code:', error)
     }
-  };
+  }
 
   // Simulate driver search
   useEffect(() => {
     if (currentScreen === 'waiting-driver') {
       const timer = setTimeout(() => {
-        setDriverFound(true);
+        setDriverFound(true)
         setTimeout(() => {
-          handleScreenTransition('payment');
-        }, 2000);
-      }, 5000);
-      return () => clearTimeout(timer);
+          handleScreenTransition('payment')
+        }, 2000)
+      }, 5000)
+      return () => clearTimeout(timer)
     }
-  }, [currentScreen]);
+  }, [currentScreen])
 
   // Generate PIX QR Code when payment screen loads
   useEffect(() => {
     if (currentScreen === 'payment') {
-      generateQRCode('facilita@pagbank.com', 119.99);
+      generateQRCode('facilita@pagbank.com', 119.99)
     }
-  }, [currentScreen]);
+  }, [currentScreen])
 
   // Função para validar email
   const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
 
   // Função para validar nome (não pode conter números)
   const validateName = (name: string): boolean => {
-    const nameRegex = /^[a-zA-ZÀ-ÿ\s]+$/;
-    return nameRegex.test(name) && name.trim().length > 0;
-  };
+    const nameRegex = /^[a-zA-ZÀ-ÿ\s]+$/
+    return nameRegex.test(name) && name.trim().length > 0
+  }
 
   // Função para validar telefone
   const validatePhone = (phone: string): boolean => {
-    const phoneRegex = /^\(\d{2}\)\s\d{4,5}-\d{4}$/;
-    return phoneRegex.test(phone);
-  };
+    const phoneRegex = /^\(\d{2}\)\s\d{4,5}-\d{4}$/
+    return phoneRegex.test(phone)
+  }
 
   // Função para validar senha
   const validatePassword = (password: string): boolean => {
-    return password.length >= 6 && password.length <= 20;
-  };
+    return password.length >= 6 && password.length <= 20
+  }
 
   // Função para limpar erro específico
   const clearError = (field: keyof ValidationErrors) => {
     setErrors(prev => ({
       ...prev,
       [field]: undefined
-    }));
-  };
+    }))
+  }
 
   const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment') => {
-    setIsTransitioning(true);
+    setIsTransitioning(true)
     setTimeout(() => {
-      setCurrentScreen(newScreen);
+      setCurrentScreen(newScreen)
       setTimeout(() => {
-        setIsTransitioning(false);
-      }, 50);
-    }, 300);
-  };
+        setIsTransitioning(false)
+      }, 50)
+    }, 300)
+  }
 
   const handleLogin = () => {
-    const newErrors: ValidationErrors = {};
+    const newErrors: ValidationErrors = {}
 
     // Validar email
     if (!validateEmail(loginData.email)) {
-      newErrors.loginEmail = 'Endereço de e-mail inválido';
+      newErrors.loginEmail = 'Endereço de e-mail inválido'
     }
 
     // Validar senha
     if (!loginData.senha) {
-      newErrors.loginSenha = 'Senha incorreta';
+      newErrors.loginSenha = 'Senha incorreta'
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
+      setErrors(newErrors)
+      return
     }
 
     if (!termsAccepted) {
-      setShowTermsModal(true);
-      return;
+      setShowTermsModal(true)
+      return
     }
 
-    setErrors({});
+    setErrors({})
     
     // Simulate successful login for contractor
     const mockUser: LoggedUser = {
@@ -218,85 +227,85 @@ function App() {
       email: loginData.email,
       telefone: userData.telefone,
       tipo_conta: 'CONTRATANTE'
-    };
+    }
     
-    setLoggedUser(mockUser);
-    handleScreenTransition('profile-setup');
-  };
+    setLoggedUser(mockUser)
+    handleScreenTransition('profile-setup')
+  }
 
   const handleTermsAccept = () => {
-    setTermsAccepted(true);
-    setShowTermsModal(false);
-  };
+    setTermsAccepted(true)
+    setShowTermsModal(false)
+  }
 
   const handleCadastro = () => {
-    const newErrors: ValidationErrors = {};
+    const newErrors: ValidationErrors = {}
 
     // Validar nome
     if (!validateName(userData.nome)) {
-      newErrors.nome = 'Nome inexistente';
+      newErrors.nome = 'Nome inexistente'
     }
 
     // Validar email
     if (!validateEmail(userData.email)) {
-      newErrors.email = 'Email inválido';
+      newErrors.email = 'Email inválido'
     }
 
     // Validar confirmação de email
     if (userData.email !== userData.confirmarEmail) {
-      newErrors.confirmarEmail = 'Os e-mails não coincidem';
+      newErrors.confirmarEmail = 'Os e-mails não coincidem'
     }
 
     // Validar senha
     if (!validatePassword(userData.senha)) {
-      newErrors.senha = 'Sua senha tem que ser de 6 a 20 caracteres';
+      newErrors.senha = 'Sua senha tem que ser de 6 a 20 caracteres'
     }
 
     // Validar confirmação de senha
     if (userData.senha !== userData.confirmarSenha) {
-      newErrors.confirmarSenha = 'As senhas não coincidem';
+      newErrors.confirmarSenha = 'As senhas não coincidem'
     }
 
     // Validar telefone
     if (!validatePhone(userData.telefone)) {
-      newErrors.telefone = 'Telefone inválido';
+      newErrors.telefone = 'Telefone inválido'
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
+      setErrors(newErrors)
+      return
     }
 
     // Validações básicas
     if (userData.email !== userData.confirmarEmail) {
-      alert('Os e-mails não coincidem');
-      return;
+      alert('Os e-mails não coincidem')
+      return
     }
     if (userData.senha !== userData.confirmarSenha) {
-      alert('As senhas não coincidem');
-      return;
+      alert('As senhas não coincidem')
+      return
     }
     if (!userData.nome || !userData.email || !userData.senha || !userData.telefone) {
-      alert('Todos os campos são obrigatórios');
-      return;
+      alert('Todos os campos são obrigatórios')
+      return
     }
 
-    setErrors({});
-    handleScreenTransition('account-type');
-  };
+    setErrors({})
+    handleScreenTransition('account-type')
+  }
 
   const handleAccountTypeSubmit = async () => {
     if (!selectedAccountType) {
-      alert('Selecione um tipo de conta');
-      return;
+      alert('Selecione um tipo de conta')
+      return
     }
 
     if (selectedAccountType === 'PRESTADOR') {
-      handleScreenTransition('service-provider');
-      return;
+      handleScreenTransition('service-provider')
+      return
     }
 
-    setIsLoading(true);
+    setIsLoading(true)
 
     const registerData: RegisterData = {
       nome: userData.nome,
@@ -304,7 +313,7 @@ function App() {
       email: userData.email,
       telefone: userData.telefone.replace(/\D/g, ''), 
       tipo_conta: selectedAccountType
-    };
+    }
 
     try {
       const response = await fetch('http://localhost:8080/v1/facilita/register', {
@@ -313,31 +322,31 @@ function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(registerData)
-      });
+      })
 
       if (response.ok) {
-        handleScreenTransition('success');
+        handleScreenTransition('success')
         setTimeout(() => {
-          handleScreenTransition('login');
-        }, 2000);
+          handleScreenTransition('login')
+        }, 2000)
       } else {
-        const errorData = await response.json();
-        alert(`Erro no cadastro: ${errorData.message || 'Erro desconhecido'}`);
+        const errorData = await response.json()
+        alert(`Erro no cadastro: ${errorData.message || 'Erro desconhecido'}`)
       }
     } catch (error) {
-      console.error('Erro na requisição:', error);
+      console.error('Erro na requisição:', error)
       if (error instanceof Error && error.message === 'Failed to fetch') {
-        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando em http://localhost:8080');
+        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando em http://localhost:8080')
       } else {
-        alert('Erro de conexão. Verifique se o servidor está rodando.');
+        alert('Erro de conexão. Verifique se o servidor está rodando.')
       }
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   const handleServiceProviderSubmit = async () => {
-    setIsLoading(true);
+    setIsLoading(true)
 
     const registerData: RegisterData = {
       nome: userData.nome,
@@ -345,7 +354,7 @@ function App() {
       email: userData.email,
       telefone: userData.telefone.replace(/\D/g, ''),
       tipo_conta: 'PRESTADOR'
-    };
+    }
 
     try {
       const response = await fetch('http://localhost:8080/v1/facilita/register', {
@@ -354,120 +363,120 @@ function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(registerData)
-      });
+      })
 
       if (response.ok) {
-        handleScreenTransition('success');
+        handleScreenTransition('success')
         setTimeout(() => {
-          handleScreenTransition('login');
-        }, 2000);
+          handleScreenTransition('login')
+        }, 2000)
       } else {
-        const errorData = await response.json();
-        alert(`Erro no cadastro: ${errorData.message || 'Erro desconhecido'}`);
+        const errorData = await response.json()
+        alert(`Erro no cadastro: ${errorData.message || 'Erro desconhecido'}`)
       }
     } catch (error) {
-      console.error('Erro na requisição:', error);
+      console.error('Erro na requisição:', error)
       if (error instanceof Error && error.message === 'Failed to fetch') {
-        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando em http://localhost:8080');
+        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando em http://localhost:8080')
       } else {
-        alert('Erro de conexão. Verifique se o servidor está rodando.');
+        alert('Erro de conexão. Verifique se o servidor está rodando.')
       }
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   const handleRecoverySubmit = () => {
-    const newErrors: ValidationErrors = {};
+    const newErrors: ValidationErrors = {}
 
     // Validar se é email ou telefone
-    const isEmail = recoveryContact.includes('@');
-    const isPhone = /^\(\d{2}\)\s\d{4,5}-\d{4}$/.test(recoveryContact);
+    const isEmail = recoveryContact.includes('@')
+    const isPhone = /^\(\d{2}\)\s\d{4,5}-\d{4}$/.test(recoveryContact)
 
     if (!isEmail && !isPhone) {
-      newErrors.recoveryContact = 'Digite um e-mail ou telefone válido';
-      setErrors(newErrors);
-      return;
+      newErrors.recoveryContact = 'Digite um e-mail ou telefone válido'
+      setErrors(newErrors)
+      return
     }
 
     if (isEmail && !validateEmail(recoveryContact)) {
-      newErrors.recoveryContact = 'Endereço de e-mail inválido';
-      setErrors(newErrors);
-      return;
+      newErrors.recoveryContact = 'Endereço de e-mail inválido'
+      setErrors(newErrors)
+      return
     }
 
-    setErrors({});
+    setErrors({})
     // Simular envio do código
-    handleScreenTransition('verification');
+    handleScreenTransition('verification')
     // Iniciar countdown
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          clearInterval(timer);
-          return 27;
+          clearInterval(timer)
+          return 27
         }
-        return prev - 1;
-      });
-    }, 1000);
-  };
+        return prev - 1
+      })
+    }, 1000)
+  }
 
   const handleCodeChange = (index: number, value: string) => {
     if (value.length <= 1) {
-      const newCode = [...verificationCode];
-      newCode[index] = value;
-      setVerificationCode(newCode);
+      const newCode = [...verificationCode]
+      newCode[index] = value
+      setVerificationCode(newCode)
       
       // Auto focus next input
       if (value && index < 4) {
-        const nextInput = document.getElementById(`code-${index + 1}`);
-        nextInput?.focus();
+        const nextInput = document.getElementById(`code-${index + 1}`)
+        nextInput?.focus()
       }
     }
-  };
+  }
 
   const handleVerification = () => {
-    const code = verificationCode.join('');
+    const code = verificationCode.join('')
     
     if (code.length !== 5 || !/^\d{5}$/.test(code)) {
-      setErrors({ verificationCode: 'Código inválido' });
-      return;
+      setErrors({ verificationCode: 'Código inválido' })
+      return
     }
 
-    setErrors({});
+    setErrors({})
     // Lógica de verificação
-    console.log('Código verificado:', verificationCode.join(''));
-    handleScreenTransition('login');
-  };
+    console.log('Código verificado:', verificationCode.join(''))
+    handleScreenTransition('login')
+  }
 
   const handleProfileSetup = () => {
     if (!profileData.endereco || !profileData.mercado || !profileData.necessidades) {
-      alert('Preencha todos os campos');
-      return;
+      alert('Preencha todos os campos')
+      return
     }
-    handleScreenTransition('home');
-  };
+    handleScreenTransition('home')
+  }
 
   const handleServiceRequest = () => {
-    handleScreenTransition('location-select');
-  };
+    handleScreenTransition('location-select')
+  }
 
   const handleLocationSelect = (address: string) => {
-    setSelectedLocation(address);
-    handleScreenTransition('service-create');
-  };
+    setSelectedLocation(address)
+    handleScreenTransition('service-create')
+  }
 
   const handleServiceCreate = () => {
     if (!serviceDescription && !selectedServiceType) {
-      alert('Selecione um serviço ou descreva o que precisa');
-      return;
+      alert('Selecione um serviço ou descreva o que precisa')
+      return
     }
-    handleScreenTransition('waiting-driver');
-  };
+    handleScreenTransition('waiting-driver')
+  }
 
   const copyPixCode = () => {
-    navigator.clipboard.writeText(pixCode);
-    alert('Código PIX copiado!');
-  };
+    navigator.clipboard.writeText(pixCode)
+    alert('Código PIX copiado!')
+  }
 
   const FacilitaLogo = () => (
     <div className="flex items-center justify-center mt-8 xl:mt-0">
@@ -475,7 +484,7 @@ function App() {
         <img src="/logotcc 1.png" alt="Facilita Logo" className="facilita-logo w-[400px] h-auto" />
       </div>
     </div>
-  );
+  )
 
   const UserIcon = () => (
     <div className="w-24 h-24 bg-green-200 rounded-full flex items-center justify-center mb-4">
@@ -483,7 +492,7 @@ function App() {
         <User className="w-8 h-8 text-green-800" />
       </div>
     </div>
-  );
+  )
 
   // Payment Screen
   if (currentScreen === 'payment') {
@@ -610,7 +619,7 @@ function App() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   // Waiting Driver Screen
@@ -645,7 +654,7 @@ function App() {
           )}
         </div>
       </div>
-    );
+    )
   }
 
   // Service Create Screen
@@ -740,10 +749,10 @@ function App() {
           </button>
         </div>
       </div>
-    );
+    )
   }
 
-  // No seu App.tsx, substitua a tela 'location-select' por:
+
   
   if (currentScreen === 'location-select') {
     return (
@@ -759,7 +768,7 @@ function App() {
           onScreenChange={handleScreenTransition}
         />
       </div>
-    );
+    )
   }
   
 
@@ -867,7 +876,7 @@ function App() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   // Profile Setup Screen
@@ -962,7 +971,7 @@ function App() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   if (currentScreen === 'service-provider') {
@@ -1003,7 +1012,7 @@ function App() {
           </button>
         </div>
       </div>
-    );
+    )
   }
 
   if (currentScreen === 'account-type') {
@@ -1068,7 +1077,7 @@ function App() {
           </button>
         </div>
       </div>
-    );
+    )
   }
 
   if (currentScreen === 'verification') {
@@ -1112,8 +1121,8 @@ function App() {
                   maxLength={1}
                   value={digit}
                  onChange={(e) => {
-                   handleCodeChange(index, e.target.value);
-                   clearError('verificationCode');
+                   handleCodeChange(index, e.target.value)
+                   clearError('verificationCode')
                  }}
                   className="w-10 h-10 md:w-12 md:h-12 bg-gray-600 text-white text-center text-lg md:text-xl rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
@@ -1145,7 +1154,7 @@ function App() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   if (currentScreen === 'recovery') {
@@ -1190,8 +1199,8 @@ function App() {
                     type="text"
                     value={recoveryContact}
                    onChange={(e) => {
-                     setRecoveryContact(e.target.value);
-                     clearError('recoveryContact');
+                     setRecoveryContact(e.target.value)
+                     clearError('recoveryContact')
                    }}
                     placeholder="Digite seu e-mail ou telefone"
                     className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -1223,7 +1232,7 @@ function App() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   if (currentScreen === 'success') {
@@ -1239,7 +1248,7 @@ function App() {
           <p className="text-gray-400">Redirecionando para o login...</p>
         </div>
       </div>
-    );
+    )
   }
 
   if (currentScreen === 'cadastro') {
@@ -1247,7 +1256,7 @@ function App() {
       <div className={`min-h-screen bg-gray-800 flex flex-col xl:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="flex-1 p-4 md:p-8 w-full xl:max-w-lg xl:ml-[15%] xl:mt-[5%]  order-2 xl:order-1">
+        <div className="flex-1 p-4 md:p-8 w-full xl:max-w-lg xl:ml-[15%] xl:mt-[5%]  order-2 xl:order-1">
           <h2 className="text-xl md:text-2xl text-white font-bold mb-6 md:mb-8">Cadastro</h2>
           
           <div className="space-y-4 md:space-y-6">
@@ -1257,57 +1266,57 @@ function App() {
                 <input
                   type="text"
                   value={userData.nome}
-                 onChange={(e) => {
-                   setUserData({...userData, nome: e.target.value});
-                   clearError('nome');
-                 }}
+                  onChange={(e) => {
+                    setUserData({...userData, nome: e.target.value})
+                    clearError('nome')
+                  }}
                   className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <User className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
-             {errors.nome && (
-               <p className="text-red-500 text-sm mt-1">{errors.nome}</p>
-             )}
+              {errors.nome && (
+                <p className="text-red-500 text-sm mt-1">{errors.nome}</p>
+              )}
             </div>
-
+  
             <div>
               <label className="block text-gray-400 text-sm mb-2">E-mail</label>
               <div className="relative">
                 <input
                   type="email"
                   value={userData.email}
-                 onChange={(e) => {
-                   setUserData({...userData, email: e.target.value});
-                   clearError('email');
-                 }}
+                  onChange={(e) => {
+                    setUserData({...userData, email: e.target.value})
+                    clearError('email')
+                  }}
                   className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
-             {errors.email && (
-               <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-             )}
+              {errors.email && (
+                <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+              )}
             </div>
-
+  
             <div>
               <label className="block text-gray-400 text-sm mb-2">Confirmar Email</label>
               <div className="relative">
                 <input
                   type="email"
                   value={userData.confirmarEmail}
-                 onChange={(e) => {
-                   setUserData({...userData, confirmarEmail: e.target.value});
-                   clearError('confirmarEmail');
-                 }}
+                  onChange={(e) => {
+                    setUserData({...userData, confirmarEmail: e.target.value})
+                    clearError('confirmarEmail')
+                  }}
                   className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
-             {errors.confirmarEmail && (
-               <p className="text-red-500 text-sm mt-1">{errors.confirmarEmail}</p>
-             )}
+              {errors.confirmarEmail && (
+                <p className="text-red-500 text-sm mt-1">{errors.confirmarEmail}</p>
+              )}
             </div>
-
+  
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-gray-400 text-sm mb-2">Senha</label>
@@ -1315,10 +1324,10 @@ function App() {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={userData.senha}
-                   onChange={(e) => {
-                     setUserData({...userData, senha: e.target.value});
-                     clearError('senha');
-                   }}
+                    onChange={(e) => {
+                      setUserData({...userData, senha: e.target.value})
+                      clearError('senha')
+                    }}
                     className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <button
@@ -1329,21 +1338,21 @@ function App() {
                     {showPassword ? <EyeOff /> : <Eye />}
                   </button>
                 </div>
-               {errors.senha && (
-                 <p className="text-red-500 text-sm mt-1">{errors.senha}</p>
-               )}
+                {errors.senha && (
+                  <p className="text-red-500 text-sm mt-1">{errors.senha}</p>
+                )}
               </div>
-
+  
               <div>
                 <label className="block text-gray-400 text-sm mb-2">Confirmar Senha</label>
                 <div className="relative">
                   <input
                     type={showConfirmPassword ? "text" : "password"}
                     value={userData.confirmarSenha}
-                   onChange={(e) => {
-                     setUserData({...userData, confirmarSenha: e.target.value});
-                     clearError('confirmarSenha');
-                   }}
+                    onChange={(e) => {
+                      setUserData({...userData, confirmarSenha: e.target.value})
+                      clearError('confirmarSenha')
+                    }}
                     className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <button
@@ -1354,38 +1363,30 @@ function App() {
                     {showConfirmPassword ? <EyeOff /> : <Eye />}
                   </button>
                 </div>
-               {errors.confirmarSenha && (
-                 <p className="text-red-500 text-sm mt-1">{errors.confirmarSenha}</p>
-               )}
+                {errors.confirmarSenha && (
+                  <p className="text-red-500 text-sm mt-1">{errors.confirmarSenha}</p>
+                )}
               </div>
             </div>
-
+            
+            {/* CAMPO DE ENDEREÇO ADICIONADO AQUI */}
             <div>
-              <label className="block text-gray-400 text-sm mb-2">Telefone</label>
+              <label className="block text-gray-400 text-sm mb-2">Endereço</label>
               <div className="relative">
-                <input
-                  type="tel"
-                  value={userData.telefone}
-                 onChange={(e) => {
-                   setUserData({...userData, telefone: e.target.value});
-                   clearError('telefone');
-                 }}
-                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                <AddressInput
+                  onSelectAddress={handleAddressSelection}
+                  placeholder="Digite seu endereço completo"
                 />
-                <Phone className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
-             {errors.telefone && (
-               <p className="text-red-500 text-sm mt-1">{errors.telefone}</p>
-             )}
             </div>
-
+  
             <button
               onClick={handleCadastro}
               className="w-full bg-green-500 text-white py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-600 transition-colors"
             >
               Próximo
             </button>
-
+  
             <p className="text-center text-gray-400 text-sm">
               Já possui uma conta?{' '}
               <button
@@ -1397,7 +1398,7 @@ function App() {
             </p>
           </div>
         </div>
-
+  
         <div className="flex-1 flex flex-col justify-end items-end p-8 order-1 xl:order-2">
           <div className="absolute top-4 right-4 md:top-8 md:right-8">
             <FacilitaLogo />
@@ -1413,7 +1414,7 @@ function App() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -1460,8 +1461,8 @@ function App() {
                   type="email"
                   value={loginData.email}
                  onChange={(e) => {
-                   setLoginData({...loginData, email: e.target.value});
-                   clearError('loginEmail');
+                   setLoginData({...loginData, email: e.target.value})
+                   clearError('loginEmail')
                  }}
                   className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
@@ -1479,8 +1480,8 @@ function App() {
                   type="password"
                   value={loginData.senha}
                  onChange={(e) => {
-                   setLoginData({...loginData, senha: e.target.value});
-                   clearError('loginSenha');
+                   setLoginData({...loginData, senha: e.target.value})
+                   clearError('loginSenha')
                  }}
                   className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="••••••••••"
@@ -1539,7 +1540,7 @@ function App() {
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fadeIn"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setShowTermsModal(false);
+              setShowTermsModal(false)
             }
           }}
         >
@@ -1613,7 +1614,7 @@ function App() {
         </div>
       )}
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
