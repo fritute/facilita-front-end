@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, UserIcon as UserIconLucide, ShoppingCart, Truck, Package, Users } from 'lucide-react';
+import QRCode from 'qrcode';
+import LocationMap from './LocationMap';
+
+type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select";
+
 
 interface ValidationErrors {
   nome?: string;
@@ -31,8 +36,24 @@ interface RegisterData {
   tipo_conta: 'CONTRATANTE' | 'PRESTADOR';
 }
 
+interface LoggedUser {
+  nome: string;
+  email: string;
+  telefone: string;
+  tipo_conta: 'CONTRATANTE' | 'PRESTADOR';
+  foto?: string;
+}
+
+interface ServiceRequest {
+  id: string;
+  description: string;
+  location: string;
+  price: number;
+  status: 'pending' | 'accepted' | 'in_progress' | 'completed';
+}
+
 function App() {
-  const [currentScreen, setCurrentScreen] = useState<'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider'>('login');
+  const [currentScreen, setCurrentScreen] = useState<'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment'>('login')
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -44,9 +65,21 @@ function App() {
   const [selectedAccountType, setSelectedAccountType] = useState<'CONTRATANTE' | 'PRESTADOR' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const [loggedUser, setLoggedUser] = useState<LoggedUser | null>(null);
+  const [profileData, setProfileData] = useState({
+    endereco: '',
+    mercado: '',
+    necessidades: ''
+  });
+  const [selectedLocation, setSelectedLocation] = useState<string>('');
+  const [serviceDescription, setServiceDescription] = useState('');
+  const [selectedServiceType, setSelectedServiceType] = useState<string>('');
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [pixCode, setPixCode] = useState<string>('');
+  const [driverFound, setDriverFound] = useState(false);
   
   const [loginData, setLoginData] = useState({
-    email: 'seuemeil@gmail.com',
+    email: '',
     senha: ''
   });
 
@@ -58,6 +91,60 @@ function App() {
     confirmarSenha: '',
     telefone: '(11) 90000-1234'
   });
+
+  // Mock data for recent addresses
+  const recentAddresses = [
+    'Rua Vitória, cohab 2, Carapicuíba',
+    'Rua Manaus, cohab 2, Carapicuíba',
+    'Rua Belém, cohab 2, Carapicuíba',
+    'Rua Paraná, cohab 1, Carapicuíba'
+  ];
+
+  // Mock service cards
+  const serviceCards = [
+    { id: 'farmacia', name: 'Farmácia', icon: '💊' },
+    { id: 'mercado', name: 'Mercado', icon: '🛒' },
+    { id: 'correios', name: 'Correios', icon: '📦' },
+    { id: 'shopping', name: 'Shopping', icon: '🛍️' }
+  ];
+
+  // Predefined service options
+  const predefinedServices = [
+    { id: 'ir-mercado', text: 'Ir ao mercado', category: 'Compras' },
+    { id: 'buscar-remedios', text: 'Buscar remédios na farmácia', category: 'Saúde' },
+    { id: 'acompanhar-consulta', text: 'Acompanhar em consultas médicas', category: 'Saúde' }
+  ];
+
+  const generateQRCode = async (pixKey: string, amount: number) => {
+    try {
+      const pixString = `00020126580014BR.GOV.BCB.PIX0136${pixKey}520400005303986540${amount.toFixed(2)}5802BR5925FACILITA SERVICOS LTDA6009SAO PAULO62070503***6304`;
+      const qrCodeDataUrl = await QRCode.toDataURL(pixString);
+      setQrCodeUrl(qrCodeDataUrl);
+      setPixCode(pixString);
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+    }
+  };
+
+  // Simulate driver search
+  useEffect(() => {
+    if (currentScreen === 'waiting-driver') {
+      const timer = setTimeout(() => {
+        setDriverFound(true);
+        setTimeout(() => {
+          handleScreenTransition('payment');
+        }, 2000);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentScreen]);
+
+  // Generate PIX QR Code when payment screen loads
+  useEffect(() => {
+    if (currentScreen === 'payment') {
+      generateQRCode('facilita@pagbank.com', 119.99);
+    }
+  }, [currentScreen]);
 
   // Função para validar email
   const validateEmail = (email: string): boolean => {
@@ -90,7 +177,7 @@ function App() {
     }));
   };
 
-  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider') => {
+  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment') => {
     setIsTransitioning(true);
     setTimeout(() => {
       setCurrentScreen(newScreen);
@@ -124,8 +211,17 @@ function App() {
     }
 
     setErrors({});
-    // Lógica de login aqui
-    console.log('Login realizado');
+    
+    // Simulate successful login for contractor
+    const mockUser: LoggedUser = {
+      nome: userData.nome,
+      email: loginData.email,
+      telefone: userData.telefone,
+      tipo_conta: 'CONTRATANTE'
+    };
+    
+    setLoggedUser(mockUser);
+    handleScreenTransition('profile-setup');
   };
 
   const handleTermsAccept = () => {
@@ -211,7 +307,7 @@ function App() {
     };
 
     try {
-      const response = await fetch('http://localhost:8080/v1/facilita/usuario/register', {
+      const response = await fetch('http://localhost:8080/v1/facilita/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -343,6 +439,36 @@ function App() {
     handleScreenTransition('login');
   };
 
+  const handleProfileSetup = () => {
+    if (!profileData.endereco || !profileData.mercado || !profileData.necessidades) {
+      alert('Preencha todos os campos');
+      return;
+    }
+    handleScreenTransition('home');
+  };
+
+  const handleServiceRequest = () => {
+    handleScreenTransition('location-select');
+  };
+
+  const handleLocationSelect = (address: string) => {
+    setSelectedLocation(address);
+    handleScreenTransition('service-create');
+  };
+
+  const handleServiceCreate = () => {
+    if (!serviceDescription && !selectedServiceType) {
+      alert('Selecione um serviço ou descreva o que precisa');
+      return;
+    }
+    handleScreenTransition('waiting-driver');
+  };
+
+  const copyPixCode = () => {
+    navigator.clipboard.writeText(pixCode);
+    alert('Código PIX copiado!');
+  };
+
   const FacilitaLogo = () => (
     <div className="flex items-center justify-center mt-8 xl:mt-0">
       <div className="flex items-center">
@@ -351,8 +477,6 @@ function App() {
     </div>
   );
 
-
-
   const UserIcon = () => (
     <div className="w-24 h-24 bg-green-200 rounded-full flex items-center justify-center mb-4">
       <div className="w-16 h-16 bg-green-400 rounded-full flex items-center justify-center">
@@ -360,6 +484,486 @@ function App() {
       </div>
     </div>
   );
+
+  // Payment Screen
+  if (currentScreen === 'payment') {
+    return (
+      <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        <div className="bg-green-500 text-white p-4 relative">
+          <button
+            onClick={() => handleScreenTransition('home')}
+            className="absolute left-4 top-4 text-white hover:text-gray-200"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <div className="text-center">
+            <h1 className="text-lg font-bold">Você está quase lá...!</h1>
+          </div>
+          <button className="absolute right-4 top-4 text-white">
+            Voltar
+          </button>
+        </div>
+
+        <div className="flex flex-col lg:flex-row min-h-screen">
+          {/* Left side - Service details */}
+          <div className="flex-1 p-6">
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <div className="flex items-center mb-4">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mr-3">
+                  <FileText className="w-4 h-4 text-white" />
+                </div>
+                <h3 className="font-semibold">Detalhes do serviço</h3>
+              </div>
+
+              <div className="border rounded-lg p-4 mb-4">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="text-sm text-gray-600">Modalidade: Carro - Personalizado</p>
+                    <div className="flex items-center mt-2">
+                      <img src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" alt="Driver" className="w-8 h-8 rounded-full mr-2" />
+                      <div>
+                        <p className="font-semibold text-sm">RV9G33</p>
+                        <p className="text-xs text-blue-500">Entregador • Katiê Bueno</p>
+                        <div className="flex items-center">
+                          <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                          <span className="text-xs ml-1">4.7</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-lg">R$ 291,76</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center mb-4">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mr-3">
+                  <CreditCard className="w-4 h-4 text-white" />
+                </div>
+                <h3 className="font-semibold">Pagamento</h3>
+              </div>
+
+              <div className="flex items-center mb-4">
+                <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
+                <CreditCard className="w-4 h-4 mr-2" />
+                <span className="text-sm">Carteira digital</span>
+              </div>
+
+              {qrCodeUrl && (
+                <div className="text-center mb-4">
+                  <img src={qrCodeUrl} alt="QR Code PIX" className="mx-auto mb-2" style={{ width: '200px', height: '200px' }} />
+                  <div className="bg-gray-100 p-2 rounded flex items-center justify-between">
+                    <span className="text-xs text-gray-600 truncate flex-1">
+                      {pixCode.substring(0, 30)}...
+                    </span>
+                    <button
+                      onClick={copyPixCode}
+                      className="ml-2 text-green-500 hover:text-green-600"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-xs text-gray-600 space-y-1">
+                <p>Instruções</p>
+                <p>1. O tempo para você pagar é de 30 minutos</p>
+                <p>2. Abra o aplicativo do seu banco ou instituição financeira e entre no Área Pix</p>
+                <p>3. Escolha a opção pagar com QR Code e aponte para o código ou cole o código</p>
+                <p>4. Confirme as informações e finalize o pagamento</p>
+                <p>5. Volte para o site ou volte e clique em "Recebi o pagamento" Pronto!</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Right side - Payment summary */}
+          <div className="lg:w-96 bg-white p-6 shadow-lg">
+            <h3 className="font-semibold mb-4">Detalhes</h3>
+            
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Valor</span>
+                <span className="font-semibold">R$ 119,99</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Taxas</span>
+                <span className="text-green-500">Free</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Descontos</span>
+                <span>R$ 0</span>
+              </div>
+              <hr />
+              <div className="flex justify-between font-bold text-lg">
+                <span>Total</span>
+                <span>R$ 119,99</span>
+              </div>
+            </div>
+
+            <button className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors">
+              Realize o Pagamento
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Waiting Driver Screen
+  if (currentScreen === 'waiting-driver') {
+    return (
+      <div className={`min-h-screen bg-gray-100 flex items-center justify-center transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+      }`}>
+        <div className="text-center p-8">
+          <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+            <Search className="w-10 h-10 text-white" />
+          </div>
+          
+          {!driverFound ? (
+            <>
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Procurando motorista...</h2>
+              <p className="text-gray-600 mb-6">Aguarde enquanto encontramos o melhor prestador para você</p>
+              <div className="flex justify-center space-x-2">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce"></div>
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-8 h-8 border-2 border-white border-l-0 border-t-0 transform rotate-45"></div>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Motorista encontrado!</h2>
+              <p className="text-gray-600">Redirecionando para o pagamento...</p>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Service Create Screen
+  if (currentScreen === 'service-create') {
+    return (
+      <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        <div className="bg-green-500 text-white p-4 relative">
+          <button
+            onClick={() => handleScreenTransition('location-select')}
+            className="absolute left-4 top-4 text-white hover:text-gray-200"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-center text-lg font-bold">Monte o seu serviço</h1>
+        </div>
+
+        <div className="max-w-4xl mx-auto p-6">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">
+              Descreva o que você precisa e<br />
+              escolha como deseja receber
+            </h2>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="flex items-center mb-4">
+              <MapPin className="w-5 h-5 text-green-500 mr-2" />
+              <div>
+                <p className="font-semibold">Entregar em</p>
+                <p className="text-gray-600 text-sm">{selectedLocation}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h3 className="font-semibold mb-4">Pedido</h3>
+            
+            <div className="mb-6">
+              <div className="flex items-start mb-4">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mr-3 mt-1">
+                  <span className="text-white text-sm">✏️</span>
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium mb-2">Preciso que alguém me acompanhe até o hospital</p>
+                  <textarea
+                    value={serviceDescription}
+                    onChange={(e) => setServiceDescription(e.target.value)}
+                    placeholder="Descreva detalhadamente o que você precisa..."
+                    className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {predefinedServices.map((service) => (
+                <button
+                  key={service.id}
+                  onClick={() => setSelectedServiceType(service.id)}
+                  className={`p-4 border rounded-lg text-left transition-all ${
+                    selectedServiceType === service.id
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-300 hover:border-green-300'
+                  }`}
+                >
+                  <p className="font-medium text-sm">{service.text}</p>
+                  <p className="text-xs text-gray-500 mt-1">{service.category}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="font-medium mb-3">Transporte</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 border border-gray-300 rounded-lg text-center">
+                  <p className="text-sm font-medium">Buscar remédios na farmácia</p>
+                </div>
+                <div className="p-3 border border-green-500 bg-green-50 rounded-lg text-center">
+                  <p className="text-sm font-medium">Acompanhar em consultas médicas</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleServiceCreate}
+            className="w-full bg-green-500 text-white py-4 rounded-lg text-lg font-semibold hover:bg-green-600 transition-colors"
+          >
+            Confirmar Serviço
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // No seu App.tsx, substitua a tela 'location-select' por:
+  
+  if (currentScreen === 'location-select') {
+    return (
+      <div
+        className={`min-h-screen bg-gray-100 transition-all duration-300 ${
+          isTransitioning
+            ? 'opacity-0 translate-x-full'
+            : 'opacity-100 translate-x-0'
+        }`}
+      >
+        <LocationMap
+          onLocationSelect={handleLocationSelect}
+          onScreenChange={handleScreenTransition}
+        />
+      </div>
+    );
+  }
+  
+
+
+  // Home Screen
+  if (currentScreen === 'home') {
+    return (
+      <div className={`min-h-screen bg-gray-100 flex transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        {/* Sidebar */}
+        <div className="w-64 bg-green-500 text-white p-4">
+          <div className="flex items-center mb-8">
+            <img src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" alt="User" className="w-10 h-10 rounded-full mr-3" />
+            <div>
+              <p className="font-semibold">Olá, {loggedUser?.nome?.split(' ')[0] || 'Lara'}</p>
+              <p className="text-green-200 text-sm">Boa tarde! 16:30</p>
+            </div>
+          </div>
+
+          <nav className="space-y-2">
+            <button className="w-full flex items-center p-3 bg-white bg-opacity-20 rounded-lg">
+              <Home className="w-5 h-5 mr-3" />
+              <span>Home</span>
+            </button>
+            <button className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors">
+              <FileText className="w-5 h-5 mr-3" />
+              <span>Pedidos</span>
+            </button>
+            <button className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors">
+              <MessageSquare className="w-5 h-5 mr-3" />
+              <span>Carteira</span>
+            </button>
+            <button className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors">
+              <UserIconLucide className="w-5 h-5 mr-3" />
+              <span>Perfil</span>
+            </button>
+          </nav>
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <div></div>
+            <div className="flex items-center space-x-4">
+              <ShoppingCart className="w-6 h-6 text-gray-600" />
+              <Mail className="w-6 h-6 text-gray-600" />
+            </div>
+          </div>
+
+          {/* Hero section */}
+          <div className="bg-green-500 text-white rounded-lg p-6 mb-6 flex items-center">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold mb-2">
+                Agende já o seu<br />
+                serviço sem sair<br />
+                de casa
+              </h2>
+              <button className="bg-white text-green-500 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+                Serviços
+              </button>
+            </div>
+            <div className="w-32 h-32 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+              <div className="w-16 h-24 bg-white rounded-lg"></div>
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="relative mb-6">
+            <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Solicite seu serviço"
+              onClick={handleServiceRequest}
+              className="w-full pl-10 pr-4 py-3 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            />
+          </div>
+
+          {/* Service cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {serviceCards.map((service) => (
+              <button
+                key={service.id}
+                onClick={handleServiceRequest}
+                className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center"
+              >
+                <div className="text-4xl mb-3">{service.icon}</div>
+                <p className="font-semibold">{service.name}</p>
+              </button>
+            ))}
+          </div>
+
+          {/* Additional service cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+            {[...serviceCards].map((service, index) => (
+              <button
+                key={`${service.id}-${index}`}
+                onClick={handleServiceRequest}
+                className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center"
+              >
+                <div className="text-4xl mb-3">{service.icon}</div>
+                <p className="font-semibold">{service.name}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Profile Setup Screen
+  if (currentScreen === 'profile-setup') {
+    return (
+      <div className={`min-h-screen bg-gray-800 flex transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        {/* Left side - Illustration */}
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="text-center">
+            <div className="w-64 h-64 bg-green-500 rounded-lg flex items-center justify-center mb-8 mx-auto">
+              <div className="text-white">
+                <div className="w-32 h-32 bg-white bg-opacity-20 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <Package className="w-16 h-16" />
+                </div>
+                <div className="flex justify-center space-x-4">
+                  <div className="w-8 h-1 bg-white rounded"></div>
+                  <div className="w-8 h-1 bg-white bg-opacity-50 rounded"></div>
+                </div>
+              </div>
+            </div>
+            <FacilitaLogo />
+          </div>
+        </div>
+
+        {/* Right side - Profile form */}
+        <div className="flex-1 bg-white p-8 flex items-center justify-center">
+          <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <div className="relative inline-block mb-4">
+                <div className="w-24 h-24 bg-blue-200 rounded-full flex items-center justify-center mx-auto">
+                  <User className="w-12 h-12 text-blue-600" />
+                </div>
+                <button className="absolute bottom-0 right-0 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white hover:bg-green-600 transition-colors">
+                  <Camera className="w-4 h-4" />
+                </button>
+              </div>
+              <h2 className="text-xl font-bold text-gray-800">{loggedUser?.nome || 'Luiz Inacio Lula da Silva'}</h2>
+              <p className="text-gray-600">Complete seu perfil</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-gray-700 text-sm mb-2">Endereço</label>
+                <input
+                  type="text"
+                  value={profileData.endereco}
+                  onChange={(e) => setProfileData({...profileData, endereco: e.target.value})}
+                  placeholder="Endereço completo"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 text-sm mb-2">Preferência de Serviços</label>
+                <select
+                  value={profileData.mercado}
+                  onChange={(e) => setProfileData({...profileData, mercado: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">Mercado</option>
+                  <option value="farmacia">Farmácia</option>
+                  <option value="mercado">Mercado</option>
+                  <option value="correios">Correios</option>
+                  <option value="shopping">Shopping</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 text-sm mb-2">Necessidades Especiais</label>
+                <select
+                  value={profileData.necessidades}
+                  onChange={(e) => setProfileData({...profileData, necessidades: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">Idoso</option>
+                  <option value="mobilidade">Problemas de mobilidade</option>
+                  <option value="visual">Deficiência visual</option>
+                  <option value="auditiva">Deficiência auditiva</option>
+                  <option value="nenhuma">Nenhuma</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleProfileSetup}
+                className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
+              >
+                Finalizar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (currentScreen === 'service-provider') {
     return (
@@ -476,8 +1080,7 @@ function App() {
           <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
-          <div className=" flex-1 flex items-center justify-center p-8
-">
+          <div className=" flex-1 flex items-center justify-center p-8">
             <img 
               src="/undraw_order-delivered_puaw 3.png" 
               alt="Ilustração de entrega" 
@@ -486,7 +1089,6 @@ function App() {
           </div>
         </div>
         
-        /*Arrumar essa div no dia 23*/
         <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2">
           <img
             src="./Vector copy.png"
