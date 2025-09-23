@@ -486,11 +486,12 @@ function App() {
           </div>
         </div>
         
+        /*Arrumar essa div no dia 23*/
         <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2">
           <img
             src="./Vector copy.png"
             alt="Decoração"
-            className="absolute top-0 right-0 w-32 h-24 md:w-40 md:h-32 object-cover"
+            className="absolute top-0 right-0 w-32 h-24 md:w-40 md:h-32"
           />
           
           <div className="relative z-10 text-center">
