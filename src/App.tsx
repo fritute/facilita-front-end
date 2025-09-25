@@ -3,10 +3,30 @@ import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search
 import QRCode from 'qrcode'
 import LocationMap from './LocationMap'
 import AddressInput from './components/AddressInput'
+import ServiceTracking from './components/ServiceTracking'
 
-type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select"
+type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking";
 
+// Adicione esta interface antes da função App
+interface ServiceTrackingProps {
+  onBack: () => void;
+  entregador: Entregador;
+  destination: {
+    address: string;
+    lat: number;
+    lng: number;
+  };
+}
 
+interface Entregador {
+  nome: string;
+  telefone: string;
+  veiculo: string;
+  placa: string;
+  rating: number;
+  tempoEstimado: string;
+  distancia: string;
+}
 
 interface ValidationErrors {
   nome?: string
@@ -55,7 +75,13 @@ interface ServiceRequest {
 }
 
 function App() {
-  const [currentScreen, setCurrentScreen] = useState<'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment'>('login')
+  const [currentScreen, setCurrentScreen] = useState<
+  'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 
+  'account-type' | 'service-provider' | 'profile-setup' | 'home' | 
+  'location-select' | 'service-create' | 'waiting-driver' | 
+  'payment' | 'service-confirmed'
+>('login')
+
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
@@ -85,7 +111,37 @@ function App() {
     setSelectedAddress(address);
     console.log("Endereço selecionado:", address);
   };
+  const [selectedDestination, setSelectedDestination] = useState<{address: string, lat: number, lng: number} | null>(null);
 
+  const handleStartTracking = (destination: {address: string, lat: number, lng: number}) => {
+    setSelectedDestination(destination);
+    handleScreenTransition('service-tracking');
+  };
+  
+  if (currentScreen === 'tracking') {
+    return (
+      <ServiceTracking
+        onBack={() => handleScreenTransition('home')} // Função para voltar
+        entregador={entregadorData} // Seu estado de entregador
+        destination={{
+            address: 'Rua Exemplo, 123', // Exemplo de endereço
+            lat: -23.55052, 
+            lng: -46.63330
+        }} 
+      />
+    );
+  }
+
+
+  const [entregadorData] = useState<Entregador>({
+    nome: 'João Silva',
+    telefone: '(11) 98765-4321',
+    veiculo: 'Honda Biz',
+    placa: 'ABC-1234',
+    rating: 4.8,
+    tempoEstimado: '15 min',
+    distancia: '2.5 km',
+  });
 
   const [loginData, setLoginData] = useState({
     email: '',
@@ -316,7 +372,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('https://server-facilita.onrender.com/v1/facilita/usuario', {
+      const response = await fetch('https://server-facilita.onrender.com/v1/facilita/usuario/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -357,7 +413,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('https://server-facilita.onrender.com/v1/facilita/usuario', {
+      const response = await fetch('https://server-facilita.onrender.com/v1/facilita/usuario/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -460,18 +516,30 @@ function App() {
     handleScreenTransition('location-select')
   }
 
-  const handleLocationSelect = (address: string) => {
-    setSelectedLocation(address)
-    handleScreenTransition('service-create')
+const handleLocationSelect = (address: string, lat: number, lng: number) => {
+  setSelectedLocation(address);
+  setSelectedDestination({ address, lat, lng });
+  handleScreenTransition('service-create');
+};
+
+
+const handleServiceCreate = () => {
+  if (!serviceDescription && !selectedServiceType) {
+    alert('Selecione um serviço ou descreva o que precisa');
+    return;
   }
 
-  const handleServiceCreate = () => {
-    if (!serviceDescription && !selectedServiceType) {
-      alert('Selecione um serviço ou descreva o que precisa')
-      return
-    }
-    handleScreenTransition('waiting-driver')
+  if (selectedDestination) {
+    handleStartTracking(selectedDestination);
+  } else {
+    // Fallback com coordenadas padrão (Carapicuíba)
+    handleStartTracking({
+      address: selectedLocation || 'Carapicuíba, SP',
+      lat: -23.5235,
+      lng: -46.8401
+    });
   }
+};
 
   const copyPixCode = () => {
     navigator.clipboard.writeText(pixCode)
@@ -613,10 +681,98 @@ function App() {
               </div>
             </div>
 
-            <button className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors">
-              Realize o Pagamento
-            </button>
+            <button
+            onClick={() => handleScreenTransition('service-confirmed')}
+            className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
+>
+  Realize o Pagamento
+</button>
           </div>
+        </div>
+      </div>
+    )
+  }
+  if (currentScreen === 'service-confirmed') {
+    return (
+      <div className="min-h-screen flex bg-gray-100">
+        {/* Lado esquerdo verde com check */}
+        <div className="w-1/3 bg-green-500 flex items-center justify-center rounded-r-3xl">
+          <div className="w-32 h-32 flex items-center justify-center rounded-full border-8 border-white">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-20 w-20 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={3}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        </div>
+  
+        {/* Conteúdo à direita */}
+        <div className="flex-1 flex flex-col items-center justify-center p-10">
+          <button
+            onClick={() => handleScreenTransition('home')}
+            className="absolute top-6 left-6 text-green-500 hover:underline"
+          >
+            ← Voltar
+          </button>
+  
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Serviço Confirmada</h2>
+          <p className="text-gray-600 mb-6">Obrigado por escolher a Facilita</p>
+  
+          <div className="bg-white border rounded-lg shadow-md p-6 w-full max-w-md">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm text-gray-600">Modalidade: Carro - Personalizado</p>
+                <div className="flex items-center mt-2">
+                  <img
+                    src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg"
+                    alt="Driver"
+                    className="w-10 h-10 rounded-full mr-2"
+                  />
+                  <div>
+                    <p className="font-semibold text-sm">RVJ9G33</p>
+                    <p className="text-xs text-blue-500">Entregador • Kaike Bueno</p>
+                    <div className="flex items-center">
+                      <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                      <span className="text-xs ml-1">4.7</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p className="font-bold text-lg">R$ 291,76</p>
+            </div>
+          </div>
+  
+          {/* Detalhes */}
+          <div className="mt-6 w-full max-w-md text-sm text-gray-600 space-y-2">
+            <div className="flex justify-between">
+              <span>Nome</span>
+              <span className="font-medium">Kaike Bueno</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Data</span>
+              <span className="font-medium">22 Ago 2024</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Hora</span>
+              <span className="font-medium">10:00 AM</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Pagamento</span>
+              <span className="font-medium text-green-600">Confirmado</span>
+            </div>
+          </div>
+  
+          <button
+            onClick={() => handleScreenTransition('home')}
+            className="mt-8 px-8 py-3 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition-colors"
+          >
+            Seguir
+          </button>
         </div>
       </div>
     )
@@ -1368,17 +1524,27 @@ function App() {
                 )}
               </div>
             </div>
-            
-            {/* CAMPO DE ENDEREÇO ADICIONADO AQUI */}
+
             <div>
-              <label className="block text-gray-400 text-sm mb-2">Endereço</label>
+              <label className="block text-gray-400 text-sm mb-2">Telefone</label>
               <div className="relative">
-                <AddressInput
-                  onSelectAddress={handleAddressSelection}
-                  placeholder="Digite seu endereço completo"
+                <input
+                  type="text"
+                  value={userData.telefone}
+                  onChange={(e) => {
+                    setUserData({...userData, telefone: e.target.value})
+                    clearError('telefone')
+                  }}
+                  placeholder="(00) 00000-0000"
+                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
+                <Phone className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
               </div>
+              {errors.telefone && (
+                <p className="text-red-500 text-sm mt-1">{errors.telefone}</p>
+              )}
             </div>
+     
   
             <button
               onClick={handleCadastro}
@@ -1613,8 +1779,11 @@ function App() {
           </div>
         </div>
       )}
+      
     </div>
+    
   )
+  
 }
 
 export default App
