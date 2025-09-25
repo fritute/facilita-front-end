@@ -107,6 +107,7 @@ function App() {
   const [driverFound, setDriverFound] = useState(false)
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
   
+  
   const handleAddressSelection = (address: any) => {
     setSelectedAddress(address);
     console.log("Endereço selecionado:", address);
@@ -898,9 +899,9 @@ const handleServiceCreate = () => {
               </div>
             </div>
           </div>
-
           <button
-            onClick={handleServiceCreate}
+          //AQUI
+            onClick={() => handleScreenTransition('waiting-driver')}
             className="w-full bg-green-500 text-white py-4 rounded-lg text-lg font-semibold hover:bg-green-600 transition-colors"
           >
             Confirmar Serviço
@@ -1781,7 +1782,6 @@ const handleServiceCreate = () => {
           </div>
         </div>
       )}
-      
     </div>
     
   )
