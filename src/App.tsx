@@ -316,7 +316,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('http://localhost:8080/v1/facilita/register', {
+      const response = await fetch('https://server-facilita.onrender.com/v1/facilita/usuario', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -336,7 +336,7 @@ function App() {
     } catch (error) {
       console.error('Erro na requisição:', error)
       if (error instanceof Error && error.message === 'Failed to fetch') {
-        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando em http://localhost:8080')
+        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando')
       } else {
         alert('Erro de conexão. Verifique se o servidor está rodando.')
       }
@@ -357,7 +357,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('http://localhost:8080/v1/facilita/register', {
+      const response = await fetch('https://server-facilita.onrender.com/v1/facilita/usuario', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -377,7 +377,7 @@ function App() {
     } catch (error) {
       console.error('Erro na requisição:', error)
       if (error instanceof Error && error.message === 'Failed to fetch') {
-        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando em http://localhost:8080')
+        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando')
       } else {
         alert('Erro de conexão. Verifique se o servidor está rodando.')
       }
