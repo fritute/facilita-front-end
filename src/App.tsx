@@ -79,7 +79,7 @@ function App() {
   'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 
   'account-type' | 'service-provider' | 'profile-setup' | 'home' | 
   'location-select' | 'service-create' | 'waiting-driver' | 
-  'payment' | 'service-confirmed'
+  'tracking' | 'service-confirmed' | 'payment'
 >('login')
 
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -117,6 +117,8 @@ function App() {
     setSelectedDestination(destination);
     handleScreenTransition('service-tracking');
   };
+
+  
   
   if (currentScreen === 'tracking') {
     return (
@@ -132,15 +134,14 @@ function App() {
     );
   }
 
-
-  const [entregadorData] = useState<Entregador>({
+  const [entregadorData, setEntregadorData] = useState({
     nome: 'João Silva',
-    telefone: '(11) 98765-4321',
-    veiculo: 'Honda Biz',
-    placa: 'ABC-1234',
+    telefone: '(11) 99999-9999',
+    veiculo: 'Honda CG 160',
+    placa: 'ABC1D23',
     rating: 4.8,
-    tempoEstimado: '15 min',
-    distancia: '2.5 km',
+    tempoEstimado: '15',
+    distancia: '2.5 km'
   });
 
   const [loginData, setLoginData] = useState({
@@ -570,6 +571,7 @@ const handleServiceCreate = () => {
       }`}>
         <div className="bg-green-500 text-white p-4 relative">
           <button
+          //TALVEZ SEJA ESSA
             onClick={() => handleScreenTransition('home')}
             className="absolute left-4 top-4 text-white hover:text-gray-200"
           >
