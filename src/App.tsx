@@ -198,6 +198,56 @@ function App() {
     }
   }, [currentScreen])
 
+  // Recuperar usuário logado do localStorage ao carregar a página
+  useEffect(() => {
+    const storedUser = localStorage.getItem('loggedUser')
+    const storedToken = localStorage.getItem('authToken')
+    
+    if (storedUser && storedToken) {
+      try {
+        const user = JSON.parse(storedUser)
+        setLoggedUser(user)
+        console.log('Usuário recuperado do localStorage:', user)
+        console.log('Token recuperado:', storedToken)
+      } catch (error) {
+        console.error('Erro ao recuperar usuário:', error)
+        localStorage.removeItem('loggedUser')
+        localStorage.removeItem('authToken')
+      }
+    }
+  }, [])
+
+  // Função helper para fazer requisições autenticadas
+  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    const token = localStorage.getItem('authToken')
+    
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+      ...options.headers,
+    }
+
+    console.log('Fazendo requisição para:', url)
+    console.log('Com token:', token ? 'Sim' : 'Não')
+
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    })
+
+    // Interceptar erro 401
+    if (response.status === 401) {
+      console.error('❌ ERRO 401 - Não autorizado na URL:', url)
+      console.error('Token usado:', token)
+      alert('Sessão expirada. Faça login novamente.')
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('loggedUser')
+      handleScreenTransition('login')
+    }
+
+    return response
+  }
+
   // Função para validar email
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -239,7 +289,7 @@ function App() {
     }, 300)
   }
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const newErrors: ValidationErrors = {}
 
     // Validar email
@@ -263,17 +313,65 @@ function App() {
     }
 
     setErrors({})
-    
-    // Simulate successful login for contractor
-    const mockUser: LoggedUser = {
-      nome: userData.nome,
-      email: loginData.email,
-      telefone: userData.telefone,
-      tipo_conta: 'CONTRATANTE'
+    setIsLoading(true)
+
+    try {
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: loginData.email,
+          senha: loginData.senha
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        
+        console.log('Resposta do login:', data) // Debug
+        
+        // Armazenar token no localStorage
+        if (data.token) {
+          localStorage.setItem('authToken', data.token)
+          console.log('Token armazenado:', data.token)
+        }
+        
+        // Armazenar dados do usuário vindos do banco
+        if (data.usuario) {
+          const user: LoggedUser = {
+            nome: data.usuario.nome,
+            email: data.usuario.email,
+            telefone: data.usuario.telefone,
+            tipo_conta: data.usuario.tipo_conta
+          }
+          
+          // Armazenar usuário no localStorage também
+          localStorage.setItem('loggedUser', JSON.stringify(user))
+          
+          setLoggedUser(user)
+          console.log('Usuário logado:', user)
+          
+          // Redirecionar baseado no tipo de conta
+          if (user.tipo_conta === 'CONTRATANTE') {
+            handleScreenTransition('profile-setup')
+          } else {
+            handleScreenTransition('home')
+          }
+        } else {
+          alert('Erro: Dados do usuário não retornados pela API')
+        }
+      } else {
+        const errorData = await response.json()
+        alert(`Erro no login: ${errorData.message || 'Email ou senha incorretos'}`)
+      }
+    } catch (error) {
+      console.error('Erro na requisição:', error)
+      alert('Erro de conexão. Verifique se o servidor está rodando.')
+    } finally {
+      setIsLoading(false)
     }
-    
-    setLoggedUser(mockUser)
-    handleScreenTransition('profile-setup')
   }
 
   const handleTermsAccept = () => {
@@ -359,7 +457,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('https://server-facilita.onrender.com/v1/facilita/usuario/register', {
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -400,7 +498,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('https://server-facilita.onrender.com/v1/facilita/usuario/register', {
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -429,7 +527,7 @@ function App() {
     }
   }
 
-  const handleRecoverySubmit = () => {
+  const handleRecoverySubmit = async () => {
     const newErrors: ValidationErrors = {}
 
     // Validar se é email ou telefone
@@ -449,18 +547,64 @@ function App() {
     }
 
     setErrors({})
-    // Simular envio do código
-    handleScreenTransition('verification')
-    // Iniciar countdown
-    const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          return 27
-        }
-        return prev - 1
+    setIsLoading(true)
+
+    try {
+      const payload = isEmail 
+        ? { email: recoveryContact }
+        : { telefone: recoveryContact.replace(/\D/g, '') }
+
+      console.log('Enviando requisição de recuperação:', payload)
+      
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/recuperar-senha', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
       })
-    }, 1000)
+
+      console.log('Status da resposta:', response.status)
+
+      if (response.ok) {
+        // Código enviado com sucesso
+        alert('Código enviado com sucesso! Verifique seu email/SMS.')
+        handleScreenTransition('verification')
+        // Iniciar countdown
+        const timer = setInterval(() => {
+          setCountdown(prev => {
+            if (prev <= 1) {
+              clearInterval(timer)
+              return 27
+            }
+            return prev - 1
+          })
+        }, 1000)
+      } else if (response.status === 401) {
+        console.error('❌ Erro 401: A rota de recuperação de senha não deveria exigir autenticação')
+        alert('Erro no servidor: A rota de recuperação de senha está protegida incorretamente. Entre em contato com o suporte.')
+      } else {
+        const errorData = await response.json().catch(() => ({ message: 'Erro desconhecido' }))
+        console.error('❌ Erro na recuperação:')
+        console.error('Status:', response.status)
+        console.error('Dados do erro:', JSON.stringify(errorData, null, 2))
+        
+        let errorMessage = errorData.message || errorData.error || 'Não foi possível enviar o código'
+        
+        if (response.status === 500) {
+          errorMessage = `Erro no servidor: ${errorData.error || errorData.message}. Verifique se o email está cadastrado ou entre em contato com o suporte.`
+        } else if (response.status === 404) {
+          errorMessage = 'Email não encontrado. Verifique se está cadastrado.'
+        }
+        
+        alert(errorMessage)
+      }
+    } catch (error) {
+      console.error('Erro na requisição:', error)
+      alert('Erro de conexão. Verifique se o servidor está rodando.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCodeChange = (index: number, value: string) => {
@@ -477,7 +621,7 @@ function App() {
     }
   }
 
-  const handleVerification = () => {
+  const handleVerification = async () => {
     const code = verificationCode.join('')
     
     if (code.length !== 5 || !/^\d{5}$/.test(code)) {
@@ -486,9 +630,61 @@ function App() {
     }
 
     setErrors({})
-    // Lógica de verificação
-    console.log('Código verificado:', verificationCode.join(''))
-    handleScreenTransition('login')
+    setIsLoading(true)
+
+    try {
+      // Aqui você pode adicionar a lógica para verificar o código com o backend
+      // Por enquanto, vamos apenas redirecionar para redefinir senha
+      
+      // Simular verificação bem-sucedida
+      // Em produção, você deve validar o código com o backend primeiro
+      
+      // Redirecionar para tela de redefinir senha (você pode criar uma nova tela)
+      // Por enquanto, vamos voltar ao login
+      handleScreenTransition('login')
+      alert('Código verificado! Você pode redefinir sua senha.')
+      
+    } catch (error) {
+      console.error('Erro na verificação:', error)
+      alert('Erro ao verificar código.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleResetPassword = async (newPassword: string) => {
+    const code = verificationCode.join('')
+    
+    try {
+      const isEmail = recoveryContact.includes('@')
+      const payload = {
+        codigo: code,
+        nova_senha: newPassword,
+        ...(isEmail 
+          ? { email: recoveryContact }
+          : { telefone: recoveryContact.replace(/\D/g, '') }
+        )
+      }
+
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/redefinir-senha', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      })
+
+      if (response.ok) {
+        alert('Senha redefinida com sucesso!')
+        handleScreenTransition('login')
+      } else {
+        const errorData = await response.json()
+        alert(`Erro: ${errorData.message || 'Não foi possível redefinir a senha'}`)
+      }
+    } catch (error) {
+      console.error('Erro na requisição:', error)
+      alert('Erro de conexão. Verifique se o servidor está rodando.')
+    }
   }
 
   const handleProfileSetup = () => {
