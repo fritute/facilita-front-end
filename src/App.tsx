@@ -79,7 +79,7 @@ function App() {
   'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 
   'account-type' | 'service-provider' | 'profile-setup' | 'home' | 
   'location-select' | 'service-create' | 'waiting-driver' | 
-  'tracking' | 'service-confirmed' | 'payment'
+  'tracking' | 'service-confirmed' | 'payment' | 'service-tracking'
 >('login')
 
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -120,21 +120,6 @@ function App() {
   };
 
   
-  
-  if (currentScreen === 'tracking') {
-    return (
-      <ServiceTracking
-        onBack={() => handleScreenTransition('home')} // Função para voltar
-        entregador={entregadorData} // Seu estado de entregador
-        destination={{
-            address: 'Rua Exemplo, 123', // Exemplo de endereço
-            lat: -23.55052, 
-            lng: -46.63330
-        }} 
-      />
-    );
-  }
-
   const [entregadorData, setEntregadorData] = useState({
     nome: 'João Silva',
     telefone: '(11) 99999-9999',
@@ -144,6 +129,24 @@ function App() {
     tempoEstimado: '15',
     distancia: '2.5 km'
   });
+
+// Service Tracking Screen - DEVE SER A PRIMEIRA CONDIÇÃO APÓS OS HOOKS
+if (currentScreen === 'service-tracking') {
+  return (
+    <ServiceTracking
+      onBack={() => handleScreenTransition('home')}
+      entregador={entregadorData}
+      destination={selectedDestination || {
+        address: selectedLocation || 'Endereço não especificado',
+        lat: -23.55052, 
+        lng: -46.63330
+      }} 
+    />
+  )
+}
+
+
+
 
   const [loginData, setLoginData] = useState({
     email: '',
@@ -244,7 +247,7 @@ function App() {
     }))
   }
 
-  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment') => {
+  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment' | 'service-tracking') => {
     setIsTransitioning(true)
     setTimeout(() => {
       setCurrentScreen(newScreen)
@@ -529,7 +532,10 @@ const handleServiceCreate = () => {
   if (!serviceDescription && !selectedServiceType) {
     alert('Selecione um serviço ou descreva o que precisa');
     return;
+
+    handleScreenTransition('waiting-driver');
   }
+  
 
   if (selectedDestination) {
     handleStartTracking(selectedDestination);
@@ -696,90 +702,91 @@ const handleServiceCreate = () => {
     )
   }
   if (currentScreen === 'service-confirmed') {
-    return (
-      <div className="min-h-screen flex bg-gray-100">
-        {/* Lado esquerdo verde com check */}
-        <div className="w-1/3 bg-green-500 flex items-center justify-center rounded-r-3xl">
-          <div className="w-32 h-32 flex items-center justify-center rounded-full border-8 border-white">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-20 w-20 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={3}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-        </div>
-  
-        {/* Conteúdo à direita */}
-        <div className="flex-1 flex flex-col items-center justify-center p-10">
-          <button
-            onClick={() => handleScreenTransition('home')}
-            className="absolute top-6 left-6 text-green-500 hover:underline"
+  return (
+    <div className="min-h-screen flex bg-gray-100">
+      {/* Lado esquerdo verde com check */}
+      <div className="w-1/3 bg-green-500 flex items-center justify-center rounded-r-3xl">
+        <div className="w-32 h-32 flex items-center justify-center rounded-full border-8 border-white">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-20 w-20 text-white"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={3}
           >
-            ← Voltar
-          </button>
-  
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Serviço Confirmada</h2>
-          <p className="text-gray-600 mb-6">Obrigado por escolher a Facilita</p>
-  
-          <div className="bg-white border rounded-lg shadow-md p-6 w-full max-w-md">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm text-gray-600">Modalidade: Carro - Personalizado</p>
-                <div className="flex items-center mt-2">
-                  <img
-                    src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg"
-                    alt="Driver"
-                    className="w-10 h-10 rounded-full mr-2"
-                  />
-                  <div>
-                    <p className="font-semibold text-sm">RVJ9G33</p>
-                    <p className="text-xs text-blue-500">Entregador • Kaike Bueno</p>
-                    <div className="flex items-center">
-                      <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                      <span className="text-xs ml-1">4.7</span>
-                    </div>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Conteúdo à direita */}
+      <div className="flex-1 flex flex-col items-center justify-center p-10">
+        <button
+          onClick={() => handleScreenTransition('home')}
+          className="absolute top-6 left-6 text-green-500 hover:underline"
+        >
+          ← Voltar
+        </button>
+
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">Serviço Confirmado</h2>
+        <p className="text-gray-600 mb-6">Obrigado por escolher a Facilita</p>
+
+        <div className="bg-white border rounded-lg shadow-md p-6 w-full max-w-md">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm text-gray-600">Modalidade: Carro - Personalizado</p>
+              <div className="flex items-center mt-2">
+                <img
+                  src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg"
+                  alt="Driver"
+                  className="w-10 h-10 rounded-full mr-2"
+                />
+                <div>
+                  <p className="font-semibold text-sm">RVJ9G33</p>
+                  <p className="text-xs text-blue-500">Entregador • {entregadorData.nome}</p>
+                  <div className="flex items-center">
+                    <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                    <span className="text-xs ml-1">{entregadorData.rating}</span>
                   </div>
                 </div>
               </div>
-              <p className="font-bold text-lg">R$ 291,76</p>
             </div>
+            <p className="font-bold text-lg">R$ 291,76</p>
           </div>
-  
-          {/* Detalhes */}
-          <div className="mt-6 w-full max-w-md text-sm text-gray-600 space-y-2">
-            <div className="flex justify-between">
-              <span>Nome</span>
-              <span className="font-medium">Kaike Bueno</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Data</span>
-              <span className="font-medium">22 Ago 2024</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Hora</span>
-              <span className="font-medium">10:00 AM</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Pagamento</span>
-              <span className="font-medium text-green-600">Confirmado</span>
-            </div>
-          </div>
-  
-          <button
-            onClick={() => handleScreenTransition('home')}
-            className="mt-8 px-8 py-3 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition-colors"
-          >
-            Seguir
-          </button>
         </div>
+
+        {/* Detalhes */}
+        <div className="mt-6 w-full max-w-md text-sm text-gray-600 space-y-2">
+          <div className="flex justify-between">
+            <span>Nome</span>
+            <span className="font-medium">{entregadorData.nome}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Data</span>
+            <span className="font-medium">22 Ago 2024</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Hora</span>
+            <span className="font-medium">10:00 AM</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Pagamento</span>
+            <span className="font-medium text-green-600">Confirmado</span>
+          </div>
+        </div>
+
+        {/* BOTÃO SEGUIR CORRIGIDO */}
+        <button
+          onClick={() => handleScreenTransition('service-tracking')}
+          className="mt-8 px-8 py-3 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition-colors"
+        >
+          Seguir
+        </button>
       </div>
-    )
-  }
+    </div>
+  )
+}
 
   // Waiting Driver Screen
   if (currentScreen === 'waiting-driver') {
@@ -901,8 +908,8 @@ const handleServiceCreate = () => {
           </div>
           <button
           //AQUI
-            onClick={() => handleScreenTransition('waiting-driver')}
-            className="w-full bg-green-500 text-white py-4 rounded-lg text-lg font-semibold hover:bg-green-600 transition-colors"
+          onClick={handleServiceCreate} 
+           className="w-full bg-green-500 text-white py-4 rounded-lg text-lg font-semibold hover:bg-green-600 transition-colors"
           >
             Confirmar Serviço
           </button>
