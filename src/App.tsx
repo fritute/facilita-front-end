@@ -130,24 +130,6 @@ function App() {
     distancia: '2.5 km'
   });
 
-// Service Tracking Screen - DEVE SER A PRIMEIRA CONDIÇÃO APÓS OS HOOKS
-if (currentScreen === 'service-tracking') {
-  return (
-    <ServiceTracking
-      onBack={() => handleScreenTransition('home')}
-      entregador={entregadorData}
-      destination={selectedDestination || {
-        address: selectedLocation || 'Endereço não especificado',
-        lat: -23.55052, 
-        lng: -46.63330
-      }} 
-    />
-  )
-}
-
-
-
-
   const [loginData, setLoginData] = useState({
     email: '',
     senha: ''
@@ -247,7 +229,7 @@ if (currentScreen === 'service-tracking') {
     }))
   }
 
-  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment' | 'service-tracking') => {
+  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment' | 'service-tracking' | 'service-confirmed' | 'tracking') => {
     setIsTransitioning(true)
     setTimeout(() => {
       setCurrentScreen(newScreen)
@@ -532,21 +514,10 @@ const handleServiceCreate = () => {
   if (!serviceDescription && !selectedServiceType) {
     alert('Selecione um serviço ou descreva o que precisa');
     return;
-
-    handleScreenTransition('waiting-driver');
   }
   
-
-  if (selectedDestination) {
-    handleStartTracking(selectedDestination);
-  } else {
-    // Fallback com coordenadas padrão (Carapicuíba)
-    handleStartTracking({
-      address: selectedLocation || 'Carapicuíba, SP',
-      lat: -23.5235,
-      lng: -46.8401
-    });
-  }
+  // Ir para a tela de procurar motorista
+  handleScreenTransition('waiting-driver');
 };
 
   const copyPixCode = () => {
@@ -569,6 +540,21 @@ const handleServiceCreate = () => {
       </div>
     </div>
   )
+
+  // Service Tracking Screen
+  if (currentScreen === 'service-tracking') {
+    return (
+      <ServiceTracking
+        onBack={() => handleScreenTransition('home')}
+        entregador={entregadorData}
+        destination={selectedDestination || {
+          address: selectedLocation || 'Endereço não especificado',
+          lat: -23.55052, 
+          lng: -46.63330
+        }} 
+      />
+    )
+  }
 
   // Payment Screen
   if (currentScreen === 'payment') {

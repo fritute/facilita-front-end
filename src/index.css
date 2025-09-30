@@ -105,3 +105,21 @@
 .move-right {
   margin-left: 6rem; /* Move o elemento para a direita */
 }
+
+/* Estilos para Leaflet Map */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  z-index: 0;
+}
+
+/* Garantir que o mapa tenha altura */
+.leaflet-container,
+.leaflet-pane,
+.leaflet-tile-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}

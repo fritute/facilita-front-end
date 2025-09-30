@@ -19,8 +19,8 @@ export interface Location {
 }
 
 export interface LocationMapProps {
-  onLocationSelect: (address: string) => void
-  onScreenChange: (screen: string) => void
+  onLocationSelect: (address: string, lat: number, lng: number) => void
+  onScreenChange: (screen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment' | 'service-tracking' | 'service-confirmed' | 'tracking') => void
 }
 
   
@@ -45,6 +45,10 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
   const getUserLocation = () => {
     setIsLocating(true)
     
+    // Usar localização padrão (Carapicuíba, SP) diretamente
+    const defaultLat = -23.5235
+    const defaultLng = -46.8401
+    
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
@@ -55,19 +59,19 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
           await getAddressFromCoords(latitude, longitude)
           setIsLocating(false)
         },
-        (error) => {
-          console.error('Erro ao obter localização:', error)
-          alert('Não foi possível obter sua localização. Usando localização padrão.')
+        async (error) => {
+          console.log('Usando localização padrão:', error.message)
+          setMapCenter([defaultLat, defaultLng])
+          setUserLocation({ lat: defaultLat, lng: defaultLng, address: 'Carapicuíba, SP' })
+          await getAddressFromCoords(defaultLat, defaultLng)
           setIsLocating(false)
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
         }
       )
     } else {
-      alert('Geolocalização não suportada pelo navegador.')
+      // Usar localização padrão se geolocalização não for suportada
+      setMapCenter([defaultLat, defaultLng])
+      setUserLocation({ lat: defaultLat, lng: defaultLng, address: 'Carapicuíba, SP' })
+      getNearbyAddresses(defaultLat, defaultLng)
       setIsLocating(false)
     }
   }
@@ -204,7 +208,7 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
                   <p className="font-semibold">Endereço próximo</p>
                   <p className="text-sm text-gray-600">{location.address}</p>
                   <button
-                    onClick={() => onLocationSelect(location.address)}
+                    onClick={() => onLocationSelect(location.address, location.lat, location.lng)}
                     className="mt-2 bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600"
                   >
                     Selecionar
@@ -272,7 +276,7 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
               {nearbyAddresses.map((location, index) => (
                 <button
                   key={index}
-                  onClick={() => onLocationSelect(location.address)}
+                  onClick={() => onLocationSelect(location.address, location.lat, location.lng)}
                   className="w-full flex items-center p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-green-300"
                 >
                   <MapPin />

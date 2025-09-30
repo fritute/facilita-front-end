@@ -1,6 +1,37 @@
-// ServiceTracking.tsx
+// ServiceTracking.tsx - Rastreamento com OSRM
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Phone, MessageSquare, Star, Clock, Truck } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { ArrowLeft, MessageSquare, Star, Clock, CheckCircle } from 'lucide-react';
+
+// Fix para ícones do Leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Ícone customizado para o motorista
+const driverIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+// Ícone customizado para o destino
+const destinationIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
 
 interface ServiceTrackingProps {
   onBack: () => void;
@@ -21,56 +52,91 @@ interface ServiceTrackingProps {
 }
 
 const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, destination }) => {
-  const [driverPosition, setDriverPosition] = useState<{ lat: number; lng: number } | null>(null);
+  // Posição inicial do motorista (exemplo: um ponto distante do destino)
+  const initialDriverPosition = {
+    lat: -23.5324859,
+    lng: -46.7916801
+  };
+
+  const [driverPosition, setDriverPosition] = useState<{ lat: number; lng: number }>(initialDriverPosition);
   const [progress, setProgress] = useState(0);
-  const [eta, setEta] = useState(entregador.tempoEstimado);
+  const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
+  const [currentRouteIndex, setCurrentRouteIndex] = useState(0);
+  const [estimatedTime, setEstimatedTime] = useState<number>(0);
 
-  // Simular movimento do motorista em tempo real
+  // Buscar rota real usando OSRM
   useEffect(() => {
-    // Posição inicial aleatória próxima ao destino (para demonstração)
-    const initialLat = destination.lat + (Math.random() * 0.02 - 0.01);
-    const initialLng = destination.lng + (Math.random() * 0.02 - 0.01);
-    
-    setDriverPosition({ lat: initialLat, lng: initialLng });
+    const fetchRoute = async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${initialDriverPosition.lng},${initialDriverPosition.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.routes && data.routes.length > 0) {
+          const route = data.routes[0];
+          const coordinates: [number, number][] = route.geometry.coordinates.map(
+            (coord: number[]) => [coord[1], coord[0]] // Inverter para [lat, lng]
+          );
+          
+          setRouteCoordinates(coordinates);
+          setEstimatedTime(Math.round(route.duration / 60)); // Converter para minutos
+          
+          console.log('Rota calculada:', {
+            distancia: `${(route.distance / 1000).toFixed(2)} km`,
+            tempo: `${Math.round(route.duration / 60)} min`,
+            pontos: coordinates.length
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao buscar rota:', error);
+        // Fallback: linha reta
+        setRouteCoordinates([
+          [initialDriverPosition.lat, initialDriverPosition.lng],
+          [destination.lat, destination.lng]
+        ]);
+      }
+    };
 
-    // Simular movimento em tempo real
+    fetchRoute();
+  }, [destination]);
+
+  // Simular movimento do motorista ao longo da rota
+  useEffect(() => {
+    if (routeCoordinates.length === 0) return;
+
     const interval = setInterval(() => {
-      setDriverPosition(prev => {
-        if (!prev) return null;
+      setCurrentRouteIndex(prev => {
+        const nextIndex = prev + 1;
         
-        // Mover gradualmente em direção ao destino
-        const latDiff = destination.lat - prev.lat;
-        const lngDiff = destination.lng - prev.lng;
+        if (nextIndex >= routeCoordinates.length) {
+          setProgress(100);
+          return prev; // Chegou ao destino
+        }
         
-        const newLat = prev.lat + latDiff * 0.1;
-        const newLng = prev.lng + lngDiff * 0.1;
+        // Atualizar posição do motorista
+        const newPosition = routeCoordinates[nextIndex];
+        setDriverPosition({ lat: newPosition[0], lng: newPosition[1] });
         
         // Calcular progresso
-        const totalDistance = Math.sqrt(
-          Math.pow(destination.lat - initialLat, 2) + 
-          Math.pow(destination.lng - initialLng, 2)
-        );
-        const currentDistance = Math.sqrt(
-          Math.pow(destination.lat - newLat, 2) + 
-          Math.pow(destination.lng - newLng, 2)
-        );
-        
-        const newProgress = Math.max(0, Math.min(100, 100 - (currentDistance / totalDistance) * 100));
+        const newProgress = (nextIndex / routeCoordinates.length) * 100;
         setProgress(newProgress);
         
-        // Atualizar ETA baseado no progresso
-        const remainingTime = parseInt(entregador.tempoEstimado) * (1 - newProgress / 100);
-        setEta(`${Math.ceil(remainingTime)} min`);
-        
-        return { lat: newLat, lng: newLng };
+        return nextIndex;
       });
-    }, 3000); // Atualizar a cada 3 segundos
+    }, 2000); // Move para o próximo ponto a cada 2 segundos
 
     return () => clearInterval(interval);
-  }, [destination, entregador.tempoEstimado]);
+  }, [routeCoordinates]);
+
+  // Centro do mapa (ponto médio entre motorista e destino)
+  const mapCenter: [number, number] = [
+    (driverPosition.lat + destination.lat) / 2,
+    (driverPosition.lng + destination.lng) / 2
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 flex flex-col">
       {/* Header */}
       <div className="bg-green-500 text-white p-4 relative">
         <button
@@ -84,150 +150,94 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, d
         </div>
       </div>
 
-      {/* Driver Info */}
-      <div className="bg-white p-4 mx-4 mt-4 rounded-lg shadow-md">
-        <div className="flex justify-between items-center mb-3">
-          <div className="flex items-center">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-3">
-              <Truck className="w-6 h-6 text-green-600" />
-            </div>
+      {/* Map Area - OpenStreetMap */}
+      <div className="flex-1 relative z-0" style={{ minHeight: '400px' }}>
+        <MapContainer
+          center={mapCenter}
+          zoom={14}
+          style={{ height: '100%', width: '100%', position: 'absolute' }}
+          className="z-0"
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          
+          {/* Linha da rota */}
+          {routeCoordinates.length > 0 && (
+            <Polyline 
+              positions={routeCoordinates} 
+              color="#10b981" 
+              weight={4}
+              dashArray="10, 10"
+            />
+          )}
+          
+          {/* Marcador do motorista */}
+          <Marker position={[driverPosition.lat, driverPosition.lng]} icon={driverIcon}>
+            <Popup>
+              <div className="text-center">
+                <p className="font-semibold">{entregador.nome}</p>
+                <p className="text-sm text-gray-600">{entregador.veiculo}</p>
+                <p className="text-xs text-gray-500">{entregador.placa}</p>
+              </div>
+            </Popup>
+          </Marker>
+          
+          {/* Marcador do destino */}
+          <Marker position={[destination.lat, destination.lng]} icon={destinationIcon}>
+            <Popup>
+              <div className="text-center">
+                <p className="font-semibold">Destino</p>
+                <p className="text-sm text-gray-600">{destination.address}</p>
+              </div>
+            </Popup>
+          </Marker>
+        </MapContainer>
+      </div>
+
+      {/* Bottom Card - Informações do Prestador */}
+      <div className="bg-green-500 text-white p-4 rounded-t-3xl shadow-2xl relative z-10">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <img 
+              src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" 
+              alt={entregador.nome}
+              className="w-12 h-12 rounded-full border-2 border-white"
+            />
             <div>
-              <h3 className="font-semibold">{entregador.nome}</h3>
-              <div className="flex items-center">
-                <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                <span className="text-sm ml-1">{entregador.rating} ▼</span>
+              <h3 className="font-bold text-lg">{entregador.nome}</h3>
+              <div className="flex items-center space-x-1">
+                <span className="text-sm">{entregador.rating}</span>
+                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
               </div>
             </div>
           </div>
-          <div className="text-right">
-            <div className="flex items-center justify-end text-green-600">
-              <Clock className="w-4 h-4 mr-1" />
-              <span className="font-semibold">{eta}</span>
-            </div>
-            <p className="text-sm text-gray-600">{entregador.distancia}</p>
+          <div className="flex items-center space-x-2 bg-white bg-opacity-20 px-3 py-2 rounded-full">
+            <Clock className="w-5 h-5" />
+            <span className="font-semibold">
+              {estimatedTime > 0 
+                ? Math.ceil(estimatedTime * (1 - progress / 100))
+                : Math.ceil(parseInt(entregador.tempoEstimado) * (1 - progress / 100))
+              } Min
+            </span>
+            <CheckCircle className="w-5 h-5 text-white" />
           </div>
         </div>
 
-        {/* Vehicle Info */}
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <div className="grid grid-cols-2 gap-2 text-sm">
+        {/* Status */}
+        <div className="bg-white bg-opacity-10 rounded-lg p-3 mb-3">
+          <div className="flex items-center justify-between">
             <div>
-              <span className="text-gray-600">Veículo:</span>
-              <p className="font-medium">{entregador.veiculo}</p>
+              <p className="text-sm opacity-90">Status</p>
+              <p className="font-bold text-lg">
+                {progress >= 100 ? 'Prestador chegou!' : 'Prestador em rota'}
+              </p>
             </div>
-            <div>
-              <span className="text-gray-600">Placa:</span>
-              <p className="font-medium">{entregador.placa}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="bg-white p-4 mx-4 mt-4 rounded-lg shadow-md">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-medium">Status do trajeto</span>
-          <span className="text-sm text-green-600">{progress.toFixed(0)}%</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div 
-            className="bg-green-500 h-2 rounded-full transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          ></div>
-        </div>
-        <div className="flex justify-between text-xs text-gray-600 mt-1">
-          <span>Motorista a caminho</span>
-          <span>Chegando</span>
-        </div>
-      </div>
-
-      {/* Map */}
-      <div className="bg-white p-4 mx-4 mt-4 rounded-lg shadow-md">
-        <h3 className="font-semibold mb-3">Localização em tempo real</h3>
-        <div className="h-64 bg-gray-200 rounded-lg relative overflow-hidden">
-          {/* Mapa simplificado - Em produção, integraria com OpenStreetMap */}
-          <div className="absolute inset-0 bg-blue-50">
-            {/* Simulação do mapa */}
-            <div className="w-full h-full relative">
-              {/* Rua principal */}
-              <div className="absolute top-1/2 left-0 right-0 h-4 bg-gray-300 transform -translate-y-1/2"></div>
-              
-              {/* Destino */}
-              <div 
-                className="absolute w-6 h-6 bg-red-500 rounded-full transform -translate-x-1/2 -translate-y-1/2"
-                style={{
-                  left: '80%',
-                  top: '50%'
-                }}
-              >
-                <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-red-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                  Destino
-                </div>
-              </div>
-              
-              {/* Motorista */}
-              {driverPosition && (
-                <div 
-                  className="absolute w-8 h-8 bg-green-500 rounded-full transform -translate-x-1/2 -translate-y-1/2 shadow-lg"
-                  style={{
-                    left: `${20 + progress * 0.6}%`,
-                    top: '50%'
-                  }}
-                >
-                  <Truck className="w-4 h-4 text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
-                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-green-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
-                    {entregador.nome.split(' ')[0]}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="p-4 flex space-x-3">
-        <button className="flex-1 bg-green-500 text-white py-3 rounded-lg font-semibold flex items-center justify-center hover:bg-green-600 transition-colors">
-          <Phone className="w-5 h-5 mr-2" />
-          Ligar
-        </button>
-        <button className="flex-1 bg-white border border-green-500 text-green-500 py-3 rounded-lg font-semibold flex items-center justify-center hover:bg-green-50 transition-colors">
-          <MessageSquare className="w-5 h-5 mr-2" />
-          Mensagem
-        </button>
-      </div>
-
-      {/* Status Timeline */}
-      <div className="bg-white p-4 mx-4 mb-4 rounded-lg shadow-md">
-        <h3 className="font-semibold mb-3">Status do serviço</h3>
-        <div className="space-y-4">
-          <div className="flex items-center">
-            <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-            <div>
-              <p className="font-medium">Serviço confirmado</p>
-              <p className="text-sm text-gray-600">Há 5 minutos</p>
-            </div>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-            <div>
-              <p className="font-medium">Prestador a caminho</p>
-              <p className="text-sm text-gray-600">Há 3 minutos</p>
-            </div>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 bg-gray-300 rounded-full mr-3"></div>
-            <div>
-              <p className="text-gray-400">Serviço em andamento</p>
-              <p className="text-sm text-gray-500">Em breve</p>
-            </div>
-          </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 bg-gray-300 rounded-full mr-3"></div>
-            <div>
-              <p className="text-gray-400">Serviço finalizado</p>
-              <p className="text-sm text-gray-500">--:--</p>
-            </div>
+            <button className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold hover:bg-opacity-90 transition-all flex items-center space-x-2">
+              <MessageSquare className="w-4 h-4" />
+              <span>Conversar</span>
+            </button>
           </div>
         </div>
       </div>
