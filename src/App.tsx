@@ -84,7 +84,7 @@ function App() {
   'account-type' | 'service-provider' | 'profile-setup' | 'home' | 
   'location-select' | 'service-create' | 'waiting-driver' | 
   'tracking' | 'service-confirmed' | 'payment' | 'service-tracking' | 'profile' | 'orders' | 'service-rating'
-  >('home')  
+  >('login')  
   
 
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -2545,11 +2545,11 @@ const handleServiceCreate = async () => {
           </div>
         </div>
         
-        <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2">
+        <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col order-1 md:order-2">
           <img
             src="./Vector copy.png"
-            alt="Decoração"
-            className="absolute top-0 right-0 w-32 h-24 md:w-40 md:h-32"
+            alt="Decoração da tela de verificação de código"
+            className="absolute top-0 left-0 w-32 h-24 md:w-40 md:h-32 transform -scale-x-100 z-10"
           />
           
           <div className="relative z-10 text-center">
@@ -2627,8 +2627,8 @@ const handleServiceCreate = async () => {
         <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2">
           <img
             src="./Vector copy.png"
-            alt="Decoração"
-            className="absolute top-0 right-0 w-32 h-24 md:w-40 md:h-32 object-cover"
+            alt="Decoração da tela de recuperação de senha"
+            className="absolute top-0 left-0 w-32 h-24 md:w-40 md:h-32 object-cover transform -scale-x-100 z-10"
           />
           
           <div className="relative z-10">
@@ -2703,10 +2703,10 @@ const handleServiceCreate = async () => {
       <div className={`min-h-screen bg-gray-800 flex flex-col xl:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="flex-1 p-4 md:p-8 w-full xl:max-w-lg xl:ml-[15%] xl:mt-[5%]  order-2 xl:order-1">
+        <div className="flex-1 p-4 md:p-8 w-full xl:max-w-lg xl:ml-[15%] xl:mt-[10%]  order-2 xl:order-1">
           <h2 className="text-xl md:text-2xl text-white font-bold mb-6 md:mb-8">Cadastro</h2>
           
-          <div className="space-y-4 md:space-y-6">
+          <div className="cadastro-form space-y-4 md:space-y-6 mt-100">
             <div>
               <label className="block text-gray-400 text-sm mb-2">Nome</label>
               <div className="relative">
@@ -2856,11 +2856,16 @@ const handleServiceCreate = async () => {
           </div>
         </div>
   
-        <div className="flex-1 flex flex-col justify-end items-end p-8 order-1 xl:order-2">
-          <div className="absolute top-4 right-4 md:top-8 md:right-8">
+        <div className="flex-1 flex flex-col justify-center items-end p-8 order-1 xl:order-2 relative">
+          <img
+            src="./Vector copy.png"
+            alt="Decoração da tela de cadastro de usuário"
+            className="translate-x-[-1350px] translate-y-[-30px]"
+          />
+          <div className="absolute top-4 right-4 md:top-8 md:right-8 z-30">
             <FacilitaLogo />
           </div>
-          <div className=" flex-1 flex items-center justify-center p-8 transform translate-x-[-300px] translate-y-[10px] cadastro-image">
+          <div className=" flex-1 flex items-center justify-center p-8 transform translate-x-[-200px] translate-y-[20px] cadastro-image">
             <div className="relative max-w-xs md:max-w-sm">
               <img 
                 src="/undraw_order-delivered_puaw 3.png" 
@@ -2894,13 +2899,13 @@ const handleServiceCreate = async () => {
       <div className="flex-1 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 move-right">
         <img
           src="./Vector copy.png"
-          alt="Decoração"
-          className="absolute top-0 right-0 w-32 h-24 md:w-40 md:h-32 object-cover"
+          alt="Decoração da tela de login do usuário"
+          className=" transform -scale-x-100 z-1 move-right translate-x-[28px] translate-y-[-179px]"
         />
         
-        <div className="relative z-10">
-          <h2 className="text-2xl md:text-3xl text-white font-bold mb-2">Entrar no Facilita</h2>
-          <p className="text-sm md:text-base text-gray-400 mb-6 md:mb-8">
+        <div className="relative z-10 transform translate-y-[-120px] ">
+          <h2 className="text-2xl md:text-3xl text-white font-bold mb-2 transform translate-y-[-85px] trasform translate-x-[270px]">Entrar no Facilita</h2>
+          <p className="text-sm md:text-base text-gray-400 mb-6 md:mb-8 transform translate-y-[-20px] trasform translate-x-[270px]">
             Não possui uma conta?{' '}
             <button
               onClick={() => handleScreenTransition('cadastro')}
@@ -2910,7 +2915,7 @@ const handleServiceCreate = async () => {
             </button>
           </p>
 
-          <div className="space-y-4 md:space-y-6">
+          <div className="login-form max-w-md mx-auto space-y-4 md:space-y-6 transform translate-y-[85px]">
             <div>
               <label className="block text-gray-400 text-sm mb-2">E-mail ou Telefone</label>
               <div className="relative">
@@ -2957,7 +2962,7 @@ const handleServiceCreate = async () => {
               </button>
             </div>
 
-            <div className="flex items-center">
+            <div className="flex items-center max-w-md mx-auto">
               <input
                 type="checkbox"
                 checked={termsAccepted}
@@ -2985,7 +2990,7 @@ const handleServiceCreate = async () => {
             <button
               onClick={handleLogin}
               disabled={isLoginLoading}
-              className={`w-full py-3 rounded-lg text-sm md:text-base font-semibold transition-colors flex items-center justify-center ${
+              className={`max-w-md mx-auto w-full py-3 rounded-lg text-sm md:text-base font-semibold transition-colors flex items-center justify-center ${
                 isLoginLoading 
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-green-500 hover:bg-green-600'
