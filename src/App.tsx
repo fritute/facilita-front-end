@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, UserIcon as UserIconLucide, ShoppingCart, Truck, Package, Users } from 'lucide-react'
 import QRCode from 'qrcode'
 import LocationMap from './LocationMap'
-import AddressInput from './components/AddressInput'
 import ServiceTracking from './components/ServiceTracking'
+import CompleteProfileModal from './components/CompleteProfileModal'
+import LoadingSpinner from './components/LoadingSpinner'
 
 type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking";
 
@@ -75,12 +76,15 @@ interface ServiceRequest {
 }
 
 function App() {
+  // 🔧 MODO DESENVOLVEDOR: Mude aqui para testar diferentes telas
+  // Opções: 'login', 'cadastro', 'home', 'location-select', 'service-create', 
+  // 'waiting-driver', 'payment', 'service-tracking', 'service-confirmed', etc.
   const [currentScreen, setCurrentScreen] = useState<
   'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 
   'account-type' | 'service-provider' | 'profile-setup' | 'home' | 
   'location-select' | 'service-create' | 'waiting-driver' | 
   'tracking' | 'service-confirmed' | 'payment' | 'service-tracking'
->('login')
+>('login')  // 👈 MODO DEV: Mude aqui para testar
 
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
@@ -92,21 +96,29 @@ function App() {
   const [countdown, setCountdown] = useState(27)
   const [selectedAccountType, setSelectedAccountType] = useState<'CONTRATANTE' | 'PRESTADOR' | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoginLoading, setIsLoginLoading] = useState(false)
   const [errors, setErrors] = useState<ValidationErrors>({})
   const [loggedUser, setLoggedUser] = useState<LoggedUser | null>(null)
   const [profileData, setProfileData] = useState({
-    endereco: '',
-    mercado: '',
-    necessidades: ''
+    cpf: '',
+    necessidade: '', // Campo que vai para a API
+    endereco: '' // Para capturar endereço e gerar id_localizacao
   })
   const [selectedLocation, setSelectedLocation] = useState<string>('')
+  const [selectedOriginLocation, setSelectedOriginLocation] = useState<string>('')
   const [serviceDescription, setServiceDescription] = useState('')
   const [selectedServiceType, setSelectedServiceType] = useState<string>('')
+  const [isSelectingOrigin, setIsSelectingOrigin] = useState(false)
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
   const [pixCode, setPixCode] = useState<string>('')
   const [driverFound, setDriverFound] = useState(false)
   const [selectedAddress, setSelectedAddress] = useState<any>(null);
-  
+  const [pickupLocation, setPickupLocation] = useState<{address: string, lat: number, lng: number} | null>(null);
+  const [deliveryLocation, setDeliveryLocation] = useState<{address: string, lat: number, lng: number} | null>(null);
+  const [servicePrice, setServicePrice] = useState<number>(0);
+  const [driverOrigin, setDriverOrigin] = useState<{lat: number, lng: number} | null>(null);
+  const [showCompleteProfileModal, setShowCompleteProfileModal] = useState(false);
+  const [hasCheckedProfile, setHasCheckedProfile] = useState(false);
   
   const handleAddressSelection = (address: any) => {
     setSelectedAddress(address);
@@ -116,6 +128,15 @@ function App() {
 
   const handleStartTracking = (destination: {address: string, lat: number, lng: number}) => {
     setSelectedDestination(destination);
+    // Define origem do prestador se não existir (usa origem selecionada como fallback)
+    if (!driverOrigin) {
+      if (pickupLocation) {
+        setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng });
+      } else {
+        // Fallback para uma posição padrão (Carapicuíba/SP)
+        setDriverOrigin({ lat: -23.5324859, lng: -46.7916801 });
+      }
+    }
     handleScreenTransition('service-tracking');
   };
 
@@ -131,7 +152,7 @@ function App() {
   });
 
   const [loginData, setLoginData] = useState({
-    email: '',
+    login: '', // Pode ser email ou telefone
     senha: ''
   })
 
@@ -167,6 +188,28 @@ function App() {
     { id: 'acompanhar-consulta', text: 'Acompanhar em consultas médicas', category: 'Saúde' }
   ]
 
+  // Função para calcular distância entre dois pontos (fórmula de Haversine)
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Raio da Terra em km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c;
+    return distance;
+  }
+
+  // Função para calcular preço baseado na distância
+  const calculatePrice = (distance: number): number => {
+    const basePrice = 10; // Preço base R$ 10
+    const pricePerKm = 3.5; // R$ 3,50 por km
+    const total = basePrice + (distance * pricePerKm);
+    return parseFloat(total.toFixed(2));
+  }
+
   const generateQRCode = async (pixKey: string, amount: number) => {
     try {
       const pixString = `00020126580014BR.GOV.BCB.PIX0136${pixKey}520400005303986540${amount.toFixed(2)}5802BR5925FACILITA SERVICOS LTDA6009SAO PAULO62070503***6304`
@@ -175,6 +218,50 @@ function App() {
       setPixCode(pixString)
     } catch (error) {
       console.error('Error generating QR code:', error)
+    }
+  }
+
+  // Função para gerar pagamento via PagBank
+  const generatePagBankPayment = async (amount: number) => {
+    try {
+      const token = localStorage.getItem('authToken')
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/pagamento/pagbank', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          amount: amount,
+          description: 'Pagamento de serviço Facilita'
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Resposta PagBank:', data)
+        
+        // Se o backend retornar o QR code
+        if (data.qr_code) {
+          setPixCode(data.qr_code)
+          // Gerar imagem do QR code
+          const qrCodeDataUrl = await QRCode.toDataURL(data.qr_code)
+          setQrCodeUrl(qrCodeDataUrl)
+        } else if (data.qr_code_base64) {
+          setQrCodeUrl(data.qr_code_base64)
+          setPixCode(data.qr_code_text || '')
+        }
+        
+        return data
+      } else {
+        console.error('Erro ao gerar pagamento PagBank')
+        // Fallback para o método antigo
+        await generateQRCode('facilita@pagbank.com', amount)
+      }
+    } catch (error) {
+      console.error('Erro na requisição PagBank:', error)
+      // Fallback para o método antigo
+      await generateQRCode('facilita@pagbank.com', amount)
     }
   }
 
@@ -194,7 +281,8 @@ function App() {
   // Generate PIX QR Code when payment screen loads
   useEffect(() => {
     if (currentScreen === 'payment') {
-      generateQRCode('facilita@pagbank.com', 119.99)
+      const amount = servicePrice > 0 ? servicePrice : 119.99;
+      generatePagBankPayment(amount)
     }
   }, [currentScreen])
 
@@ -207,15 +295,26 @@ function App() {
       try {
         const user = JSON.parse(storedUser)
         setLoggedUser(user)
-        console.log('Usuário recuperado do localStorage:', user)
-        console.log('Token recuperado:', storedToken)
+        console.log('👤 Usuário recuperado do localStorage:', user)
+        console.log('🔑 Token recuperado:', storedToken)
+        
+        // Redirecionar para Home se usuário está logado
+        if (currentScreen === 'login') {
+          console.log('🔄 Redirecionando usuário logado para Home')
+          setCurrentScreen('home')
+          
+          // Para contratantes, resetar verificação de perfil
+          if (user.tipo_conta === 'CONTRATANTE') {
+            setHasCheckedProfile(false)
+          }
+        }
       } catch (error) {
-        console.error('Erro ao recuperar usuário:', error)
+        console.error('❌ Erro ao recuperar usuário:', error)
         localStorage.removeItem('loggedUser')
         localStorage.removeItem('authToken')
       }
     }
-  }, [])
+  }, [currentScreen])
 
   // Função helper para fazer requisições autenticadas
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
@@ -266,6 +365,38 @@ function App() {
     return phoneRegex.test(phone)
   }
 
+  // Função para formatar CPF
+  const formatCPF = (value: string): string => {
+    // Remove tudo que não é número
+    const numbers = value.replace(/\D/g, '')
+    
+    // Limita a 11 dígitos
+    const limited = numbers.slice(0, 11)
+    
+    // Aplica a formatação XXX.XXX.XXX-XX
+    if (limited.length <= 3) {
+      return limited
+    } else if (limited.length <= 6) {
+      return `${limited.slice(0, 3)}.${limited.slice(3)}`
+    } else if (limited.length <= 9) {
+      return `${limited.slice(0, 3)}.${limited.slice(3, 6)}.${limited.slice(6)}`
+    } else {
+      return `${limited.slice(0, 3)}.${limited.slice(3, 6)}.${limited.slice(6, 9)}-${limited.slice(9)}`
+    }
+  }
+
+  // Função para validar CPF
+  const validateCPF = (cpf: string): boolean => {
+    const numbers = cpf.replace(/\D/g, '')
+    return numbers.length === 11
+  }
+
+  // Handler para mudança do CPF
+  const handleCPFChange = (value: string) => {
+    const formatted = formatCPF(value)
+    setProfileData({...profileData, cpf: formatted})
+  }
+
   // Função para validar senha
   const validatePassword = (password: string): boolean => {
     return password.length >= 6 && password.length <= 20
@@ -292,8 +423,10 @@ function App() {
   const handleLogin = async () => {
     const newErrors: ValidationErrors = {}
 
-    // Validar email
-    if (!validateEmail(loginData.email)) {
+    // Validar login (email ou telefone)
+    if (!loginData.login.trim()) {
+      newErrors.loginEmail = 'Email ou telefone é obrigatório'
+    } else if (loginData.login.includes('@') && !validateEmail(loginData.login)) {
       newErrors.loginEmail = 'Endereço de e-mail inválido'
     }
 
@@ -313,29 +446,36 @@ function App() {
     }
 
     setErrors({})
-    setIsLoading(true)
+    setIsLoginLoading(true)
 
     try {
+      // Preparar payload do login - backend espera 'login' e 'senha'
+      const loginPayload = {
+        login: loginData.login.trim(), // Campo 'login' pode ser email ou telefone
+        senha: loginData.senha
+      }
+      
+      console.log('📤 Enviando login:', { login: loginPayload.login, senha: '***' })
+      
       const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email: loginData.email,
-          senha: loginData.senha
-        })
+        body: JSON.stringify(loginPayload)
       })
+
+      console.log('📥 Status da resposta:', response.status)
 
       if (response.ok) {
         const data = await response.json()
         
-        console.log('Resposta do login:', data) // Debug
+        console.log('✅ Resposta do login:', data)
         
         // Armazenar token no localStorage
         if (data.token) {
           localStorage.setItem('authToken', data.token)
-          console.log('Token armazenado:', data.token)
+          console.log('🔑 Token armazenado:', data.token)
         }
         
         // Armazenar dados do usuário vindos do banco
@@ -351,11 +491,14 @@ function App() {
           localStorage.setItem('loggedUser', JSON.stringify(user))
           
           setLoggedUser(user)
-          console.log('Usuário logado:', user)
+          console.log('👤 Usuário logado:', user)
           
           // Redirecionar baseado no tipo de conta
           if (user.tipo_conta === 'CONTRATANTE') {
-            handleScreenTransition('profile-setup')
+            // Para contratantes, sempre vai para home primeiro
+            // O modal de completar perfil será mostrado se necessário
+            setHasCheckedProfile(false); // Reset para verificar perfil
+            handleScreenTransition('home')
           } else {
             handleScreenTransition('home')
           }
@@ -363,14 +506,28 @@ function App() {
           alert('Erro: Dados do usuário não retornados pela API')
         }
       } else {
-        const errorData = await response.json()
-        alert(`Erro no login: ${errorData.message || 'Email ou senha incorretos'}`)
+        // Tentar ler a resposta de erro
+        let errorMessage = 'Email ou senha incorretos'
+        try {
+          const errorData = await response.json()
+          console.error('❌ Erro do backend:', errorData)
+          errorMessage = errorData.message || errorData.error || errorMessage
+          
+          // Se o erro for sobre campos faltando, mostrar detalhes
+          if (errorData.details) {
+            console.error('Detalhes do erro:', errorData.details)
+          }
+        } catch (e) {
+          console.error('❌ Não foi possível ler o erro do backend')
+        }
+        
+        alert(`Erro no login: ${errorMessage}`)
       }
     } catch (error) {
-      console.error('Erro na requisição:', error)
+      console.error('❌ Erro na requisição:', error)
       alert('Erro de conexão. Verifique se o servidor está rodando.')
     } finally {
-      setIsLoading(false)
+      setIsLoginLoading(false)
     }
   }
 
@@ -441,20 +598,18 @@ function App() {
       return
     }
 
-    if (selectedAccountType === 'PRESTADOR') {
-      handleScreenTransition('service-provider')
-      return
-    }
+    // Cadastro do usuário (independente do tipo) com payload exato exigido
 
     setIsLoading(true)
 
-    const registerData: RegisterData = {
+    const registerData = {
       nome: userData.nome,
-      senha_hash: userData.senha,
       email: userData.email,
-      telefone: userData.telefone.replace(/\D/g, ''), 
-      tipo_conta: selectedAccountType
+      telefone: userData.telefone.replace(/\D/g, ''),
+      senha_hash: userData.senha,
     }
+
+    console.log('📤 Enviando cadastro:', { ...registerData, senha_hash: '***' })
 
     try {
       const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/register', {
@@ -465,13 +620,20 @@ function App() {
         body: JSON.stringify(registerData)
       })
 
+      console.log('📥 Status do cadastro:', response.status)
+
       if (response.ok) {
-        handleScreenTransition('success')
-        setTimeout(() => {
-          handleScreenTransition('login')
-        }, 2000)
+        const data = await response.json()
+        console.log('✅ Cadastro bem-sucedido:', data)
+        // Após cadastrado, direciona conforme tipo de conta escolhido
+        if (selectedAccountType === 'CONTRATANTE') {
+          handleScreenTransition('profile-setup')
+        } else {
+          handleScreenTransition('home')
+        }
       } else {
         const errorData = await response.json()
+        console.error('❌ Erro no cadastro:', errorData)
         alert(`Erro no cadastro: ${errorData.message || 'Erro desconhecido'}`)
       }
     } catch (error) {
@@ -600,10 +762,11 @@ function App() {
         alert(errorMessage)
       }
     } catch (error) {
-      console.error('Erro na requisição:', error)
+      console.error('Erro no login:', error)
       alert('Erro de conexão. Verifique se o servidor está rodando.')
     } finally {
-      setIsLoading(false)
+      setIsLoginLoading(false)
+      setErrors({})
     }
   }
 
@@ -687,29 +850,202 @@ function App() {
     }
   }
 
-  const handleProfileSetup = () => {
-    if (!profileData.endereco || !profileData.mercado || !profileData.necessidades) {
-      alert('Preencha todos os campos')
+  const handleProfileSetup = async () => {
+    if (!profileData.cpf || !profileData.necessidade) {
+      alert('Preencha todos os campos obrigatórios')
       return
     }
-    handleScreenTransition('home')
+    
+    if (!validateCPF(profileData.cpf)) {
+      alert('CPF inválido. Digite os 11 dígitos.')
+      return
+    }
+
+    try {
+      // Monta payload exatamente como solicitado
+      const payload = {
+        id_localizacao: 1, // Fixo por enquanto
+        necessidade: profileData.necessidade.toUpperCase(),
+        cpf: profileData.cpf.replace(/\D/g, ''),
+      }
+
+      console.log('📤 Enviando dados do contratante:', payload)
+
+      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/register', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Erro ao registrar contratante:', errorData)
+        alert(`Falha ao completar perfil de contratante: ${errorData.message || response.status}`)
+        return
+      }
+
+      alert('Perfil de contratante salvo com sucesso!')
+      handleScreenTransition('home')
+    } catch (e) {
+      console.error('Erro ao registrar contratante:', e)
+      alert('Erro de conexão ao salvar perfil de contratante.')
+    }
   }
 
   const handleServiceRequest = () => {
     handleScreenTransition('location-select')
   }
 
+  // Função para fazer logout
+  const handleLogout = () => {
+    console.log('🚪 Fazendo logout do usuário')
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('loggedUser')
+    setLoggedUser(null)
+    setHasCheckedProfile(false)
+    setShowCompleteProfileModal(false)
+    handleScreenTransition('login')
+  }
+
+  // Verificar se contratante tem perfil completo
+  const checkContratanteProfile = async () => {
+    if (!loggedUser || loggedUser.tipo_conta !== 'CONTRATANTE' || hasCheckedProfile) {
+      console.log('🔍 Pulando verificação:', { 
+        loggedUser: !!loggedUser, 
+        tipo: loggedUser?.tipo_conta, 
+        hasChecked: hasCheckedProfile 
+      });
+      return;
+    }
+
+    console.log('🔍 Verificando perfil do contratante...');
+
+    try {
+      // Tentar buscar dados do contratante
+      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/me');
+      
+      console.log('📥 Resposta da API /contratante/me:', {
+        status: response.status,
+        ok: response.ok
+      });
+      
+      if (response.status === 404) {
+        // Contratante não tem perfil completo
+        console.log('❌ Contratante sem perfil completo, mostrando modal');
+        setShowCompleteProfileModal(true);
+      } else if (response.ok) {
+        // Contratante já tem perfil completo
+        const data = await response.json();
+        console.log('✅ Contratante com perfil completo:', data);
+      } else {
+        // Outro erro - assumir que não tem perfil
+        console.log('⚠️ Status inesperado, assumindo sem perfil. Status:', response.status);
+        setShowCompleteProfileModal(true);
+      }
+      
+      setHasCheckedProfile(true);
+    } catch (error) {
+      console.error('❌ Erro ao verificar perfil do contratante:', error);
+      // Em caso de erro, assumir que não tem perfil
+      console.log('⚠️ Erro na requisição, mostrando modal por segurança');
+      setShowCompleteProfileModal(true);
+      setHasCheckedProfile(true);
+    }
+  };
+
+  // Verificar perfil quando entrar na home
+  useEffect(() => {
+    console.log('🔍 useEffect verificar perfil:', {
+      currentScreen,
+      loggedUser: loggedUser?.nome,
+      tipo_conta: loggedUser?.tipo_conta,
+      shouldCheck: currentScreen === 'home' && loggedUser && loggedUser.tipo_conta === 'CONTRATANTE'
+    });
+    
+    if (currentScreen === 'home' && loggedUser && loggedUser.tipo_conta === 'CONTRATANTE') {
+      console.log('🚀 Executando checkContratanteProfile...');
+      checkContratanteProfile();
+    }
+  }, [currentScreen, loggedUser]);
+
+  // Tela de loading durante o login
+  if (isLoginLoading) {
+    return (
+      <div className="min-h-screen bg-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="mb-8">
+            <div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <LoadingSpinner size="lg" color="white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Entrando...</h2>
+            <p className="text-gray-400">Verificando suas credenciais</p>
+          </div>
+          
+          <div className="flex justify-center space-x-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
 const handleLocationSelect = (address: string, lat: number, lng: number) => {
-  setSelectedLocation(address);
-  setSelectedDestination({ address, lat, lng });
+  if (isSelectingOrigin) {
+    // Selecionando origem (de onde buscar)
+    setSelectedOriginLocation(address);
+    setPickupLocation({ address, lat, lng });
+    console.log('Local de origem definido:', { address, lat, lng });
+    setIsSelectingOrigin(false);
+  } else {
+    // Selecionando destino (onde entregar)
+    setSelectedLocation(address);
+    setDeliveryLocation({ address, lat, lng });
+    console.log('Local de entrega definido:', { address, lat, lng });
+  }
   handleScreenTransition('service-create');
 };
 
 
-const handleServiceCreate = () => {
+const handleServiceCreate = async () => {
   if (!serviceDescription && !selectedServiceType) {
     alert('Selecione um serviço ou descreva o que precisa');
     return;
+  }
+  
+  // Verificar se origem e destino foram selecionados
+  if (!pickupLocation) {
+    alert('Selecione o local de origem (de onde buscar)');
+    return;
+  }
+  
+  if (!deliveryLocation) {
+    alert('Selecione o local de entrega (para onde levar)');
+    return;
+  }
+  
+  // Calcular distância e preço entre origem e destino escolhidos
+  const distance = calculateDistance(
+    pickupLocation.lat,
+    pickupLocation.lng,
+    deliveryLocation.lat,
+    deliveryLocation.lng
+  );
+  const price = calculatePrice(distance);
+  setServicePrice(price);
+  
+  console.log('=== CÁLCULO DE PREÇO ===');
+  console.log(`Origem: ${pickupLocation.address}`);
+  console.log(`Destino: ${deliveryLocation.address}`);
+  console.log(`Distância: ${distance.toFixed(2)} km`);
+  console.log(`Preço: R$ ${price.toFixed(2)}`);
+  console.log('========================');
+  
+  // Definir destino para o tracking
+  setSelectedDestination(deliveryLocation);
+  // Definir origem do prestador (usa a origem selecionada como base para a primeira perna)
+  if (pickupLocation) {
+    setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng });
   }
   
   // Ir para a tela de procurar motorista
@@ -747,7 +1083,11 @@ const handleServiceCreate = () => {
           address: selectedLocation || 'Endereço não especificado',
           lat: -23.55052, 
           lng: -46.63330
-        }} 
+        }}
+        driverOrigin={(driverOrigin || pickupLocation) ? {
+          lat: (driverOrigin?.lat ?? pickupLocation!.lat),
+          lng: (driverOrigin?.lng ?? pickupLocation!.lng)
+        } : { lat: -23.5324859, lng: -46.7916801 }} 
       />
     )
   }
@@ -802,7 +1142,7 @@ const handleServiceCreate = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-lg">R$ 291,76</p>
+                    <p className="font-bold text-lg">R$ {(servicePrice > 0 ? servicePrice : 291.76).toFixed(2)}</p>
                   </div>
                 </div>
               </div>
@@ -820,7 +1160,7 @@ const handleServiceCreate = () => {
                 <span className="text-sm">Carteira digital</span>
               </div>
 
-              {qrCodeUrl && (
+              {qrCodeUrl ? (
                 <div className="text-center mb-4">
                   <img src={qrCodeUrl} alt="QR Code PIX" className="mx-auto mb-2" style={{ width: '200px', height: '200px' }} />
                   <div className="bg-gray-100 p-2 rounded flex items-center justify-between">
@@ -834,6 +1174,11 @@ const handleServiceCreate = () => {
                       <Copy className="w-4 h-4" />
                     </button>
                   </div>
+                </div>
+              ) : (
+                <div className="text-center mb-4">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-600">Gerando QR Code PIX...</p>
                 </div>
               )}
 
@@ -855,7 +1200,7 @@ const handleServiceCreate = () => {
             <div className="space-y-3 mb-6">
               <div className="flex justify-between">
                 <span className="text-gray-600">Valor</span>
-                <span className="font-semibold">R$ 119,99</span>
+                <span className="font-semibold">R$ {(servicePrice > 0 ? servicePrice : 119.99).toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Taxas</span>
@@ -868,8 +1213,15 @@ const handleServiceCreate = () => {
               <hr />
               <div className="flex justify-between font-bold text-lg">
                 <span>Total</span>
-                <span>R$ 119,99</span>
+                <span>R$ {(servicePrice > 0 ? servicePrice : 119.99).toFixed(2)}</span>
               </div>
+              {pickupLocation && deliveryLocation && (
+                <div className="text-xs text-gray-500 mt-2">
+                  <p><strong>Origem:</strong> {pickupLocation.address.substring(0, 50)}{pickupLocation.address.length > 50 ? '...' : ''}</p>
+                  <p><strong>Entrega:</strong> {deliveryLocation.address.substring(0, 50)}{deliveryLocation.address.length > 50 ? '...' : ''}</p>
+                  <p className="mt-1"><strong>Distância:</strong> {pickupLocation && deliveryLocation ? calculateDistance(pickupLocation.lat, pickupLocation.lng, deliveryLocation.lat, deliveryLocation.lng).toFixed(2) : '0'} km</p>
+                </div>
+              )}
             </div>
 
             <button
@@ -934,7 +1286,7 @@ const handleServiceCreate = () => {
                 </div>
               </div>
             </div>
-            <p className="font-bold text-lg">R$ 291,76</p>
+            <p className="font-bold text-lg">R$ {(servicePrice > 0 ? servicePrice : 119.99).toFixed(2)}</p>
           </div>
         </div>
 
@@ -1030,13 +1382,53 @@ const handleServiceCreate = () => {
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div className="flex items-center mb-4">
-              <MapPin className="w-5 h-5 text-green-500 mr-2" />
-              <div>
-                <p className="font-semibold">Entregar em</p>
-                <p className="text-gray-600 text-sm">{selectedLocation}</p>
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center flex-1">
+                  <MapPin className="w-5 h-5 text-blue-500 mr-2" />
+                  <div className="flex-1">
+                    <p className="font-semibold">Buscar em (Origem)</p>
+                    <p className="text-gray-600 text-sm">{selectedOriginLocation || 'Clique para selecionar'}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsSelectingOrigin(true);
+                    handleScreenTransition('location-select');
+                  }}
+                  className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition-colors"
+                >
+                  {selectedOriginLocation ? 'Alterar' : 'Selecionar'}
+                </button>
+              </div>
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center flex-1">
+                    <MapPin className="w-5 h-5 text-green-500 mr-2" />
+                    <div className="flex-1">
+                      <p className="font-semibold">Entregar em (Destino)</p>
+                      <p className="text-gray-600 text-sm">{selectedLocation || 'Clique para selecionar'}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsSelectingOrigin(false);
+                      handleScreenTransition('location-select');
+                    }}
+                    className="bg-green-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-600 transition-colors"
+                  >
+                    {selectedLocation ? 'Alterar' : 'Selecionar'}
+                  </button>
+                </div>
               </div>
             </div>
+            {pickupLocation && deliveryLocation && (
+              <div className="bg-blue-50 p-3 rounded-lg mt-4">
+                <p className="text-sm font-semibold text-blue-800 mb-1">Estimativa de Preço</p>
+                <p className="text-xs text-blue-600">Distância: {calculateDistance(pickupLocation.lat, pickupLocation.lng, deliveryLocation.lat, deliveryLocation.lng).toFixed(2)} km</p>
+                <p className="text-lg font-bold text-blue-800">R$ {calculatePrice(calculateDistance(pickupLocation.lat, pickupLocation.lng, deliveryLocation.lat, deliveryLocation.lng)).toFixed(2)}</p>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -1155,6 +1547,17 @@ const handleServiceCreate = () => {
               <span>Perfil</span>
             </button>
           </nav>
+          
+          {/* Botão de logout */}
+          <div className="mt-8 pt-4 border-t border-white border-opacity-20">
+            <button 
+              onClick={handleLogout}
+              className="w-full flex items-center p-3 hover:bg-red-500 hover:bg-opacity-20 rounded-lg transition-colors text-red-200 hover:text-white"
+            >
+              <ArrowLeft className="w-5 h-5 mr-3" />
+              <span>Sair</span>
+            </button>
+          </div>
         </div>
 
         {/* Main content */}
@@ -1269,52 +1672,69 @@ const handleServiceCreate = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-gray-700 text-sm mb-2">Endereço</label>
+                <label className="block text-gray-700 text-sm mb-2">CPF *</label>
                 <input
                   type="text"
-                  value={profileData.endereco}
-                  onChange={(e) => setProfileData({...profileData, endereco: e.target.value})}
-                  placeholder="Endereço completo"
+                  value={profileData.cpf}
+                  onChange={(e) => handleCPFChange(e.target.value)}
+                  placeholder="000.000.000-00"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  maxLength={14}
                 />
               </div>
 
               <div>
-                <label className="block text-gray-700 text-sm mb-2">Preferência de Serviços</label>
+                <label className="block text-gray-700 text-sm mb-2">Tipo de Necessidade *</label>
                 <select
-                  value={profileData.mercado}
-                  onChange={(e) => setProfileData({...profileData, mercado: e.target.value})}
+                  value={profileData.necessidade}
+                  onChange={(e) => setProfileData({...profileData, necessidade: e.target.value})}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 >
-                  <option value="">Mercado</option>
-                  <option value="farmacia">Farmácia</option>
-                  <option value="mercado">Mercado</option>
-                  <option value="correios">Correios</option>
-                  <option value="shopping">Shopping</option>
+                  <option value="">Selecione sua necessidade</option>
+                  <option value="IDOSO">Idoso</option>
+                  <option value="MOBILIDADE">Problemas de mobilidade</option>
+                  <option value="VISUAL">Deficiência visual</option>
+                  <option value="AUDITIVA">Deficiência auditiva</option>
+                  <option value="NENHUMA">Nenhuma necessidade especial</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-gray-700 text-sm mb-2">Necessidades Especiais</label>
-                <select
-                  value={profileData.necessidades}
-                  onChange={(e) => setProfileData({...profileData, necessidades: e.target.value})}
+                <label className="block text-gray-700 text-sm mb-2">Endereço (opcional)</label>
+                <input
+                  type="text"
+                  value={profileData.endereco}
+                  onChange={(e) => setProfileData({...profileData, endereco: e.target.value})}
+                  placeholder="Seu endereço completo"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="">Idoso</option>
-                  <option value="mobilidade">Problemas de mobilidade</option>
-                  <option value="visual">Deficiência visual</option>
-                  <option value="auditiva">Deficiência auditiva</option>
-                  <option value="nenhuma">Nenhuma</option>
-                </select>
+                />
+                <p className="text-xs text-gray-500 mt-1">Usado para encontrar prestadores próximos</p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-blue-800 mb-2">Dados que serão enviados:</h3>
+                <ul className="text-xs text-blue-700 space-y-1">
+                  <li>• <strong>CPF:</strong> {profileData.cpf || 'Não informado'}</li>
+                  <li>• <strong>Necessidade:</strong> {profileData.necessidade || 'Não selecionada'}</li>
+                  <li>• <strong>ID Localização:</strong> 1 (padrão)</li>
+                </ul>
               </div>
 
               <button
                 onClick={handleProfileSetup}
-                className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
+                disabled={!profileData.cpf || !profileData.necessidade}
+                className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                  profileData.cpf && profileData.necessidade
+                    ? 'bg-green-500 text-white hover:bg-green-600'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
               >
-                Finalizar
+                Completar Perfil
               </button>
+              
+              <p className="text-xs text-gray-500 text-center">
+                * Campos obrigatórios
+              </p>
             </div>
           </div>
         </div>
@@ -1813,15 +2233,16 @@ const handleServiceCreate = () => {
 
           <div className="space-y-4 md:space-y-6">
             <div>
-              <label className="block text-gray-400 text-sm mb-2">E-mail</label>
+              <label className="block text-gray-400 text-sm mb-2">E-mail ou Telefone</label>
               <div className="relative">
                 <input
-                  type="email"
-                  value={loginData.email}
+                  type="text"
+                  value={loginData.login}
                  onChange={(e) => {
-                   setLoginData({...loginData, email: e.target.value})
+                   setLoginData({...loginData, login: e.target.value})
                    clearError('loginEmail')
                  }}
+                  placeholder="Digite seu e-mail ou telefone"
                   className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
@@ -1884,9 +2305,21 @@ const handleServiceCreate = () => {
 
             <button
               onClick={handleLogin}
-              className="w-full bg-green-500 text-white py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-600 transition-colors"
+              disabled={isLoginLoading}
+              className={`w-full py-3 rounded-lg text-sm md:text-base font-semibold transition-colors flex items-center justify-center ${
+                isLoginLoading 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-green-500 hover:bg-green-600'
+              } text-white`}
             >
-              Entrar
+              {isLoginLoading ? (
+                <>
+                  <LoadingSpinner size="sm" color="white" />
+                  <span className="ml-2">Entrando...</span>
+                </>
+              ) : (
+                'Entrar'
+              )}
             </button>
           </div>
         </div>
@@ -1971,8 +2404,22 @@ const handleServiceCreate = () => {
           </div>
         </div>
       )}
+
+      {/* Modal para completar perfil do contratante */}
+      <CompleteProfileModal
+        isOpen={showCompleteProfileModal}
+        onComplete={() => {
+          console.log('✅ Usuário escolheu completar perfil');
+          setShowCompleteProfileModal(false);
+          handleScreenTransition('profile-setup');
+        }}
+        onSkip={() => {
+          console.log('⏭️ Usuário escolheu pular perfil');
+          setShowCompleteProfileModal(false);
+        }}
+        userName={loggedUser?.nome || 'Usuário'}
+      />
     </div>
-    
   )
   
 }

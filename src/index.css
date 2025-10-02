@@ -111,6 +111,7 @@
   height: 100%;
   width: 100%;
   z-index: 0;
+  background-color: #f3f4f6; /* Fallback background */
 }
 
 /* Garantir que o mapa tenha altura */
@@ -122,4 +123,23 @@
   left: 0;
   right: 0;
   bottom: 0;
+}
+
+/* Loading spinner para tiles */
+.leaflet-tile-loading {
+  opacity: 0.5;
+  background-color: #e5e7eb;
+}
+
+/* Evitar problemas com tiles que não carregam */
+.leaflet-tile {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+/* Spinner de carregamento customizado */
+.leaflet-control-loading {
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  padding: 8px;
 }

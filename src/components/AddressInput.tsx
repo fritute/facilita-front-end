@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin } from 'lucide-react';
 
-const debounce = (func: Function, delay: number) => {
+const debounce = <T extends (...args: any[]) => any>(func: T, delay: number) => {
   let timer: ReturnType<typeof setTimeout>;
-  return function(...args: any[]) {
+  return (...args: Parameters<T>) => {
     clearTimeout(timer);
-    timer = setTimeout(() => func.apply(this, args), delay);
+    timer = setTimeout(() => func(...args), delay);
   };
 };
 
@@ -62,20 +62,10 @@ const AddressInput: React.FC<AddressInputProps> = ({ onSelectAddress, placeholde
     onSelectAddress(address);
   };
 
-    const handleAddressSelection = (address: Address) => {
-        setQuery(address.display_name);
-        setShowSuggestions(false);
-        onSelectAddress(address);
-    };
-  
   return (
     <div className="relative">
       <div className="relative">
         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-        <AddressInput
-    onSelectAddress={handleAddressSelection}
-    placeholder="Digite seu endereço completo"
-  />
         <input
           type="text"
           value={query}

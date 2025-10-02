@@ -173,10 +173,15 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
           zoom={15} 
           style={{ height: '100%', width: '100%' }}
           className="z-0"
+          preferCanvas={true}
         >
           <TileLayer
-            attribution='&copy <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maxZoom={19}
+            subdomains={['a', 'b', 'c']}
+            crossOrigin={true}
+            errorTileUrl="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
           />
           
           {/* Marcador da localização do usuário */}

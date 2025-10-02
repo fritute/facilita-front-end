@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet'
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ArrowLeft, MessageSquare, Star, Clock, CheckCircle } from 'lucide-react';
+import ChatModal from './ChatModal';
 
 // Fix para ícones do Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -49,13 +50,17 @@ interface ServiceTrackingProps {
     lat: number;
     lng: number;
   };
+  driverOrigin: {
+    lat: number;
+    lng: number;
+  };
 }
 
-const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, destination }) => {
-  // Posição inicial do motorista (exemplo: um ponto distante do destino)
+const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, destination, driverOrigin }) => {
+  // Posição inicial do motorista vem do prestador (driverOrigin)
   const initialDriverPosition = {
-    lat: -23.5324859,
-    lng: -46.7916801
+    lat: driverOrigin.lat,
+    lng: driverOrigin.lng
   };
 
   const [driverPosition, setDriverPosition] = useState<{ lat: number; lng: number }>(initialDriverPosition);
@@ -63,6 +68,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, d
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
   const [currentRouteIndex, setCurrentRouteIndex] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState<number>(0);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Buscar rota real usando OSRM
   useEffect(() => {
@@ -99,7 +105,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, d
     };
 
     fetchRoute();
-  }, [destination]);
+  }, [destination, driverOrigin.lat, driverOrigin.lng]);
 
   // Simular movimento do motorista ao longo da rota
   useEffect(() => {
@@ -157,10 +163,15 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, d
           zoom={14}
           style={{ height: '100%', width: '100%', position: 'absolute' }}
           className="z-0"
+          preferCanvas={true}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maxZoom={19}
+            subdomains={['a', 'b', 'c']}
+            crossOrigin={true}
+            errorTileUrl="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
           />
           
           {/* Linha da rota */}
@@ -234,13 +245,25 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, d
                 {progress >= 100 ? 'Prestador chegou!' : 'Prestador em rota'}
               </p>
             </div>
-            <button className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold hover:bg-opacity-90 transition-all flex items-center space-x-2">
+            <button 
+              onClick={() => setIsChatOpen(true)}
+              className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold hover:bg-opacity-90 transition-all flex items-center space-x-2"
+            >
               <MessageSquare className="w-4 h-4" />
               <span>Conversar</span>
             </button>
           </div>
         </div>
+
       </div>
+
+      {/* Chat Modal */}
+      <ChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        driverName={entregador.nome}
+        driverPhone={entregador.telefone}
+      />
     </div>
   );
 };
