@@ -1,11 +1,11 @@
-import React from 'react';
-import { User, X, CheckCircle } from 'lucide-react';
+import React from 'react'
+import { User, X, CheckCircle } from 'lucide-react'
 
 interface CompleteProfileModalProps {
-  isOpen: boolean;
-  onComplete: () => void;
-  onSkip: () => void;
-  userName: string;
+  isOpen: boolean
+  onComplete: () => void
+  onSkip: () => void
+  userName: string
 }
 
 const CompleteProfileModal: React.FC<CompleteProfileModalProps> = ({ 
@@ -14,7 +14,7 @@ const CompleteProfileModal: React.FC<CompleteProfileModalProps> = ({
   onSkip, 
   userName 
 }) => {
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -93,7 +93,7 @@ const CompleteProfileModal: React.FC<CompleteProfileModalProps> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default CompleteProfileModal;
+export default CompleteProfileModal

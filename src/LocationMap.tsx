@@ -23,8 +23,6 @@ export interface LocationMapProps {
   onScreenChange: (screen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment' | 'service-tracking' | 'service-confirmed' | 'tracking') => void
 }
 
-  
-
 // Componente para capturar cliques no mapa
 function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
   useMapEvents({
@@ -35,49 +33,128 @@ function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number
   return null
 }
 
+// Componente para controlar o mapa
+function MapController({ center, map, setMap }: { center: [number, number], map: any, setMap: (map: any) => void }) {
+  const mapInstance = useMapEvents({})
+  
+  React.useEffect(() => {
+    if (mapInstance && !map) {
+      setMap(mapInstance)
+    }
+  }, [mapInstance, map, setMap])
+  
+  React.useEffect(() => {
+    if (mapInstance) {
+      mapInstance.setView(center, mapInstance.getZoom())
+    }
+  }, [center, mapInstance])
+  
+  return null
+}
+
 const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenChange }) => {
   const [userLocation, setUserLocation] = useState<Location | null>(null)
   const [mapCenter, setMapCenter] = useState<[number, number]>([-23.5505, -46.6333])
   const [nearbyAddresses, setNearbyAddresses] = useState<Location[]>([])
   const [isLocating, setIsLocating] = useState(false)
+  const [clickedLocation, setClickedLocation] = useState<Location | null>(null)
+  const [map, setMap] = useState<any>(null)
 
   // Função para obter a localização do usuário
-  const getUserLocation = () => {
+  const getUserLocation = async () => {
     setIsLocating(true)
     
-    // Usar localização padrão (Carapicuíba, SP) diretamente
-    const defaultLat = -23.5235
-    const defaultLng = -46.8401
+    // Localização padrão (São Paulo, SP) como fallback
+    const defaultLat = -23.5505
+    const defaultLng = -46.6333
     
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords
-          setMapCenter([latitude, longitude])
-          setUserLocation({ lat: latitude, lng: longitude, address: '' })
-          
-          await getAddressFromCoords(latitude, longitude)
-          setIsLocating(false)
-        },
-        async (error) => {
-          console.log('Usando localização padrão:', error.message)
-          setMapCenter([defaultLat, defaultLng])
-          setUserLocation({ lat: defaultLat, lng: defaultLng, address: 'Carapicuíba, SP' })
-          await getAddressFromCoords(defaultLat, defaultLng)
-          setIsLocating(false)
-        }
-      )
-    } else {
-      // Usar localização padrão se geolocalização não for suportada
+    // Verificar se geolocalização está disponível
+    if (!navigator.geolocation) {
+      console.warn('⚠️ Geolocalização não suportada pelo navegador')
       setMapCenter([defaultLat, defaultLng])
-      setUserLocation({ lat: defaultLat, lng: defaultLng, address: 'Carapicuíba, SP' })
-      getNearbyAddresses(defaultLat, defaultLng)
+      setUserLocation({ lat: defaultLat, lng: defaultLng, address: 'São Paulo, SP (geolocalização não suportada)' })
+      await getNearbyAddresses(defaultLat, defaultLng)
       setIsLocating(false)
+      return
     }
+
+    console.log('🌍 Geolocalização disponível, verificando permissões...')
+    
+    // Verificar permissões primeiro (se disponível)
+    if ('permissions' in navigator) {
+      try {
+        const permission = await navigator.permissions.query({ name: 'geolocation' })
+        console.log(`🔐 Status da permissão: ${permission.state}`)
+        
+        if (permission.state === 'denied') {
+          console.warn('❌ Permissão de localização negada pelo usuário')
+          setMapCenter([defaultLat, defaultLng])
+          setUserLocation({ lat: defaultLat, lng: defaultLng, address: 'São Paulo, SP (permissão negada)' })
+          await getNearbyAddresses(defaultLat, defaultLng)
+          setIsLocating(false)
+          return
+        }
+      } catch (permError) {
+        console.warn('⚠️ Erro ao verificar permissões:', permError)
+      }
+    }
+
+    console.log('📡 Solicitando localização atual...')
+    
+    // Tentar obter localização
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude, accuracy, timestamp } = position.coords
+        console.log(`✅ Localização obtida com sucesso!`)
+        console.log(`📍 Coordenadas: ${latitude}, ${longitude}`)
+        console.log(`🎯 Precisão: ${accuracy}m`)
+        console.log(`⏰ Timestamp: ${new Date(timestamp).toLocaleString()}`)
+        
+        setMapCenter([latitude, longitude])
+        setUserLocation({ lat: latitude, lng: longitude, address: 'Obtendo endereço da sua localização...' })
+        
+        await getAddressFromCoords(latitude, longitude, true)
+        setIsLocating(false)
+      },
+      async (error) => {
+        console.error('❌ Erro ao obter localização:')
+        console.error(`Código: ${error.code}`)
+        console.error(`Mensagem: ${error.message}`)
+        
+        let errorMessage = 'São Paulo, SP'
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage += ' (permissão negada - clique no ícone de localização no navegador)'
+            console.log('💡 Dica: Verifique se o site tem permissão para acessar localização')
+            break
+          case error.POSITION_UNAVAILABLE:
+            errorMessage += ' (localização indisponível)'
+            console.log('💡 Dica: Verifique sua conexão com internet e GPS')
+            break
+          case error.TIMEOUT:
+            errorMessage += ' (tempo esgotado)'
+            console.log('💡 Dica: Tente novamente, pode estar demorando para obter sinal GPS')
+            break
+          default:
+            errorMessage += ' (erro desconhecido)'
+            break
+        }
+        
+        setMapCenter([defaultLat, defaultLng])
+        setUserLocation({ lat: defaultLat, lng: defaultLng, address: errorMessage })
+        await getNearbyAddresses(defaultLat, defaultLng)
+        setIsLocating(false)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000, // Aumentado para 15 segundos
+        maximumAge: 60000 // Reduzido para 1 minuto para forçar nova leitura
+      }
+    )
   }
 
   // Função para obter endereço a partir de coordenadas
-  const getAddressFromCoords = async (lat: number, lng: number) => {
+  const getAddressFromCoords = async (lat: number, lng: number, isUserLocation = true) => {
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
@@ -87,27 +164,156 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
         const data = await response.json()
         const address = data.display_name || 'Endereço não encontrado'
         
-        setUserLocation(prev => prev ? { ...prev, address } : { lat, lng, address })
-        await getNearbyAddresses(lat, lng)
+        if (isUserLocation) {
+          setUserLocation(prev => prev ? { ...prev, address } : { lat, lng, address })
+          await getNearbyAddresses(lat, lng)
+        } else {
+          // Para cliques no mapa, criar um marcador temporário
+          setClickedLocation({ lat, lng, address })
+          console.log(`📍 Marcador adicionado em: ${address}`)
+        }
       }
     } catch (error) {
       console.error('Erro ao buscar endereço:', error)
     }
   }
 
+  // Função para navegar até um local específico
+  const navigateToLocation = (lat: number, lng: number, address: string) => {
+    console.log(`🗺️ Navegando para: ${address}`)
+    
+    // Atualizar o centro do mapa
+    setMapCenter([lat, lng])
+    
+    // Se o mapa estiver disponível, fazer pan suave
+    if (map) {
+      map.flyTo([lat, lng], 16, {
+        animate: true,
+        duration: 1.5
+      })
+    }
+    
+    // Definir como localização clicada para mostrar marcador
+    setClickedLocation({ lat, lng, address })
+    
+    // Buscar endereços próximos da nova localização
+    getNearbyAddresses(lat, lng)
+  }
+
   // Função para buscar endereços próximos
   const getNearbyAddresses = async (lat: number, lng: number) => {
     try {
+      console.log(`🔍 Buscando endereços próximos a: ${lat}, ${lng}`)
+      
+      // Buscar pontos de interesse próximos usando Overpass API
+      const overpassQuery = `
+        [out:json][timeout:25];
+        (
+          node["amenity"~"^(restaurant|cafe|pharmacy|hospital|bank|school|supermarket|gas_station)$"](around:2000,${lat},${lng});
+          node["shop"~"^(supermarket|convenience|bakery|pharmacy)$"](around:2000,${lat},${lng});
+          node["leisure"~"^(park|playground)$"](around:1000,${lat},${lng});
+        );
+        out geom;
+      `
+      
+      try {
+        const overpassResponse = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          body: overpassQuery,
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+        })
+        
+        if (overpassResponse.ok) {
+          const overpassData = await overpassResponse.json()
+          console.log('📍 Pontos encontrados via Overpass:', overpassData.elements?.length || 0)
+          
+          if (overpassData.elements && overpassData.elements.length > 0) {
+            const nearbyPOIs = overpassData.elements
+              .slice(0, 8) // Limitar a 8 resultados
+              .map((element: any) => {
+                const name = element.tags?.name || element.tags?.amenity || element.tags?.shop || 'Local próximo'
+                const type = element.tags?.amenity || element.tags?.shop || element.tags?.leisure || 'local'
+                return {
+                  lat: element.lat,
+                  lng: element.lon,
+                  address: `${name} - ${type.charAt(0).toUpperCase() + type.slice(1)}`
+                }
+              })
+            
+            setNearbyAddresses(nearbyPOIs)
+            return
+          }
+        }
+      } catch (overpassError) {
+        console.warn('⚠️ Erro na API Overpass, usando busca alternativa:', overpassError)
+      }
+      
+      // Fallback: buscar endereços próximos usando Nominatim
+      const searches = [
+        'restaurant',
+        'pharmacy',
+        'supermarket',
+        'hospital',
+        'school',
+        'bank'
+      ]
+      
+      const nearbyResults: Location[] = []
+      
+      for (const searchTerm of searches) {
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${searchTerm}&lat=${lat}&lon=${lng}&limit=2&bounded=1&viewbox=${lng-0.01},${lat+0.01},${lng+0.01},${lat-0.01}`
+          )
+          
+          if (response.ok) {
+            const data = await response.json()
+            const results = data.map((item: any) => ({
+              lat: parseFloat(item.lat),
+              lng: parseFloat(item.lon),
+              address: item.display_name
+            }))
+            
+            nearbyResults.push(...results)
+          }
+          
+          // Pequeno delay para não sobrecarregar a API
+          await new Promise(resolve => setTimeout(resolve, 200))
+        } catch (error) {
+          console.warn(`Erro ao buscar ${searchTerm}:`, error)
+        }
+      }
+      
+      if (nearbyResults.length > 0) {
+        console.log(`📍 ${nearbyResults.length} endereços encontrados via Nominatim`)
+        setNearbyAddresses(nearbyResults.slice(0, 8))
+      } else {
+        // Último fallback: endereços mock baseados na localização
+        console.log('📍 Usando endereços mock próximos')
+        const mockNearbyAddresses: Location[] = [
+          { lat: lat + 0.002, lng: lng + 0.001, address: 'Supermercado próximo' },
+          { lat: lat - 0.001, lng: lng + 0.002, address: 'Farmácia da região' },
+          { lat: lat + 0.001, lng: lng - 0.001, address: 'Restaurante local' },
+          { lat: lat - 0.002, lng: lng - 0.001, address: 'Hospital da área' },
+        ]
+        
+        setNearbyAddresses(mockNearbyAddresses)
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro ao buscar endereços próximos:', error)
+      
+      // Fallback final com endereços mock
       const mockNearbyAddresses: Location[] = [
-        { lat: lat + 0.001, lng: lng + 0.001, address: 'Rua Vitória, cohab 2, Carapicuíba' },
-        { lat: lat + 0.002, lng: lng - 0.001, address: 'Rua Manaus, cohab 2, Carapicuíba' },
-        { lat: lat - 0.001, lng: lng + 0.002, address: 'Rua Belém, cohab 2, Carapicuíba' },
-        { lat: lat - 0.002, lng: lng - 0.002, address: 'Rua Paraná, cohab 1, Carapicuíba' },
+        { lat: lat + 0.002, lng: lng + 0.001, address: 'Local próximo 1' },
+        { lat: lat - 0.001, lng: lng + 0.002, address: 'Local próximo 2' },
+        { lat: lat + 0.001, lng: lng - 0.001, address: 'Local próximo 3' },
+        { lat: lat - 0.002, lng: lng - 0.001, address: 'Local próximo 4' },
       ]
       
       setNearbyAddresses(mockNearbyAddresses)
-    } catch (error) {
-      console.error('Erro ao buscar endereços próximos:', error)
     }
   }
 
@@ -136,6 +342,55 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
       }
     } catch (error) {
       console.error('Erro ao buscar endereço:', error)
+    }
+  }
+
+  // Função para forçar solicitação de localização
+  const forceLocationRequest = async () => {
+    console.log('🔄 Forçando nova solicitação de localização...')
+    
+    // Limpar cache de localização
+    if ('geolocation' in navigator) {
+      // Tentar com configurações mais agressivas
+      setIsLocating(true)
+      
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude, accuracy } = position.coords
+          console.log(`✅ Localização forçada obtida: ${latitude}, ${longitude} (${accuracy}m)`)
+          
+          setMapCenter([latitude, longitude])
+          setUserLocation({ lat: latitude, lng: longitude, address: 'Obtendo endereço da sua localização...' })
+          
+          await getAddressFromCoords(latitude, longitude, true)
+          setIsLocating(false)
+        },
+        async (error) => {
+          console.error('❌ Falha na solicitação forçada:', error.message)
+          
+          // Mostrar instruções específicas baseadas no erro
+          let instructions = ''
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              instructions = 'Clique no ícone 🔒 ou 📍 na barra de endereços do navegador e permita o acesso à localização'
+              break
+            case error.POSITION_UNAVAILABLE:
+              instructions = 'Verifique se o GPS está ativado e você tem conexão com internet'
+              break
+            case error.TIMEOUT:
+              instructions = 'Tente sair para um local com melhor sinal GPS'
+              break
+          }
+          
+          alert(`Não foi possível obter sua localização.\n\n${instructions}`)
+          setIsLocating(false)
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0 // Força nova leitura
+        }
+      )
     }
   }
 
@@ -223,37 +478,121 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
             </Marker>
           ))}
           
+          {/* Marcador da localização clicada */}
+          {clickedLocation && (
+            <Marker 
+              position={[clickedLocation.lat, clickedLocation.lng]}
+              icon={L.icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+              })}
+            >
+              <Popup>
+                <div className="text-center">
+                  <p className="font-semibold">Local selecionado</p>
+                  <p className="text-sm text-gray-600 mb-2">{clickedLocation.address}</p>
+                  <button
+                    onClick={() => onLocationSelect(clickedLocation.address, clickedLocation.lat, clickedLocation.lng)}
+                    className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 mr-2"
+                  >
+                    Selecionar
+                  </button>
+                  <button
+                    onClick={() => setClickedLocation(null)}
+                    className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600"
+                  >
+                    Remover
+                  </button>
+                </div>
+              </Popup>
+            </Marker>
+          )}
+
           <MapClickHandler onMapClick={async (lat, lng) => {
-            await getAddressFromCoords(lat, lng)
+            console.log(`📍 Clique no mapa: ${lat}, ${lng}`)
+            await getAddressFromCoords(lat, lng, false)
           }} />
+          
+          <MapController center={mapCenter} map={map} setMap={setMap} />
         </MapContainer>
         
         {/* Overlay com informações */}
-        <div className="absolute top-4 left-4 right-4 bg-white bg-opacity-90 p-4 rounded-lg shadow-lg">
+        <div className="absolute top-4 left-4 right-4 bg-white bg-opacity-95 p-4 rounded-lg shadow-lg">
           <h2 className="text-lg font-bold text-gray-800 mb-2">
-            {isLocating ? 'Obtendo sua localização...' : 'Escolha o endereço para receber o pedido'}
+            {isLocating ? (
+              <div className="flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500 mr-2"></div>
+                Obtendo sua localização...
+              </div>
+            ) : 'Escolha o endereço para receber o pedido'}
           </h2>
           {userLocation && !isLocating && (
-            <p className="text-sm text-gray-600 truncate">
-              📍 {userLocation.address}
+            <div className="mb-1">
+              <p className="text-sm text-gray-600 truncate">
+                📍 {userLocation.address}
+              </p>
+              {(userLocation.address.includes('padrão') || userLocation.address.includes('negada') || userLocation.address.includes('indisponível')) && (
+                <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded">
+                  <p className="text-xs text-orange-700 mb-2">
+                    ⚠️ {userLocation.address.includes('negada') ? 'Permissão de localização negada' : 'Usando localização padrão'}
+                  </p>
+                  <button
+                    onClick={forceLocationRequest}
+                    className="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600 transition-colors"
+                  >
+                    🔄 Tentar Novamente
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {clickedLocation && (
+            <p className="text-sm text-red-600 truncate">
+              🎯 Local selecionado: {clickedLocation.address.split(',')[0]}
             </p>
           )}
+          <p className="text-xs text-gray-500 mt-2">
+            💡 Clique no mapa para marcar um local ou nos endereços abaixo para selecioná-los
+          </p>
         </div>
         
-        {/* Botão para recarregar localização */}
-        <button
-          onClick={getUserLocation}
-          disabled={isLocating}
-          className="absolute bottom-4 right-4 bg-white p-3 rounded-full shadow-lg hover:bg-gray-100 disabled:opacity-50"
-        >
-          <MapPin />
-        </button>
+        {/* Botões de controle */}
+        <div className="absolute bottom-4 right-4 flex flex-col space-y-2">
+          {/* Botão para limpar marcador */}
+          {clickedLocation && (
+            <button
+              onClick={() => setClickedLocation(null)}
+              className="bg-red-500 text-white p-3 rounded-full shadow-lg hover:bg-red-600 transition-colors"
+              title="Remover marcador"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+          
+          {/* Botão para recarregar localização */}
+          <button
+            onClick={forceLocationRequest}
+            disabled={isLocating}
+            className="bg-white p-3 rounded-full shadow-lg hover:bg-gray-100 disabled:opacity-50 transition-colors"
+            title="Obter minha localização atual"
+          >
+            <div className={isLocating ? 'animate-spin' : ''}>
+              <MapPin />
+            </div>
+          </button>
+        </div>
       </div>
 
       {/* Search and addresses */}
       <div className="p-4">
         <div className="relative mb-6">
-          <Search />
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search />
+          </div>
           <input
             type="text"
             placeholder="Buscar endereço..."
@@ -282,14 +621,21 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
                 <button
                   key={index}
                   onClick={() => onLocationSelect(location.address, location.lat, location.lng)}
-                  className="w-full flex items-center p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-green-300"
+                  className="w-full flex items-center p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition-all border border-transparent hover:border-green-300 hover:bg-green-50"
                 >
-                  <MapPin />
-                  <div className="text-left">
+                  <div className="text-green-500 mr-3">
+                    <MapPin />
+                  </div>
+                  <div className="text-left flex-1">
                     <span className="block font-medium">{location.address.split(',')[0]}</span>
                     <span className="block text-sm text-gray-500">
                       {location.address.split(',').slice(1).join(',').trim()}
                     </span>
+                  </div>
+                  <div className="text-green-500">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
                   </div>
                 </button>
               ))}

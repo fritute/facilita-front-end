@@ -1,66 +1,66 @@
 
-import React, { useState, useEffect } from 'react';
-import { MapPin } from 'lucide-react';
+import React, { useState, useEffect } from 'react'
+import { MapPin } from 'lucide-react'
 
 const debounce = <T extends (...args: any[]) => any>(func: T, delay: number) => {
-  let timer: ReturnType<typeof setTimeout>;
+  let timer: ReturnType<typeof setTimeout>
   return (...args: Parameters<T>) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => func(...args), delay);
-  };
-};
+    clearTimeout(timer)
+    timer = setTimeout(() => func(...args), delay)
+  }
+}
 
 export interface Address {
-  place_id: number;
-  display_name: string;
-  lat: string;
-  lon: string;
+  place_id: number
+  display_name: string
+  lat: string
+  lon: string
 }
 
 interface AddressInputProps {
-  onSelectAddress: (address: Address) => void;
-  placeholder?: string;
+  onSelectAddress: (address: Address) => void
+  placeholder?: string
 }
 
 const AddressInput: React.FC<AddressInputProps> = ({ onSelectAddress, placeholder = "Digite seu endereço..." }) => {
-  const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<Address[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [query, setQuery] = useState('')
+  const [suggestions, setSuggestions] = useState<Address[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   const fetchAddresses = async (searchQuery: string) => {
     if (searchQuery.length < 3) {
-      setSuggestions([]);
-      return;
+      setSuggestions([])
+      return
     }
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&addressdetails=1`
-      );
-      const data: Address[] = await response.json();
-      setSuggestions(data);
-      setShowSuggestions(true);
+      )
+      const data: Address[] = await response.json()
+      setSuggestions(data)
+      setShowSuggestions(true)
     } catch (error) {
-      console.error('Erro ao buscar endereços:', error);
-      setSuggestions([]);
-      setShowSuggestions(false);
+      console.error('Erro ao buscar endereços:', error)
+      setSuggestions([])
+      setShowSuggestions(false)
     }
-  };
+  }
 
-  const debouncedFetch = debounce(fetchAddresses, 500);
+  const debouncedFetch = debounce(fetchAddresses, 500)
 
   useEffect(() => {
     if (query) {
-      debouncedFetch(query);
+      debouncedFetch(query)
     } else {
-      setSuggestions([]);
+      setSuggestions([])
     }
-  }, [query]);
+  }, [query])
 
   const handleSelectSuggestion = (address: Address) => {
-    setQuery(address.display_name);
-    setShowSuggestions(false);
-    onSelectAddress(address);
-  };
+    setQuery(address.display_name)
+    setShowSuggestions(false)
+    onSelectAddress(address)
+  }
 
   return (
     <div className="relative">
@@ -90,7 +90,7 @@ const AddressInput: React.FC<AddressInputProps> = ({ onSelectAddress, placeholde
         </ul>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default AddressInput;
+export default AddressInput

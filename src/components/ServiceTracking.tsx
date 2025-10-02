@@ -36,6 +36,7 @@ const destinationIcon = new L.Icon({
 
 interface ServiceTrackingProps {
   onBack: () => void;
+  onServiceCompleted: () => void; // Nova prop para quando o serviço for concluído
   entregador: {
     nome: string;
     telefone: string;
@@ -56,7 +57,7 @@ interface ServiceTrackingProps {
   };
 }
 
-const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, destination, driverOrigin }) => {
+const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceCompleted, entregador, destination, driverOrigin }) => {
   // Posição inicial do motorista vem do prestador (driverOrigin)
   const initialDriverPosition = {
     lat: driverOrigin.lat,
@@ -69,6 +70,9 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, d
   const [currentRouteIndex, setCurrentRouteIndex] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState<number>(0);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [serviceStartTime] = useState<Date>(new Date()); // Horário de início do serviço
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [isServiceCompleted, setIsServiceCompleted] = useState(false);
 
   // Buscar rota real usando OSRM
   useEffect(() => {
@@ -107,6 +111,30 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, d
     fetchRoute();
   }, [destination, driverOrigin.lat, driverOrigin.lng]);
 
+  // Atualizar horário atual a cada segundo
+  useEffect(() => {
+    const timeInterval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timeInterval);
+  }, []);
+
+  // Detectar quando o prestador chegou e encerrar automaticamente
+  useEffect(() => {
+    if (progress >= 100 && !isServiceCompleted) {
+      console.log('🎉 Prestador chegou ao destino! Encerrando serviço automaticamente...');
+      
+      // Aguardar 3 segundos para mostrar que chegou, depois encerrar
+      const completionTimer = setTimeout(() => {
+        setIsServiceCompleted(true);
+        onServiceCompleted();
+      }, 3000);
+
+      return () => clearTimeout(completionTimer);
+    }
+  }, [progress, isServiceCompleted, onServiceCompleted]);
+
   // Simular movimento do motorista ao longo da rota
   useEffect(() => {
     if (routeCoordinates.length === 0) return;
@@ -135,6 +163,34 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, d
     return () => clearInterval(interval);
   }, [routeCoordinates]);
 
+  // Funções para formatação de horário
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('pt-BR', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  };
+
+  const getElapsedTime = () => {
+    const elapsed = Math.floor((currentTime.getTime() - serviceStartTime.getTime()) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const getEstimatedArrival = () => {
+    const remainingMinutes = estimatedTime > 0 
+      ? Math.ceil(estimatedTime * (1 - progress / 100))
+      : Math.ceil(parseInt(entregador.tempoEstimado) * (1 - progress / 100));
+    
+    const arrivalTime = new Date(currentTime.getTime() + remainingMinutes * 60000);
+    return arrivalTime.toLocaleTimeString('pt-BR', { 
+      hour: '2-digit', 
+      minute: '2-digit'
+    });
+  };
+
   // Centro do mapa (ponto médio entre motorista e destino)
   const mapCenter: [number, number] = [
     (driverPosition.lat + destination.lat) / 2,
@@ -153,6 +209,11 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, d
         </button>
         <div className="text-center">
           <h1 className="text-lg font-bold">Acompanhe o serviço</h1>
+          <div className="flex justify-between items-center mt-2 text-sm opacity-90">
+            <span>Iniciado: {formatTime(serviceStartTime)}</span>
+            <span>Atual: {formatTime(currentTime)}</span>
+            <span>Duração: {getElapsedTime()}</span>
+          </div>
         </div>
       </div>
 
@@ -224,30 +285,62 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, entregador, d
               </div>
             </div>
           </div>
-          <div className="flex items-center space-x-2 bg-white bg-opacity-20 px-3 py-2 rounded-full">
-            <Clock className="w-5 h-5" />
-            <span className="font-semibold">
-              {estimatedTime > 0 
-                ? Math.ceil(estimatedTime * (1 - progress / 100))
-                : Math.ceil(parseInt(entregador.tempoEstimado) * (1 - progress / 100))
-              } Min
-            </span>
-            <CheckCircle className="w-5 h-5 text-white" />
+          <div className="flex flex-col items-end space-y-1">
+            <div className="flex items-center space-x-2 bg-white bg-opacity-20 px-3 py-2 rounded-full">
+              <Clock className="w-5 h-5" />
+              <span className="font-semibold">
+                {progress >= 100 ? 'Chegou!' : 
+                  `${estimatedTime > 0 
+                    ? Math.ceil(estimatedTime * (1 - progress / 100))
+                    : Math.ceil(parseInt(entregador.tempoEstimado) * (1 - progress / 100))
+                  } Min`
+                }
+              </span>
+              <CheckCircle className="w-5 h-5 text-white" />
+            </div>
+            {progress < 100 && (
+              <span className="text-xs opacity-75">
+                Chegada prevista: {getEstimatedArrival()}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Status */}
         <div className="bg-white bg-opacity-10 rounded-lg p-3 mb-3">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex-1">
               <p className="text-sm opacity-90">Status</p>
               <p className="font-bold text-lg">
                 {progress >= 100 ? 'Prestador chegou!' : 'Prestador em rota'}
               </p>
+              {progress >= 100 && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-sm opacity-90">
+                    🎉 Serviço será finalizado automaticamente em instantes...
+                  </p>
+                  <p className="text-xs opacity-75">
+                    Horário de chegada: {formatTime(currentTime)}
+                  </p>
+                </div>
+              )}
+              {progress < 100 && (
+                <div className="mt-1">
+                  <div className="w-full bg-white bg-opacity-20 rounded-full h-2">
+                    <div 
+                      className="bg-white h-2 rounded-full transition-all duration-1000"
+                      style={{ width: `${progress}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-xs opacity-75 mt-1">
+                    Progresso: {Math.round(progress)}%
+                  </p>
+                </div>
+              )}
             </div>
             <button 
               onClick={() => setIsChatOpen(true)}
-              className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold hover:bg-opacity-90 transition-all flex items-center space-x-2"
+              className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold hover:bg-opacity-90 transition-all flex items-center space-x-2 ml-4"
             >
               <MessageSquare className="w-4 h-4" />
               <span>Conversar</span>

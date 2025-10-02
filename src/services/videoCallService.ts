@@ -9,18 +9,17 @@ export interface VideoCallRoom {
 
 class VideoCallService {
   private callObject: any = null;
-  private apiKey = 'YOUR_DAILY_API_KEY'; // Substitua pela sua chave da Daily.co
+  private apiKey = '90e8e2035a18ec1ca52757af3fc319bfaede817a2497aaf1f51c508d028eb681'; // Substitua pela sua chave da Daily.co
 
   // Criar uma sala de videochamada
   async createRoom(roomName?: string): Promise<VideoCallRoom> {
     try {
-      // Para desenvolvimento, vamos usar uma sala pública temporária
-      // Em produção, você deve usar sua API key da Daily.co
+      // Criando sala usando a API key real do Daily.co
       const response = await fetch('https://api.daily.co/v1/rooms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // 'Authorization': `Bearer ${this.apiKey}`, // Descomente quando tiver API key
+          'Authorization': `Bearer ${this.apiKey}`, // Agora usando a API key real
         },
         body: JSON.stringify({
           name: roomName || `facilita-call-${Date.now()}`,
@@ -37,10 +36,11 @@ class VideoCallService {
       });
 
       if (!response.ok) {
-        // Fallback: criar sala temporária sem API
+        console.error('Erro na API Daily.co:', response.status, response.statusText);
+        // Fallback: criar sala temporária
         const roomId = `facilita-${Date.now()}`;
         return {
-          url: `https://facilita.daily.co/${roomId}`,
+          url: `https://facilita-app.daily.co/${roomId}`,
           name: roomId,
           created_at: new Date().toISOString(),
           expires: Date.now() + 3600000 // 1 hora
@@ -54,7 +54,7 @@ class VideoCallService {
       // Fallback: sala temporária
       const roomId = `facilita-${Date.now()}`;
       return {
-        url: `https://facilita.daily.co/${roomId}`,
+        url: `https://facilita-app.daily.co/${roomId}`,
         name: roomId,
         created_at: new Date().toISOString(),
         expires: Date.now() + 3600000

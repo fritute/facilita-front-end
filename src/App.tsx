@@ -3,30 +3,31 @@ import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search
 import QRCode from 'qrcode'
 import LocationMap from './LocationMap'
 import ServiceTracking from './components/ServiceTracking'
+import ServiceRating from './components/ServiceRating'
 import CompleteProfileModal from './components/CompleteProfileModal'
 import LoadingSpinner from './components/LoadingSpinner'
 
-type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking";
+type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking"
 
 // Adicione esta interface antes da função App
 interface ServiceTrackingProps {
-  onBack: () => void;
-  entregador: Entregador;
+  onBack: () => void
+  entregador: Entregador
   destination: {
-    address: string;
-    lat: number;
-    lng: number;
-  };
+    address: string
+    lat: number
+    lng: number
+  }
 }
 
 interface Entregador {
-  nome: string;
-  telefone: string;
-  veiculo: string;
-  placa: string;
-  rating: number;
-  tempoEstimado: string;
-  distancia: string;
+  nome: string
+  telefone: string
+  veiculo: string
+  placa: string
+  rating: number
+  tempoEstimado: string
+  distancia: string
 }
 
 interface ValidationErrors {
@@ -77,14 +78,14 @@ interface ServiceRequest {
 
 function App() {
   // 🔧 MODO DESENVOLVEDOR: Mude aqui para testar diferentes telas
-  // Opções: 'login', 'cadastro', 'home', 'location-select', 'service-create', 
   // 'waiting-driver', 'payment', 'service-tracking', 'service-confirmed', etc.
   const [currentScreen, setCurrentScreen] = useState<
   'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 
   'account-type' | 'service-provider' | 'profile-setup' | 'home' | 
   'location-select' | 'service-create' | 'waiting-driver' | 
-  'tracking' | 'service-confirmed' | 'payment' | 'service-tracking'
->('login')  // 👈 MODO DEV: Mude aqui para testar
+  'tracking' | 'service-confirmed' | 'payment' | 'service-tracking' | 'profile' | 'orders' | 'service-rating'
+  >('home')  
+  
 
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
@@ -112,33 +113,47 @@ function App() {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
   const [pixCode, setPixCode] = useState<string>('')
   const [driverFound, setDriverFound] = useState(false)
-  const [selectedAddress, setSelectedAddress] = useState<any>(null);
-  const [pickupLocation, setPickupLocation] = useState<{address: string, lat: number, lng: number} | null>(null);
-  const [deliveryLocation, setDeliveryLocation] = useState<{address: string, lat: number, lng: number} | null>(null);
-  const [servicePrice, setServicePrice] = useState<number>(0);
-  const [driverOrigin, setDriverOrigin] = useState<{lat: number, lng: number} | null>(null);
-  const [showCompleteProfileModal, setShowCompleteProfileModal] = useState(false);
-  const [hasCheckedProfile, setHasCheckedProfile] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<any>(null)
+  const [pickupLocation, setPickupLocation] = useState<{address: string, lat: number, lng: number} | null>(null)
+  const [deliveryLocation, setDeliveryLocation] = useState<{address: string, lat: number, lng: number} | null>(null)
+  const [servicePrice, setServicePrice] = useState<number>(0)
+  const [driverOrigin, setDriverOrigin] = useState<{lat: number, lng: number} | null>(null)
+  const [showCompleteProfileModal, setShowCompleteProfileModal] = useState(false)
+  const [hasCheckedProfile, setHasCheckedProfile] = useState(false)
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
+  const [createdServiceId, setCreatedServiceId] = useState<string | null>(null)
+  const [userOrders, setUserOrders] = useState<any[]>([])
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  const [serviceRating, setServiceRating] = useState<number>(0)
+  const [serviceComment, setServiceComment] = useState<string>('')
+  const [serviceCompletionTime, setServiceCompletionTime] = useState<Date | null>(null)
   
   const handleAddressSelection = (address: any) => {
-    setSelectedAddress(address);
-    console.log("Endereço selecionado:", address);
-  };
-  const [selectedDestination, setSelectedDestination] = useState<{address: string, lat: number, lng: number} | null>(null);
+    setSelectedAddress(address)
+    console.log("Endereço selecionado:", address)
+  }
+  const [selectedDestination, setSelectedDestination] = useState<{address: string, lat: number, lng: number} | null>(null)
 
   const handleStartTracking = (destination: {address: string, lat: number, lng: number}) => {
-    setSelectedDestination(destination);
+    setSelectedDestination(destination)
     // Define origem do prestador se não existir (usa origem selecionada como fallback)
     if (!driverOrigin) {
       if (pickupLocation) {
-        setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng });
+        setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng })
       } else {
         // Fallback para uma posição padrão (Carapicuíba/SP)
-        setDriverOrigin({ lat: -23.5324859, lng: -46.7916801 });
+        setDriverOrigin({ lat: -23.5324859, lng: -46.7916801 })
       }
     }
-    handleScreenTransition('service-tracking');
-  };
+    handleScreenTransition('service-tracking')
+  }
+
+  // Função chamada quando o serviço é concluído automaticamente
+  const handleServiceCompleted = () => {
+    console.log('🎉 Serviço concluído! Redirecionando para avaliação...')
+    setServiceCompletionTime(new Date())
+    handleScreenTransition('service-rating')
+  }
 
   
   const [entregadorData, setEntregadorData] = useState({
@@ -149,7 +164,7 @@ function App() {
     rating: 4.8,
     tempoEstimado: '15',
     distancia: '2.5 km'
-  });
+  })
 
   const [loginData, setLoginData] = useState({
     login: '', // Pode ser email ou telefone
@@ -190,24 +205,24 @@ function App() {
 
   // Função para calcular distância entre dois pontos (fórmula de Haversine)
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371; // Raio da Terra em km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const R = 6371 // Raio da Terra em km
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLon = (lon2 - lon1) * Math.PI / 180
     const a = 
       Math.sin(dLat/2) * Math.sin(dLat/2) +
       Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-    return distance;
+      Math.sin(dLon/2) * Math.sin(dLon/2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+    const distance = R * c
+    return distance
   }
 
   // Função para calcular preço baseado na distância
   const calculatePrice = (distance: number): number => {
-    const basePrice = 10; // Preço base R$ 10
-    const pricePerKm = 3.5; // R$ 3,50 por km
-    const total = basePrice + (distance * pricePerKm);
-    return parseFloat(total.toFixed(2));
+    const basePrice = 10 // Preço base R$ 10
+    const pricePerKm = 3.5 // R$ 3,50 por km
+    const total = basePrice + (distance * pricePerKm)
+    return parseFloat(total.toFixed(2))
   }
 
   const generateQRCode = async (pixKey: string, amount: number) => {
@@ -281,7 +296,7 @@ function App() {
   // Generate PIX QR Code when payment screen loads
   useEffect(() => {
     if (currentScreen === 'payment') {
-      const amount = servicePrice > 0 ? servicePrice : 119.99;
+      const amount = servicePrice > 0 ? servicePrice : 119.99
       generatePagBankPayment(amount)
     }
   }, [currentScreen])
@@ -410,7 +425,7 @@ function App() {
     }))
   }
 
-  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment' | 'service-tracking' | 'service-confirmed' | 'tracking') => {
+  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment' | 'service-tracking' | 'service-confirmed' | 'tracking' | 'profile' | 'orders' | 'service-rating') => {
     setIsTransitioning(true)
     setTimeout(() => {
       setCurrentScreen(newScreen)
@@ -497,7 +512,7 @@ function App() {
           if (user.tipo_conta === 'CONTRATANTE') {
             // Para contratantes, sempre vai para home primeiro
             // O modal de completar perfil será mostrado se necessário
-            setHasCheckedProfile(false); // Reset para verificar perfil
+            setHasCheckedProfile(false) // Reset para verificar perfil
             handleScreenTransition('home')
           } else {
             handleScreenTransition('home')
@@ -913,44 +928,44 @@ function App() {
         loggedUser: !!loggedUser, 
         tipo: loggedUser?.tipo_conta, 
         hasChecked: hasCheckedProfile 
-      });
-      return;
+      })
+      return
     }
 
-    console.log('🔍 Verificando perfil do contratante...');
+    console.log('🔍 Verificando perfil do contratante...')
 
     try {
       // Tentar buscar dados do contratante
-      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/me');
+      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/me')
       
       console.log('📥 Resposta da API /contratante/me:', {
         status: response.status,
         ok: response.ok
-      });
+      })
       
       if (response.status === 404) {
         // Contratante não tem perfil completo
-        console.log('❌ Contratante sem perfil completo, mostrando modal');
-        setShowCompleteProfileModal(true);
+        console.log('❌ Contratante sem perfil completo, mostrando modal')
+        setShowCompleteProfileModal(true)
       } else if (response.ok) {
         // Contratante já tem perfil completo
-        const data = await response.json();
-        console.log('✅ Contratante com perfil completo:', data);
+        const data = await response.json()
+        console.log('✅ Contratante com perfil completo:', data)
       } else {
         // Outro erro - assumir que não tem perfil
-        console.log('⚠️ Status inesperado, assumindo sem perfil. Status:', response.status);
-        setShowCompleteProfileModal(true);
+        console.log('⚠️ Status inesperado, assumindo sem perfil. Status:', response.status)
+        setShowCompleteProfileModal(true)
       }
       
-      setHasCheckedProfile(true);
+      setHasCheckedProfile(true)
     } catch (error) {
-      console.error('❌ Erro ao verificar perfil do contratante:', error);
+      console.error('❌ Erro ao verificar perfil do contratante:', error)
       // Em caso de erro, assumir que não tem perfil
-      console.log('⚠️ Erro na requisição, mostrando modal por segurança');
-      setShowCompleteProfileModal(true);
-      setHasCheckedProfile(true);
+      console.log('⚠️ Erro na requisição, mostrando modal por segurança')
+      setShowCompleteProfileModal(true)
+      setHasCheckedProfile(true)
     }
-  };
+  }
 
   // Verificar perfil quando entrar na home
   useEffect(() => {
@@ -959,13 +974,13 @@ function App() {
       loggedUser: loggedUser?.nome,
       tipo_conta: loggedUser?.tipo_conta,
       shouldCheck: currentScreen === 'home' && loggedUser && loggedUser.tipo_conta === 'CONTRATANTE'
-    });
+    })
     
     if (currentScreen === 'home' && loggedUser && loggedUser.tipo_conta === 'CONTRATANTE') {
-      console.log('🚀 Executando checkContratanteProfile...');
-      checkContratanteProfile();
+      console.log('🚀 Executando checkContratanteProfile...')
+      checkContratanteProfile()
     }
-  }, [currentScreen, loggedUser]);
+  }, [currentScreen, loggedUser])
 
   // Tela de loading durante o login
   if (isLoginLoading) {
@@ -993,35 +1008,35 @@ function App() {
 const handleLocationSelect = (address: string, lat: number, lng: number) => {
   if (isSelectingOrigin) {
     // Selecionando origem (de onde buscar)
-    setSelectedOriginLocation(address);
-    setPickupLocation({ address, lat, lng });
-    console.log('Local de origem definido:', { address, lat, lng });
-    setIsSelectingOrigin(false);
+    setSelectedOriginLocation(address)
+    setPickupLocation({ address, lat, lng })
+    console.log('Local de origem definido:', { address, lat, lng })
+    setIsSelectingOrigin(false)
   } else {
     // Selecionando destino (onde entregar)
-    setSelectedLocation(address);
-    setDeliveryLocation({ address, lat, lng });
-    console.log('Local de entrega definido:', { address, lat, lng });
+    setSelectedLocation(address)
+    setDeliveryLocation({ address, lat, lng })
+    console.log('Local de entrega definido:', { address, lat, lng })
   }
-  handleScreenTransition('service-create');
-};
+  handleScreenTransition('service-create')
+}
 
 
 const handleServiceCreate = async () => {
   if (!serviceDescription && !selectedServiceType) {
-    alert('Selecione um serviço ou descreva o que precisa');
-    return;
+    alert('Selecione um serviço ou descreva o que precisa')
+    return
   }
   
   // Verificar se origem e destino foram selecionados
   if (!pickupLocation) {
-    alert('Selecione o local de origem (de onde buscar)');
-    return;
+    alert('Selecione o local de origem (de onde buscar)')
+    return
   }
   
   if (!deliveryLocation) {
-    alert('Selecione o local de entrega (para onde levar)');
-    return;
+    alert('Selecione o local de entrega (para onde levar)')
+    return
   }
   
   // Calcular distância e preço entre origem e destino escolhidos
@@ -1030,31 +1045,333 @@ const handleServiceCreate = async () => {
     pickupLocation.lng,
     deliveryLocation.lat,
     deliveryLocation.lng
-  );
-  const price = calculatePrice(distance);
-  setServicePrice(price);
+  )
+  const price = calculatePrice(distance)
+  setServicePrice(price)
   
-  console.log('=== CÁLCULO DE PREÇO ===');
-  console.log(`Origem: ${pickupLocation.address}`);
-  console.log(`Destino: ${deliveryLocation.address}`);
-  console.log(`Distância: ${distance.toFixed(2)} km`);
-  console.log(`Preço: R$ ${price.toFixed(2)}`);
-  console.log('========================');
+  console.log('=== CÁLCULO DE PREÇO ===')
+  console.log(`Origem: ${pickupLocation.address}`)
+  console.log(`Destino: ${deliveryLocation.address}`)
+  console.log(`Distância: ${distance.toFixed(2)} km`)
+  console.log(`Preço: R$ ${price.toFixed(2)}`)
+  console.log('========================')
   
   // Definir destino para o tracking
-  setSelectedDestination(deliveryLocation);
+  setSelectedDestination(deliveryLocation)
   // Definir origem do prestador (usa a origem selecionada como base para a primeira perna)
   if (pickupLocation) {
-    setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng });
+    setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng })
   }
   
   // Ir para a tela de procurar motorista
-  handleScreenTransition('waiting-driver');
-};
+  handleScreenTransition('waiting-driver')
+}
 
   const copyPixCode = () => {
     navigator.clipboard.writeText(pixCode)
     alert('Código PIX copiado!')
+  }
+
+  // Função para obter localização atual ou usar localização padrão
+  const getCurrentLocationId = async () => {
+    try {
+      // Tentar obter localização via geolocalização do navegador
+      if (navigator.geolocation) {
+        return new Promise<number>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const { latitude, longitude } = position.coords
+              console.log('📍 Localização obtida:', { latitude, longitude })
+              
+              // Aqui você pode implementar lógica para determinar o ID da localização
+              // baseado nas coordenadas (ex: consultar API de regiões)
+              // Por enquanto, usar ID baseado na região de São Paulo
+              if (latitude >= -24 && latitude <= -23 && longitude >= -47 && longitude <= -46) {
+                resolve(1) // Região da Grande São Paulo
+              } else {
+                resolve(2) // Outras regiões
+              }
+            },
+            (error) => {
+              console.warn('⚠️ Erro ao obter geolocalização:', error.message)
+              resolve(1) // ID padrão em caso de erro
+            },
+            { timeout: 5000, enableHighAccuracy: false }
+          )
+        })
+      } else {
+        console.warn('⚠️ Geolocalização não suportada pelo navegador')
+        return 1
+      }
+    } catch (error) {
+      console.warn('⚠️ Erro na geolocalização:', error)
+      return 1 // ID fixo como fallback
+    }
+  }
+
+  // Função para obter ID do contratante
+  const getContratanteId = async () => {
+    try {
+      // Tentar buscar dados do contratante logado
+      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/me')
+      if (response.ok) {
+        const data = await response.json()
+        return data.id || data.id_contratante || 3 // fallback para ID 3
+      }
+    } catch (error) {
+      console.warn('Não foi possível obter ID do contratante, usando ID padrão')
+    }
+    return 3 // ID fixo como fallback
+  }
+
+  // Função para mapear tipo de serviço para categoria
+  const getServiceCategoryId = (description: string) => {
+    const desc = description.toLowerCase()
+    
+    // Mapeamento de palavras-chave para IDs de categoria
+    if (desc.includes('farmácia') || desc.includes('remédio') || desc.includes('medicamento')) {
+      return 2 // Categoria Farmácia
+    } else if (desc.includes('mercado') || desc.includes('compra') || desc.includes('supermercado')) {
+      return 3 // Categoria Mercado
+    } else if (desc.includes('correio') || desc.includes('encomenda') || desc.includes('pacote')) {
+      return 4 // Categoria Correios
+    } else if (desc.includes('shopping') || desc.includes('loja') || desc.includes('compra')) {
+      return 5 // Categoria Shopping
+    } else if (desc.includes('uber') || desc.includes('transporte') || desc.includes('viagem')) {
+      return 6 // Categoria Transporte
+    }
+    
+    return 1 // Categoria padrão (Geral)
+  }
+
+  // Função para obter nome da categoria pelo ID
+  const getCategoryName = (id: number) => {
+    const categories: { [key: number]: string } = {
+      1: 'Geral',
+      2: 'Farmácia',
+      3: 'Mercado',
+      4: 'Correios',
+      5: 'Shopping',
+      6: 'Transporte'
+    }
+    return categories[id] || 'Desconhecida'
+  }
+
+  // Função para buscar pedidos do usuário
+  const fetchUserOrders = async () => {
+    if (!loggedUser) {
+      console.warn('Usuário não logado, não é possível buscar pedidos')
+      return
+    }
+
+    setOrdersLoading(true)
+    
+    try {
+      console.log('📋 Buscando pedidos do usuário...')
+      
+      // Primeiro, tentar buscar via API de serviços
+      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/servico')
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Pedidos obtidos da API:', data)
+        
+        // Se a resposta for um array, usar diretamente
+        // Se for um objeto com propriedade 'servicos' ou similar, extrair
+        const orders = Array.isArray(data) ? data : (data.servicos || data.services || [])
+        
+        // Filtrar pedidos do usuário atual (se necessário)
+        const userOrders = orders.filter((order: any) => {
+          // Filtrar por ID do contratante se disponível
+          return true // Por enquanto, mostrar todos (a API deve filtrar por usuário)
+        })
+        
+        setUserOrders(userOrders)
+      } else {
+        console.error('❌ Erro ao buscar pedidos:', response.status)
+        
+        // Fallback: buscar do localStorage
+        const savedService = localStorage.getItem('currentService')
+        if (savedService) {
+          try {
+            const service = JSON.parse(savedService)
+            setUserOrders([service])
+            console.log('💾 Usando pedido salvo localmente:', service)
+          } catch (e) {
+            console.error('Erro ao parsear serviço salvo:', e)
+            setUserOrders([])
+          }
+        } else {
+          setUserOrders([])
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro na requisição de pedidos:', error)
+      
+      // Fallback: buscar do localStorage
+      const savedService = localStorage.getItem('currentService')
+      if (savedService) {
+        try {
+          const service = JSON.parse(savedService)
+          setUserOrders([service])
+          console.log('💾 Usando pedido salvo localmente (fallback):', service)
+        } catch (e) {
+          console.error('Erro ao parsear serviço salvo:', e)
+          setUserOrders([])
+        }
+      } else {
+        setUserOrders([])
+      }
+    } finally {
+      setOrdersLoading(false)
+    }
+  }
+
+  // Função para formatar status do pedido
+  const getStatusColor = (status: string) => {
+    switch (status?.toUpperCase()) {
+      case 'PENDENTE':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'EM_ANDAMENTO':
+      case 'IN_PROGRESS':
+        return 'bg-blue-100 text-blue-800'
+      case 'CONCLUIDO':
+      case 'COMPLETED':
+        return 'bg-green-100 text-green-800'
+      case 'CANCELADO':
+      case 'CANCELLED':
+        return 'bg-red-100 text-red-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  // Função para formatar status em português
+  const formatStatus = (status: string) => {
+    switch (status?.toUpperCase()) {
+      case 'PENDENTE':
+      case 'PENDING':
+        return 'Pendente'
+      case 'EM_ANDAMENTO':
+      case 'IN_PROGRESS':
+        return 'Em Andamento'
+      case 'CONCLUIDO':
+      case 'COMPLETED':
+        return 'Concluído'
+      case 'CANCELADO':
+      case 'CANCELLED':
+        return 'Cancelado'
+      default:
+        return status || 'Desconhecido'
+    }
+  }
+
+  // Função para criar serviço via API
+  const createService = async () => {
+    if (!pickupLocation || !deliveryLocation || !loggedUser) {
+      console.error('Dados insuficientes para criar serviço')
+      return false
+    }
+
+    try {
+      // Obter IDs necessários
+      const id_contratante = await getContratanteId()
+      const id_localizacao = await getCurrentLocationId()
+      
+      const descricaoServico = serviceDescription || selectedServiceType || 'Serviço de entrega personalizado'
+      const id_categoria = getServiceCategoryId(descricaoServico)
+      
+      const serviceData = {
+        id_contratante: id_contratante,
+        id_prestador: 2, // ID fixo por enquanto (ainda não tem sistema de seleção de prestador)
+        id_categoria: id_categoria,
+        id_localizacao: id_localizacao,
+        descricao: descricaoServico,
+        status: 'PENDENTE'
+      }
+
+      console.log('=== CRIAÇÃO DE SERVIÇO ===')
+      console.log('📤 Payload para API:', serviceData)
+      console.log('🗺 Localizações:', {
+        origem: pickupLocation,
+        destino: deliveryLocation,
+        id_localizacao: id_localizacao
+      })
+      console.log('🏷️ Categoria detectada:', {
+        descricao: descricaoServico,
+        id_categoria: id_categoria,
+        categoria_nome: getCategoryName(id_categoria)
+      })
+      console.log('==========================')
+
+      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/servico', {
+        method: 'POST',
+        body: JSON.stringify(serviceData)
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Serviço criado com sucesso:', data)
+        const serviceId = data.id || data.servico_id || data.service_id || 'unknown'
+        setCreatedServiceId(serviceId)
+        
+        // Salvar dados do serviço no localStorage para referência
+        const serviceInfo = {
+          id: serviceId,
+          id_contratante: serviceData.id_contratante,
+          id_prestador: serviceData.id_prestador,
+          id_categoria: serviceData.id_categoria,
+          id_localizacao: serviceData.id_localizacao,
+          descricao: serviceData.descricao,
+          status: 'PENDENTE',
+          preco: servicePrice > 0 ? servicePrice : 119.99,
+          origem: pickupLocation,
+          destino: deliveryLocation,
+          createdAt: new Date().toISOString(),
+          userId: loggedUser?.email
+        }
+        localStorage.setItem('currentService', JSON.stringify(serviceInfo))
+        
+        return true
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('❌ Erro ao criar serviço:', errorData)
+        alert(`Erro ao criar serviço: ${errorData.message || 'Erro desconhecido'}`)
+        return false
+      }
+    } catch (error) {
+      console.error('❌ Erro na requisição de criação de serviço:', error)
+      alert('Erro de conexão ao criar serviço.')
+      return false
+    }
+  }
+
+  // Função para confirmar pagamento e criar serviço
+  const handlePaymentConfirmation = async () => {
+    setIsLoading(true)
+    
+    try {
+      console.log('💳 Iniciando processo de pagamento e criação de serviço...')
+      
+      // Simular processamento do pagamento (em produção, aqui seria a validação do PIX)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Criar o serviço via API
+      const serviceCreated = await createService()
+      
+      if (serviceCreated) {
+        console.log('✅ Pagamento confirmado e serviço criado!')
+        // Se o serviço foi criado com sucesso, ir para tela de confirmação
+        handleScreenTransition('service-confirmed')
+      } else {
+        console.error('❌ Falha na criação do serviço')
+      }
+    } catch (error) {
+      console.error('Erro no processo de confirmação:', error)
+      alert('Erro no processo de pagamento. Tente novamente.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const FacilitaLogo = () => (
@@ -1078,6 +1395,7 @@ const handleServiceCreate = async () => {
     return (
       <ServiceTracking
         onBack={() => handleScreenTransition('home')}
+        onServiceCompleted={handleServiceCompleted}
         entregador={entregadorData}
         destination={selectedDestination || {
           address: selectedLocation || 'Endereço não especificado',
@@ -1088,6 +1406,19 @@ const handleServiceCreate = async () => {
           lat: (driverOrigin?.lat ?? pickupLocation!.lat),
           lng: (driverOrigin?.lng ?? pickupLocation!.lng)
         } : { lat: -23.5324859, lng: -46.7916801 }} 
+      />
+    )
+  }
+
+  // Service Rating Screen
+  if (currentScreen === 'service-rating') {
+    return (
+      <ServiceRating
+        onBack={() => handleScreenTransition('service-tracking')}
+        onFinish={() => handleScreenTransition('home')}
+        entregador={entregadorData}
+        serviceCompletionTime={serviceCompletionTime}
+        serviceStartTime={new Date(Date.now() - 300000)} // 5 min atrás como exemplo
       />
     )
   }
@@ -1225,11 +1556,16 @@ const handleServiceCreate = async () => {
             </div>
 
             <button
-            onClick={() => handleScreenTransition('service-confirmed')}
-            className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
->
-  Realize o Pagamento
-</button>
+              onClick={handlePaymentConfirmation}
+              disabled={isLoading}
+              className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                isLoading 
+                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                  : 'bg-green-500 text-white hover:bg-green-600'
+              }`}
+            >
+              {isLoading ? 'Processando...' : 'Realize o Pagamento'}
+            </button>
           </div>
         </div>
       </div>
@@ -1264,7 +1600,13 @@ const handleServiceCreate = async () => {
         </button>
 
         <h2 className="text-2xl font-bold text-gray-800 mb-2">Serviço Confirmado</h2>
-        <p className="text-gray-600 mb-6">Obrigado por escolher a Facilita</p>
+        <p className="text-gray-600 mb-2">Obrigado por escolher a Facilita</p>
+        {createdServiceId && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+            <p className="text-sm text-green-700 font-medium">Serviço criado com sucesso!</p>
+            <p className="text-xs text-green-600">ID: {createdServiceId}</p>
+          </div>
+        )}
 
         <div className="bg-white border rounded-lg shadow-md p-6 w-full max-w-md">
           <div className="flex justify-between items-center">
@@ -1298,12 +1640,24 @@ const handleServiceCreate = async () => {
           </div>
           <div className="flex justify-between">
             <span>Data</span>
-            <span className="font-medium">22 Ago 2024</span>
+            <span className="font-medium">{new Date().toLocaleDateString('pt-BR')}</span>
           </div>
           <div className="flex justify-between">
             <span>Hora</span>
-            <span className="font-medium">10:00 AM</span>
+            <span className="font-medium">{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
+          {pickupLocation && deliveryLocation && (
+            <>
+              <div className="flex justify-between">
+                <span>Origem</span>
+                <span className="font-medium text-xs">{pickupLocation.address.substring(0, 30)}...</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Destino</span>
+                <span className="font-medium text-xs">{deliveryLocation.address.substring(0, 30)}...</span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between">
             <span>Pagamento</span>
             <span className="font-medium text-green-600">Confirmado</span>
@@ -1393,8 +1747,8 @@ const handleServiceCreate = async () => {
                 </div>
                 <button
                   onClick={() => {
-                    setIsSelectingOrigin(true);
-                    handleScreenTransition('location-select');
+                    setIsSelectingOrigin(true)
+                    handleScreenTransition('location-select')
                   }}
                   className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition-colors"
                 >
@@ -1412,8 +1766,8 @@ const handleServiceCreate = async () => {
                   </div>
                   <button
                     onClick={() => {
-                      setIsSelectingOrigin(false);
-                      handleScreenTransition('location-select');
+                      setIsSelectingOrigin(false)
+                      handleScreenTransition('location-select')
                     }}
                     className="bg-green-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-600 transition-colors"
                   >
@@ -1513,6 +1867,317 @@ const handleServiceCreate = async () => {
   
 
 
+  // Orders Screen
+  if (currentScreen === 'orders') {
+    // Buscar pedidos quando a tela for carregada
+    if (userOrders.length === 0 && !ordersLoading) {
+      fetchUserOrders()
+    }
+
+    return (
+      <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        {/* Header */}
+        <div className="bg-green-500 text-white p-4 relative">
+          <button
+            onClick={() => handleScreenTransition('home')}
+            className="absolute left-4 top-4 text-white hover:text-gray-200"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <div className="text-center">
+            <h1 className="text-lg font-bold">Meus Pedidos</h1>
+          </div>
+          <button
+            onClick={fetchUserOrders}
+            className="absolute right-4 top-4 text-white hover:text-gray-200"
+            disabled={ordersLoading}
+          >
+            {ordersLoading ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+            ) : (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="max-w-4xl mx-auto p-6">
+          {ordersLoading ? (
+            /* Loading State */
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
+                <p className="text-gray-600">Carregando seus pedidos...</p>
+              </div>
+            </div>
+          ) : userOrders.length === 0 ? (
+            /* Empty State */
+            <div className="text-center py-12">
+              <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FileText className="w-12 h-12 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">Nenhum pedido encontrado</h3>
+              <p className="text-gray-600 mb-6">Você ainda não fez nenhum pedido.</p>
+              <button
+                onClick={() => handleScreenTransition('home')}
+                className="bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
+              >
+                Fazer Primeiro Pedido
+              </button>
+            </div>
+          ) : (
+            /* Orders List */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Histórico de Pedidos</h2>
+                <span className="text-sm text-gray-600">{userOrders.length} pedido(s)</span>
+              </div>
+
+              {userOrders.map((order, index) => (
+                <div key={order.id || index} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center mb-2">
+                        <h3 className="text-lg font-semibold text-gray-800 mr-3">
+                          {order.descricao || 'Serviço'}
+                        </h3>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          getStatusColor(order.status || 'PENDENTE')
+                        }`}>
+                          {formatStatus(order.status || 'PENDENTE')}
+                        </span>
+                      </div>
+                      
+                      {order.id && (
+                        <p className="text-sm text-gray-600 mb-2">ID: {order.id}</p>
+                      )}
+                      
+                      {order.createdAt && (
+                        <p className="text-sm text-gray-600 mb-2">
+                          Data: {new Date(order.createdAt).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit', 
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      )}
+                      
+                      {(order.origem || order.destino) && (
+                        <div className="text-sm text-gray-600 space-y-1">
+                          {order.origem && (
+                            <p><strong>Origem:</strong> {order.origem.address || order.origem.endereco || 'Não informado'}</p>
+                          )}
+                          {order.destino && (
+                            <p><strong>Destino:</strong> {order.destino.address || order.destino.endereco || 'Não informado'}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="text-right">
+                      {order.preco && (
+                        <p className="text-2xl font-bold text-green-600 mb-2">
+                          R$ {typeof order.preco === 'number' ? order.preco.toFixed(2) : order.preco}
+                        </p>
+                      )}
+                      
+                      {order.id_categoria && (
+                        <p className="text-sm text-gray-500">
+                          {getCategoryName(order.id_categoria)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Ações do pedido */}
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                    <div className="flex space-x-2">
+                      {(order.status === 'PENDENTE' || order.status === 'EM_ANDAMENTO') && (
+                        <button 
+                          onClick={() => {
+                            // Implementar rastreamento se necessário
+                            handleScreenTransition('service-tracking')
+                          }}
+                          className="text-green-600 hover:text-green-700 text-sm font-medium"
+                        >
+                          Rastrear
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                      {order.id_contratante && (
+                        <span>Contratante: {order.id_contratante}</span>
+                      )}
+                      {order.id_prestador && (
+                        <span>Prestador: {order.id_prestador}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Profile Screen
+  if (currentScreen === 'profile') {
+    return (
+      <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        {/* Header */}
+        <div className="bg-green-500 text-white p-4 relative">
+          <button
+            onClick={() => handleScreenTransition('home')}
+            className="absolute left-4 top-4 text-white hover:text-gray-200"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <div className="text-center">
+            <h1 className="text-lg font-bold">Perfil</h1>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="max-w-2xl mx-auto p-6">
+          {/* Profile Header */}
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="flex flex-col items-center text-center">
+              {/* Profile Photo */}
+              <div className="relative mb-4">
+                <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+                  {profilePhoto ? (
+                    <img 
+                      src={profilePhoto} 
+                      alt="Foto do perfil" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : loggedUser?.foto ? (
+                    <img 
+                      src={loggedUser.foto} 
+                      alt="Foto do perfil" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-16 h-16 text-gray-400" />
+                  )}
+                </div>
+                <button 
+                  onClick={() => {
+                    const input = document.createElement('input')
+                    input.type = 'file'
+                    input.accept = 'image/*'
+                    input.onchange = (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0]
+                      if (file) {
+                        const reader = new FileReader()
+                        reader.onload = (e) => {
+                          setProfilePhoto(e.target?.result as string)
+                        }
+                        reader.readAsDataURL(file)
+                      }
+                    }
+                    input.click()
+                  }}
+                  className="absolute bottom-2 right-2 w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white hover:bg-green-600 transition-colors shadow-lg"
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <h2 className="text-2xl font-bold text-gray-800 mb-1">{loggedUser?.nome || 'Usuário'}</h2>
+              <p className="text-gray-600 mb-4">{loggedUser?.email}</p>
+            </div>
+          </div>
+
+          {/* Profile Information */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Informações do Perfil</h3>
+            
+            <div className="space-y-4">
+              {/* Nome */}
+              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                <div className="flex items-center">
+                  <User className="w-5 h-5 text-gray-400 mr-3" />
+                  <div>
+                    <p className="font-medium text-gray-800">Nome Completo</p>
+                    <p className="text-gray-600 text-sm">{loggedUser?.nome || 'Não informado'}</p>
+                  </div>
+                </div>
+                <button className="text-green-500 hover:text-green-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Email */}
+              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                <div className="flex items-center">
+                  <Mail className="w-5 h-5 text-gray-400 mr-3" />
+                  <div>
+                    <p className="font-medium text-gray-800">Email</p>
+                    <p className="text-gray-600 text-sm">{loggedUser?.email || 'Não informado'}</p>
+                  </div>
+                </div>
+                <button className="text-green-500 hover:text-green-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Telefone */}
+              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                <div className="flex items-center">
+                  <Phone className="w-5 h-5 text-gray-400 mr-3" />
+                  <div>
+                    <p className="font-medium text-gray-800">Telefone</p>
+                    <p className="text-gray-600 text-sm">{loggedUser?.telefone || 'Não informado'}</p>
+                  </div>
+                </div>
+                <button className="text-green-500 hover:text-green-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Other Configurations */}
+          <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Outras Configurações</h3>
+            
+            <div className="space-y-4">
+              <button className="w-full flex items-center justify-between py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                    <Lock className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <span className="font-medium text-gray-800">Alterar Senha</span>
+                </div>
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Home Screen
   if (currentScreen === 'home') {
     return (
@@ -1522,7 +2187,15 @@ const handleServiceCreate = async () => {
         {/* Sidebar */}
         <div className="w-64 bg-green-500 text-white p-4">
           <div className="flex items-center mb-8">
-            <img src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" alt="User" className="w-10 h-10 rounded-full mr-3" />
+            <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
+              {profilePhoto ? (
+                <img src={profilePhoto} alt="User" className="w-full h-full object-cover" />
+              ) : loggedUser?.foto ? (
+                <img src={loggedUser.foto} alt="User" className="w-full h-full object-cover" />
+              ) : (
+                <img src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" alt="User" className="w-full h-full object-cover" />
+              )}
+            </div>
             <div>
               <p className="font-semibold">Olá, {loggedUser?.nome?.split(' ')[0] || 'Lara'}</p>
               <p className="text-green-200 text-sm">Boa tarde! 16:30</p>
@@ -1534,7 +2207,10 @@ const handleServiceCreate = async () => {
               <Home className="w-5 h-5 mr-3" />
               <span>Home</span>
             </button>
-            <button className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors">
+            <button 
+              onClick={() => handleScreenTransition('orders')}
+              className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors"
+            >
               <FileText className="w-5 h-5 mr-3" />
               <span>Pedidos</span>
             </button>
@@ -1542,7 +2218,10 @@ const handleServiceCreate = async () => {
               <MessageSquare className="w-5 h-5 mr-3" />
               <span>Carteira</span>
             </button>
-            <button className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors">
+            <button 
+              onClick={() => handleScreenTransition('profile')}
+              className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors"
+            >
               <UserIconLucide className="w-5 h-5 mr-3" />
               <span>Perfil</span>
             </button>
@@ -2409,13 +3088,13 @@ const handleServiceCreate = async () => {
       <CompleteProfileModal
         isOpen={showCompleteProfileModal}
         onComplete={() => {
-          console.log('✅ Usuário escolheu completar perfil');
-          setShowCompleteProfileModal(false);
-          handleScreenTransition('profile-setup');
+          console.log('✅ Usuário escolheu completar perfil')
+          setShowCompleteProfileModal(false)
+          handleScreenTransition('profile-setup')
         }}
         onSkip={() => {
-          console.log('⏭️ Usuário escolheu pular perfil');
-          setShowCompleteProfileModal(false);
+          console.log('⏭️ Usuário escolheu pular perfil')
+          setShowCompleteProfileModal(false)
         }}
         userName={loggedUser?.nome || 'Usuário'}
       />

@@ -1,19 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Phone, Video, Send, Mic, MicOff, VideoOff, ExternalLink } from 'lucide-react';
-import videoCallService, { VideoCallRoom } from '../services/videoCallService';
+import React, { useState, useRef, useEffect } from 'react'
+import { X, Phone, Video, Send, Mic, MicOff, VideoOff, ExternalLink } from 'lucide-react'
+import videoCallService, { VideoCallRoom } from '../services/videoCallService'
 
 interface Message {
-  id: string;
-  text: string;
-  sender: 'user' | 'driver';
-  timestamp: Date;
+  id: string
+  text: string
+  sender: 'user' | 'driver'
+  timestamp: Date
 }
 
 interface ChatModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  driverName: string;
-  driverPhone: string;
+  isOpen: boolean
+  onClose: () => void
+  driverName: string
+  driverPhone: string
 }
 
 const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driverPhone }) => {
@@ -30,52 +30,52 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
       sender: 'user',
       timestamp: new Date(Date.now() - 240000) // 4 minutos atrás
     }
-  ]);
-  const [newMessage, setNewMessage] = useState('');
-  const [isInCall, setIsInCall] = useState(false);
-  const [isVideoCall, setIsVideoCall] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [currentRoom, setCurrentRoom] = useState<VideoCallRoom | null>(null);
-  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  ])
+  const [newMessage, setNewMessage] = useState('')
+  const [isInCall, setIsInCall] = useState(false)
+  const [isVideoCall, setIsVideoCall] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const localVideoRef = useRef<HTMLVideoElement>(null)
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null)
+  const [currentRoom, setCurrentRoom] = useState<VideoCallRoom | null>(null)
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false)
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    scrollToBottom()
+  }, [messages])
 
   // Conectar stream ao vídeo quando disponível
   useEffect(() => {
     if (localStream && localVideoRef.current) {
-      console.log('Conectando stream ao elemento video');
-      localVideoRef.current.srcObject = localStream;
+      console.log('Conectando stream ao elemento video')
+      localVideoRef.current.srcObject = localStream
       
       // Garantir que o vídeo vai tocar
       localVideoRef.current.onloadedmetadata = () => {
-        console.log('Metadata carregada, iniciando reprodução');
+        console.log('Metadata carregada, iniciando reprodução')
         localVideoRef.current?.play().catch(e => {
-          console.error('Erro ao reproduzir vídeo:', e);
-        });
-      };
+          console.error('Erro ao reproduzir vídeo:', e)
+        })
+      }
     }
-  }, [localStream, isVideoCall]);
+  }, [localStream, isVideoCall])
 
   // Cleanup: parar câmera quando componente for desmontado
   useEffect(() => {
     return () => {
       if (localStream) {
         localStream.getTracks().forEach(track => {
-          track.stop();
-        });
+          track.stop()
+        })
       }
-    };
-  }, [localStream]);
+    }
+  }, [localStream])
 
   const sendMessage = () => {
     if (newMessage.trim()) {
@@ -84,9 +84,9 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
         text: newMessage,
         sender: 'user',
         timestamp: new Date()
-      };
-      setMessages([...messages, message]);
-      setNewMessage('');
+      }
+      setMessages([...messages, message])
+      setNewMessage('')
       
       // Simular resposta automática do motorista
       setTimeout(() => {
@@ -95,54 +95,54 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
           text: 'Recebido! Qualquer coisa me avise.',
           sender: 'driver',
           timestamp: new Date()
-        };
-        setMessages(prev => [...prev, driverResponse]);
-      }, 2000);
+        }
+        setMessages(prev => [...prev, driverResponse])
+      }, 2000)
     }
-  };
+  }
 
   const startVoiceCall = async () => {
     try {
-      setIsCreatingRoom(true);
+      setIsCreatingRoom(true)
       
       // Criar sala de videochamada (mas com vídeo desabilitado)
-      const room = await videoCallService.createRoom(`voice-${Date.now()}`);
-      setCurrentRoom(room);
+      const room = await videoCallService.createRoom(`voice-${Date.now()}`)
+      setCurrentRoom(room)
       
       // Entrar na sala
-      await videoCallService.joinRoom(room.url, 'Cliente');
+      await videoCallService.joinRoom(room.url, 'Cliente')
       
       // Desabilitar vídeo para chamada de voz
-      await videoCallService.toggleCamera(); // Desligar câmera
+      await videoCallService.toggleCamera() // Desligar câmera
       
-      setIsInCall(true);
-      setIsVideoCall(false);
-      setIsCreatingRoom(false);
+      setIsInCall(true)
+      setIsVideoCall(false)
+      setIsCreatingRoom(false)
       
-      console.log('Chamada de voz iniciada:', room.url);
+      console.log('Chamada de voz iniciada:', room.url)
     } catch (error) {
-      console.error('Erro ao iniciar chamada de voz:', error);
-      alert('Erro ao iniciar chamada. Tente novamente.');
-      setIsCreatingRoom(false);
+      console.error('Erro ao iniciar chamada de voz:', error)
+      alert('Erro ao iniciar chamada. Tente novamente.')
+      setIsCreatingRoom(false)
     }
-  };
+  }
 
   const startVideoCall = async () => {
     try {
-      setIsCreatingRoom(true);
+      setIsCreatingRoom(true)
       
       // Criar sala de videochamada
-      const room = await videoCallService.createRoom(`video-${Date.now()}`);
-      setCurrentRoom(room);
+      const room = await videoCallService.createRoom(`video-${Date.now()}`)
+      setCurrentRoom(room)
       
       // Entrar na sala
-      await videoCallService.joinRoom(room.url, 'Cliente');
+      await videoCallService.joinRoom(room.url, 'Cliente')
       
-      setIsInCall(true);
-      setIsVideoCall(true);
-      setIsCreatingRoom(false);
+      setIsInCall(true)
+      setIsVideoCall(true)
+      setIsCreatingRoom(false)
       
-      console.log('Videochamada iniciada:', room.url);
+      console.log('Videochamada iniciada:', room.url)
       
       // Enviar link para o prestador via chat
       const linkMessage: Message = {
@@ -150,49 +150,49 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
         text: `📹 Videochamada iniciada! Link: ${room.url}`,
         sender: 'user',
         timestamp: new Date()
-      };
-      setMessages(prev => [...prev, linkMessage]);
+      }
+      setMessages(prev => [...prev, linkMessage])
       
     } catch (error) {
-      console.error('Erro ao iniciar videochamada:', error);
-      alert('Erro ao iniciar videochamada. Tente novamente.');
-      setIsCreatingRoom(false);
+      console.error('Erro ao iniciar videochamada:', error)
+      alert('Erro ao iniciar videochamada. Tente novamente.')
+      setIsCreatingRoom(false)
     }
-  };
+  }
 
   const endCall = async () => {
     try {
       // Sair da sala Daily.co
-      await videoCallService.leaveRoom();
+      await videoCallService.leaveRoom()
       
       // Parar stream local se existir
       if (localStream) {
         localStream.getTracks().forEach(track => {
-          track.stop();
-        });
-        setLocalStream(null);
+          track.stop()
+        })
+        setLocalStream(null)
       }
       
-      setIsInCall(false);
-      setIsVideoCall(false);
-      setIsMuted(false);
-      setIsVideoEnabled(true);
-      setCurrentRoom(null);
+      setIsInCall(false)
+      setIsVideoCall(false)
+      setIsMuted(false)
+      setIsVideoEnabled(true)
+      setCurrentRoom(null)
       
-      console.log('Chamada encerrada');
+      console.log('Chamada encerrada')
     } catch (error) {
-      console.error('Erro ao encerrar chamada:', error);
+      console.error('Erro ao encerrar chamada:', error)
     }
-  };
+  }
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('pt-BR', { 
       hour: '2-digit', 
       minute: '2-digit' 
-    });
-  };
+    })
+  }
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -268,7 +268,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
               <iframe
                 src={currentRoom.url + '?embed=true'}
                 className="w-full h-full border-0"
-                allow="camera; microphone; fullscreen; speaker; display-capture"
+                allow="camera microphone fullscreen speaker display-capture"
               />
             </div>
             
@@ -276,8 +276,8 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
             <div className="p-4 bg-gray-800 flex justify-center space-x-4">
               <button
                 onClick={async () => {
-                  const newState = await videoCallService.toggleMicrophone();
-                  setIsMuted(!newState);
+                  const newState = await videoCallService.toggleMicrophone()
+                  setIsMuted(!newState)
                 }}
                 className={`p-3 rounded-full ${isMuted ? 'bg-red-600' : 'bg-gray-600'}`}
               >
@@ -287,8 +287,8 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
               {isVideoCall && (
                 <button
                   onClick={async () => {
-                    const newState = await videoCallService.toggleCamera();
-                    setIsVideoEnabled(newState);
+                    const newState = await videoCallService.toggleCamera()
+                    setIsVideoEnabled(newState)
                   }}
                   className={`p-3 rounded-full ${isVideoEnabled ? 'bg-gray-600' : 'bg-red-600'}`}
                 >
@@ -357,7 +357,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
         )}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ChatModal;
+export default ChatModal
