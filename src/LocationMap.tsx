@@ -250,57 +250,45 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
         console.warn('⚠️ Erro na API Overpass, usando busca alternativa:', overpassError)
       }
       
-      // Fallback: buscar endereços próximos usando Nominatim
-      const searches = [
-        'restaurant',
-        'pharmacy',
-        'supermarket',
-        'hospital',
-        'school',
-        'bank'
+      // Temporariamente desabilitado devido a problemas de CORS com Nominatim
+      // Usando dados mock para desenvolvimento
+      console.log('📍 Usando endereços mock para evitar problemas de CORS')
+      
+      const nearbyResults: Location[] = [
+        {
+          lat: lat + 0.001,
+          lng: lng + 0.001,
+          address: 'Farmácia Droga Raia - Rua Augusta, 1234, São Paulo'
+        },
+        {
+          lat: lat - 0.001,
+          lng: lng + 0.002,
+          address: 'Supermercado Pão de Açúcar - Av. Paulista, 567, São Paulo'
+        },
+        {
+          lat: lat + 0.002,
+          lng: lng - 0.001,
+          address: 'Hospital das Clínicas - Rua Dr. Ovídio Pires de Campos, 225'
+        },
+        {
+          lat: lat - 0.002,
+          lng: lng - 0.001,
+          address: 'Shopping Center Norte - Travessa Casalbuono, 120'
+        },
+        {
+          lat: lat + 0.003,
+          lng: lng + 0.001,
+          address: 'Banco Itaú - Rua da Consolação, 789, São Paulo'
+        },
+        {
+          lat: lat - 0.001,
+          lng: lng - 0.002,
+          address: 'Restaurante Família Mancini - Rua Avanhandava, 81'
+        }
       ]
       
-      const nearbyResults: Location[] = []
-      
-      for (const searchTerm of searches) {
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${searchTerm}&lat=${lat}&lon=${lng}&limit=2&bounded=1&viewbox=${lng-0.01},${lat+0.01},${lng+0.01},${lat-0.01}`
-          )
-          
-          if (response.ok) {
-            const data = await response.json()
-            const results = data.map((item: any) => ({
-              lat: parseFloat(item.lat),
-              lng: parseFloat(item.lon),
-              address: item.display_name
-            }))
-            
-            nearbyResults.push(...results)
-          }
-          
-          // Pequeno delay para não sobrecarregar a API
-          await new Promise(resolve => setTimeout(resolve, 200))
-        } catch (error) {
-          console.warn(`Erro ao buscar ${searchTerm}:`, error)
-        }
-      }
-      
-      if (nearbyResults.length > 0) {
-        console.log(`📍 ${nearbyResults.length} endereços encontrados via Nominatim`)
-        setNearbyAddresses(nearbyResults.slice(0, 8))
-      } else {
-        // Último fallback: endereços mock baseados na localização
-        console.log('📍 Usando endereços mock próximos')
-        const mockNearbyAddresses: Location[] = [
-          { lat: lat + 0.002, lng: lng + 0.001, address: 'Supermercado próximo' },
-          { lat: lat - 0.001, lng: lng + 0.002, address: 'Farmácia da região' },
-          { lat: lat + 0.001, lng: lng - 0.001, address: 'Restaurante local' },
-          { lat: lat - 0.002, lng: lng - 0.001, address: 'Hospital da área' },
-        ]
-        
-        setNearbyAddresses(mockNearbyAddresses)
-      }
+      console.log(`📍 ${nearbyResults.length} endereços mock carregados`)
+      setNearbyAddresses(nearbyResults.slice(0, 8))
       
     } catch (error) {
       console.error('❌ Erro ao buscar endereços próximos:', error)

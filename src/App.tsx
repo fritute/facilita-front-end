@@ -78,7 +78,7 @@ function App() {
   'account-type' | 'service-provider' | 'profile-setup' | 'home' | 
   'location-select' | 'service-create' | 'waiting-driver' | 
   'tracking' | 'service-confirmed' | 'payment' | 'service-tracking' | 'profile' | 'orders' | 'service-rating'
-  >('login')  
+  >('home')  
   
 
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -97,7 +97,8 @@ function App() {
   const [profileData, setProfileData] = useState({
     cpf: '',
     necessidade: '', // Campo que vai para a API
-    endereco: '' // Para capturar endereço e gerar id_localizacao
+    endereco: '', // Para capturar endereço e gerar id_localizacao
+    foto: null as File | null
   })
   const [selectedLocation, setSelectedLocation] = useState<string>('')
   const [selectedOriginLocation, setSelectedOriginLocation] = useState<string>('')
@@ -117,6 +118,7 @@ function App() {
   const [createdServiceId, setCreatedServiceId] = useState<string | null>(null)
   const [userOrders, setUserOrders] = useState<any[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
+  const [ordersInitialized, setOrdersInitialized] = useState(false)
   const [serviceRating, setServiceRating] = useState<number>(0)
   const [serviceComment, setServiceComment] = useState<string>('')
   const [serviceCompletionTime, setServiceCompletionTime] = useState<Date | null>(null)
@@ -181,12 +183,112 @@ function App() {
     'Rua Paraná, cohab 1, Carapicuíba'
   ]
 
-  // Mock service cards
+  // Service cards with images
   const serviceCards = [
-    { id: 'farmacia', name: 'Farmácia', icon: '💊' },
-    { id: 'mercado', name: 'Mercado', icon: '🛒' },
-    { id: 'correios', name: 'Correios', icon: '📦' },
-    { id: 'shopping', name: 'Shopping', icon: '🛍️' }
+    { 
+      id: 'farmacia', 
+      name: 'Farmácia', 
+      image: (
+        <div className="w-16 h-16 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
+          <svg viewBox="0 0 100 100" className="w-12 h-12">
+            {/* Farmácia - Médicos com cruz verde */}
+            <circle cx="20" cy="30" r="8" fill="#4CAF50"/>
+            <rect x="16" y="40" width="8" height="20" fill="#4CAF50"/>
+            <circle cx="80" cy="35" r="8" fill="#FF69B4"/>
+            <rect x="76" y="45" width="8" height="18" fill="#FF69B4"/>
+            <rect x="40" y="20" width="20" height="20" rx="10" fill="#E8F5E8"/>
+            <rect x="47" y="25" width="6" height="10" fill="#4CAF50"/>
+            <rect x="42" y="28" width="16" height="4" fill="#4CAF50"/>
+            <rect x="15" y="70" width="70" height="8" fill="#4CAF50"/>
+          </svg>
+        </div>
+      )
+    },
+    { 
+      id: 'mercado', 
+      name: 'Mercado', 
+      image: (
+        <div className="w-16 h-16 mx-auto mb-3 bg-red-100 rounded-full flex items-center justify-center">
+          <svg viewBox="0 0 100 100" className="w-12 h-12">
+            {/* Carrinho de compras vermelho */}
+            <rect x="25" y="35" width="35" height="25" fill="#DC2626" stroke="#B91C1C" strokeWidth="2"/>
+            <rect x="20" y="30" width="45" height="8" fill="#EF4444"/>
+            <circle cx="30" cy="70" r="4" fill="#333"/>
+            <circle cx="55" cy="70" r="4" fill="#333"/>
+            <rect x="15" y="25" width="8" height="20" fill="#333"/>
+            <rect x="65" y="35" width="3" height="15" fill="#333"/>
+            
+            {/* Produtos no carrinho */}
+            <rect x="28" y="40" width="8" height="6" fill="#4CAF50"/>
+            <rect x="38" y="38" width="6" height="8" fill="#FF9800"/>
+            <rect x="46" y="42" width="10" height="4" fill="#2196F3"/>
+            <circle cx="52" cy="48" r="3" fill="#F44336"/>
+            
+            {/* Alça do carrinho */}
+            <path d="M65 35 Q75 30 75 40 Q75 50 65 45" fill="none" stroke="#333" strokeWidth="2"/>
+          </svg>
+        </div>
+      )
+    },
+    { 
+      id: 'correios', 
+      name: 'Correios', 
+      image: (
+        <div className="w-16 h-16 mx-auto mb-3 bg-orange-100 rounded-full flex items-center justify-center">
+          <svg viewBox="0 0 100 100" className="w-12 h-12">
+            {/* Caixa de correios realista */}
+            <rect x="25" y="40" width="50" height="35" fill="#FF8C00" stroke="#D2691E" strokeWidth="2"/>
+            <rect x="20" y="35" width="60" height="8" fill="#8B4513"/>
+            <rect x="30" y="45" width="12" height="8" fill="#FFF"/>
+            <rect x="58" y="45" width="12" height="8" fill="#FFF"/>
+            <text x="36" y="51" fontSize="6" fill="#000">📦</text>
+            <text x="64" y="51" fontSize="6" fill="#000">♻️</text>
+            <rect x="40" y="60" width="20" height="3" fill="#8B4513"/>
+            <circle cx="30" cy="78" r="2" fill="#228B22"/>
+            <circle cx="70" cy="78" r="2" fill="#228B22"/>
+          </svg>
+        </div>
+      )
+    },
+    { 
+      id: 'shopping', 
+      name: 'Shopping', 
+      image: (
+        <div className="w-16 h-16 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
+          <svg viewBox="0 0 100 100" className="w-12 h-12">
+            {/* Cesta de compras verde */}
+            <rect x="25" y="40" width="50" height="30" fill="#22C55E" stroke="#16A34A" strokeWidth="2"/>
+            <rect x="20" y="35" width="60" height="8" fill="#15803D"/>
+            
+            {/* Grade da cesta */}
+            <line x1="30" y1="40" x2="30" y2="70" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="35" y1="40" x2="35" y2="70" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="40" y1="40" x2="40" y2="70" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="45" y1="40" x2="45" y2="70" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="50" y1="40" x2="50" y2="70" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="55" y1="40" x2="55" y2="70" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="60" y1="40" x2="60" y2="70" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="65" y1="40" x2="65" y2="70" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="70" y1="40" x2="70" y2="70" stroke="#16A34A" strokeWidth="1"/>
+            
+            <line x1="25" y1="45" x2="75" y2="45" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="25" y1="50" x2="75" y2="50" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="25" y1="55" x2="75" y2="55" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="25" y1="60" x2="75" y2="60" stroke="#16A34A" strokeWidth="1"/>
+            <line x1="25" y1="65" x2="75" y2="65" stroke="#16A34A" strokeWidth="1"/>
+            
+            {/* Alças da cesta */}
+            <path d="M20 35 Q15 30 15 40 Q15 50 20 45" fill="none" stroke="#333" strokeWidth="2"/>
+            <path d="M80 35 Q85 30 85 40 Q85 50 80 45" fill="none" stroke="#333" strokeWidth="2"/>
+            
+            {/* Produtos na cesta */}
+            <rect x="30" y="48" width="8" height="6" fill="#FFF"/>
+            <rect x="40" y="52" width="6" height="8" fill="#FFF"/>
+            <circle cx="60" cy="55" r="4" fill="#FFF"/>
+          </svg>
+        </div>
+      )
+    }
   ]
 
   // Predefined service options
@@ -314,32 +416,51 @@ function App() {
     }
   }, [currentScreen])
 
+
   // Função helper para fazer requisições autenticadas
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('authToken')
     
+    // Validar se o token existe
+    if (!token) {
+      console.error('❌ Token não encontrado - redirecionando para login')
+      alert('Sessão expirada. Faça login novamente.')
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('loggedUser')
+      handleScreenTransition('login')
+      throw new Error('Token não encontrado')
+    }
+    
     const headers = {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
+      'Authorization': `Bearer ${token}`,
       ...options.headers,
     }
 
-    console.log('Fazendo requisição para:', url)
-    console.log('Com token:', token ? 'Sim' : 'Não')
+    console.log('🌐 Fazendo requisição para:', url)
+    console.log('🔑 Com token:', token ? 'Sim' : 'Não')
+    console.log('🔑 Token (primeiros 20 chars):', token.substring(0, 20) + '...')
 
     const response = await fetch(url, {
       ...options,
       headers,
     })
 
-    // Interceptar erro 401
+    // Interceptar erros de autenticação
     if (response.status === 401) {
-      console.error('❌ ERRO 401 - Não autorizado na URL:', url)
-      console.error('Token usado:', token)
+      console.error('❌ ERRO 401 - Token inválido ou expirado na URL:', url)
+      console.error('🔑 Token usado:', token.substring(0, 20) + '...')
       alert('Sessão expirada. Faça login novamente.')
       localStorage.removeItem('authToken')
       localStorage.removeItem('loggedUser')
       handleScreenTransition('login')
+      throw new Error('Token inválido ou expirado')
+    }
+
+    if (response.status === 403) {
+      console.error('❌ ERRO 403 - Acesso negado na URL:', url)
+      console.error('🔑 Token usado:', token.substring(0, 20) + '...')
+      throw new Error('Acesso negado - permissões insuficientes')
     }
 
     return response
@@ -349,6 +470,40 @@ function App() {
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     return emailRegex.test(email)
+  }
+
+  // Função para validar senha forte
+  const validatePassword = (password: string) => {
+    // Senha deve ter pelo menos 6 caracteres, 1 maiúscula, 1 número e 1 símbolo
+    const minLength = password.length >= 6
+    const hasUpperCase = /[A-Z]/.test(password)
+    const hasNumber = /\d/.test(password)
+    const hasSymbol = /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    
+    return {
+      isValid: minLength && hasUpperCase && hasNumber && hasSymbol,
+      errors: {
+        minLength: !minLength ? 'Mínimo 6 caracteres' : '',
+        hasUpperCase: !hasUpperCase ? 'Pelo menos 1 letra maiúscula' : '',
+        hasNumber: !hasNumber ? 'Pelo menos 1 número' : '',
+        hasSymbol: !hasSymbol ? 'Pelo menos 1 símbolo (!@#$%^&*)' : ''
+      }
+    }
+  }
+
+  // Função para formatar telefone
+  const formatPhone = (phone: string): string => {
+    // Remove todos os caracteres não numéricos
+    const numbers = phone.replace(/\D/g, '')
+    
+    // Formatar para o padrão brasileiro (11 dígitos)
+    if (numbers.length === 11) {
+      return numbers.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
+    } else if (numbers.length === 10) {
+      return numbers.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
+    }
+    
+    return numbers
   }
 
   // Função para validar nome (não pode conter números)
@@ -395,10 +550,26 @@ function App() {
     setProfileData({...profileData, cpf: formatted})
   }
 
-  // Função para validar senha
-  const validatePassword = (password: string): boolean => {
-    return password.length >= 6 && password.length <= 20
+  // Handler para upload de foto
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      // Validar tipo de arquivo
+      if (!file.type.startsWith('image/')) {
+        alert('Por favor, selecione apenas arquivos de imagem.')
+        return
+      }
+      
+      // Validar tamanho (máximo 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('A imagem deve ter no máximo 5MB.')
+        return
+      }
+      
+      setProfileData({...profileData, foto: file})
+    }
   }
+
 
   // Função para limpar erro específico
   const clearError = (field: keyof ValidationErrors) => {
@@ -558,8 +729,10 @@ function App() {
     }
 
     // Validar senha
-    if (!validatePassword(userData.senha)) {
-      newErrors.senha = 'Sua senha tem que ser de 6 a 20 caracteres'
+    const passwordValidation = validatePassword(userData.senha)
+    if (!passwordValidation.isValid) {
+      const errorMessages = Object.values(passwordValidation.errors).filter(msg => msg !== '')
+      newErrors.senha = errorMessages.join(', ')
     }
 
     // Validar confirmação de senha
@@ -601,14 +774,34 @@ function App() {
       return
     }
 
-    // Cadastro do usuário (independente do tipo) com payload exato exigido
+    // Validações adicionais antes de enviar
+    if (!userData.nome || userData.nome.trim().length < 2) {
+      alert('Nome deve ter pelo menos 2 caracteres')
+      return
+    }
+
+    if (!userData.email || !validateEmail(userData.email)) {
+      alert('Email inválido')
+      return
+    }
+
+    if (!userData.senha || userData.senha.length < 6) {
+      alert('Senha deve ter pelo menos 6 caracteres')
+      return
+    }
+
+    const telefoneNumeros = userData.telefone.replace(/\D/g, '')
+    if (!telefoneNumeros || telefoneNumeros.length < 10) {
+      alert('Telefone inválido')
+      return
+    }
 
     setIsLoading(true)
 
     const registerData = {
-      nome: userData.nome,
-      email: userData.email,
-      telefone: userData.telefone.replace(/\D/g, ''),
+      nome: userData.nome.trim(),
+      email: userData.email.trim().toLowerCase(),
+      telefone: telefoneNumeros,
       senha_hash: userData.senha,
       tipo_conta: selectedAccountType
     }
@@ -715,9 +908,30 @@ function App() {
           }
         }
       } else {
-        const errorData = await response.json()
-        console.error('❌ Erro no cadastro:', errorData)
-        alert(`Erro no cadastro: ${errorData.message || 'Erro desconhecido'}`)
+        let errorData
+        try {
+          errorData = await response.json()
+        } catch (e) {
+          errorData = { message: 'Erro no servidor - resposta inválida' }
+        }
+        
+        console.error('❌ Erro no cadastro:')
+        console.error('Status:', response.status)
+        console.error('Dados enviados:', { ...registerData, senha_hash: '***' })
+        console.error('Resposta do servidor:', errorData)
+        
+        let errorMessage = 'Erro desconhecido'
+        if (response.status === 500) {
+          errorMessage = 'Erro interno do servidor. Tente novamente em alguns minutos.'
+        } else if (response.status === 400) {
+          errorMessage = errorData.message || 'Dados inválidos. Verifique as informações.'
+        } else if (response.status === 409) {
+          errorMessage = 'Email ou telefone já cadastrado. Tente fazer login.'
+        } else {
+          errorMessage = errorData.message || errorMessage
+        }
+        
+        alert(`Erro no cadastro: ${errorMessage}`)
       }
     } catch (error) {
       console.error('Erro na requisição:', error)
@@ -1196,6 +1410,33 @@ function App() {
     }
   }, [currentScreen, loggedUser])
 
+  // useEffect para buscar pedidos quando a tela de pedidos for aberta
+  React.useEffect(() => {
+    if (currentScreen === 'orders') {
+      console.log('🔄 Entrando na tela de pedidos')
+      console.log('👤 loggedUser:', loggedUser ? 'Existe' : 'Não existe')
+      console.log('🔑 Token:', localStorage.getItem('authToken') ? 'Existe' : 'Não existe')
+      
+      if (!loggedUser) {
+        console.log('❌ Usuário não logado na tela de pedidos')
+        handleScreenTransition('login')
+        return
+      }
+
+      if (!ordersInitialized) {
+        console.log('📋 Inicializando tela de pedidos...')
+        setOrdersInitialized(true)
+        
+        // Carregar pedidos reais do contratante
+        console.log('🔄 Carregando pedidos do contratante...')
+        fetchUserOrders()
+      }
+    } else {
+      // Reset quando sair da tela de pedidos
+      setOrdersInitialized(false)
+    }
+  }, [currentScreen, loggedUser, ordersInitialized])
+
   // Tela de loading durante o login
   if (isLoginLoading) {
     return (
@@ -1308,9 +1549,10 @@ const handleServiceCreate = async () => {
   setIsLoading(false)
   
   if (serviceCreated) {
-    console.log('✅ Serviço criado! Redirecionando para pagamento...')
-    // Ir direto para tela de pagamento com o id_servico já criado
-    handleScreenTransition('payment')
+    console.log('✅ Serviço criado! Pulando pagamento para teste...')
+    // TEMPORÁRIO: Pular pagamento e ir direto para confirmação
+    // para verificar se o pedido está sendo enviado ao banco
+    handleScreenTransition('service-confirmed')
   } else {
     console.error('❌ Falha ao criar serviço')
     // O erro já foi tratado dentro de createService()
@@ -1474,92 +1716,91 @@ const handleServiceCreate = async () => {
     return categories[id] || 'Desconhecida'
   }
 
-  // Função para buscar pedidos do usuário
+  // Função para buscar pedidos do contratante
   const fetchUserOrders = async () => {
     if (!loggedUser) {
-      console.warn('Usuário não logado, não é possível buscar pedidos')
+      setUserOrders([])
+      return
+    }
+
+    // Verificar se é um contratante
+    if (loggedUser.tipo_conta !== 'CONTRATANTE') {
+      setUserOrders([])
       return
     }
 
     setOrdersLoading(true)
     
     try {
-      console.log('📋 Buscando pedidos do usuário...')
-      console.log('👤 ID do usuário:', loggedUser.id)
-      console.log('👤 ID do contratante:', loggedUser.id_contratante)
+      // Buscar apenas serviços do contratante específico
+      let url = ''
+      let contratanteId = ''
       
-      // Tentar buscar serviços do contratante específico
-      let url = 'https://servidor-facilita.onrender.com/v1/facilita/servico'
-      
-      // Se temos id_contratante, buscar serviços desse contratante
       if (loggedUser.id_contratante) {
-        url = `https://servidor-facilita.onrender.com/v1/facilita/servico?id_contratante=${loggedUser.id_contratante}`
-        console.log('🔍 Buscando serviços do contratante:', loggedUser.id_contratante)
-      } else if (loggedUser.id) {
-        // Fallback: tentar buscar por id_usuario
-        url = `https://servidor-facilita.onrender.com/v1/facilita/servico?id_usuario=${loggedUser.id}`
-        console.log('🔍 Buscando serviços do usuário:', loggedUser.id)
+        contratanteId = loggedUser.id_contratante.toString()
+        url = `https://servidor-facilita.onrender.com/v1/facilita/servico?id_contratante=${contratanteId}`
+      } else {
+        setUserOrders([])
+        setOrdersLoading(false)
+        return
       }
       
-      console.log('🌐 URL da requisição:', url)
       const response = await fetchWithAuth(url)
-      
-      console.log('📥 Status da resposta:', response.status)
       
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ Pedidos obtidos da API:', JSON.stringify(data, null, 2))
         
         // Se a resposta for um array, usar diretamente
         // Se for um objeto com propriedade 'servicos' ou similar, extrair
-        const orders = Array.isArray(data) ? data : (data.servicos || data.services || [])
+        const orders = Array.isArray(data) ? data : (data.servicos || data.services || data.data || [])
         
-        // Filtrar pedidos do usuário atual (se necessário)
-        const userOrders = orders.filter((order: any) => {
-          // Filtrar por ID do contratante se disponível
-          return true // Por enquanto, mostrar todos (a API deve filtrar por usuário)
+        // Filtrar rigorosamente apenas pedidos do contratante atual
+        const contratanteOrders = orders.filter((order: any) => {
+          const orderContratanteId = order.id_contratante?.toString()
+          return orderContratanteId === contratanteId
         })
         
-        setUserOrders(userOrders)
-      } else {
-        console.error('❌ Erro ao buscar pedidos:', response.status)
+        setUserOrders(contratanteOrders)
         
+      } else {
         // Tentar ler a mensagem de erro
         try {
           const errorData = await response.json()
-          console.error('❌ Detalhes do erro:', errorData)
           
           if (response.status === 403) {
-            console.error('❌ ERRO 403: Acesso negado')
-            console.error('Possíveis causas:')
-            console.error('1. Token sem permissões corretas')
-            console.error('2. Endpoint requer autenticação específica')
-            console.error('3. Usuário não tem permissão para acessar esses dados')
             alert('Acesso negado ao buscar pedidos. Verifique suas permissões.')
+          } else if (response.status === 404) {
+            setUserOrders([])
+          } else {
+            alert(`Erro ao buscar pedidos: ${errorData.message || 'Erro desconhecido'}`)
           }
         } catch (e) {
-          console.error('Não foi possível ler detalhes do erro')
+          alert('Erro ao buscar pedidos. Tente novamente.')
         }
         
-        // Fallback: buscar do localStorage
-        const savedService = localStorage.getItem('currentService')
-        if (savedService) {
-          try {
-            const service = JSON.parse(savedService)
-            setUserOrders([service])
-            console.log('💾 Usando pedido salvo localmente:', service)
-          } catch (e) {
-            console.error('Erro ao parsear serviço salvo:', e)
+        // Se não conseguiu buscar da API, tentar fallback local
+        if (response.status !== 404) {
+          const savedService = localStorage.getItem('currentService')
+          if (savedService) {
+            try {
+              const service = JSON.parse(savedService)
+              setUserOrders([service])
+            } catch (e) {
+              setUserOrders([])
+            }
+          } else {
             setUserOrders([])
           }
-        } else {
-          setUserOrders([])
         }
       }
-    } catch (error) {
-      console.error('❌ Erro na requisição de pedidos:', error)
+    } catch (error: any) {
+      // Se o erro foi de autenticação, não tentar fallback
+      if (error.message?.includes('Token') || error.message?.includes('autenticação')) {
+        setUserOrders([])
+        return
+      }
       
-      // Fallback: buscar do localStorage
+      // Fallback: buscar do localStorage apenas se não for erro de auth
       const savedService = localStorage.getItem('currentService')
       if (savedService) {
         try {
@@ -1573,6 +1814,8 @@ const handleServiceCreate = async () => {
       } else {
         setUserOrders([])
       }
+      
+      alert('Erro ao buscar pedidos. Verifique sua conexão e tente novamente.')
     } finally {
       setOrdersLoading(false)
     }
@@ -2103,9 +2346,9 @@ const handleServiceCreate = async () => {
         <h2 className="text-2xl font-bold text-gray-800 mb-2">Serviço Confirmado</h2>
         <p className="text-gray-600 mb-2">Obrigado por escolher a Facilita</p>
         {createdServiceId && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-            <p className="text-sm text-green-700 font-medium">Serviço criado com sucesso!</p>
-            <p className="text-xs text-green-600">ID: {createdServiceId}</p>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 w-full max-w-md">
+            <p className="text-sm text-green-700 font-medium mb-2">✅ Serviço criado com sucesso!</p>
+            <p className="text-xs text-gray-600">Seu pedido foi confirmado e está sendo processado.</p>
           </div>
         )}
 
@@ -2165,13 +2408,22 @@ const handleServiceCreate = async () => {
           </div>
         </div>
 
-        {/* BOTÃO SEGUIR CORRIGIDO */}
-        <button
-          onClick={() => handleScreenTransition('service-tracking')}
-          className="mt-8 px-8 py-3 rounded-full bg-green-500 text-white font-semibold hover:bg-green-600 transition-colors"
-        >
-          Seguir
-        </button>
+        {/* Botões */}
+        <div className="mt-8 space-y-3 w-full max-w-md">
+          <button
+            onClick={() => handleScreenTransition('service-tracking')}
+            className="w-full px-6 py-3 rounded-lg bg-green-500 text-white font-semibold hover:bg-green-600 transition-colors"
+          >
+            Acompanhar Pedido
+          </button>
+          
+          <button
+            onClick={() => handleScreenTransition('home')}
+            className="w-full px-6 py-3 rounded-lg bg-gray-500 text-white font-semibold hover:bg-gray-600 transition-colors"
+          >
+            Voltar ao Início
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -2353,15 +2605,9 @@ const handleServiceCreate = async () => {
       </div>
     )
   }
-  
-
 
   // Orders Screen
   if (currentScreen === 'orders') {
-    // Buscar pedidos quando a tela for carregada
-    if (userOrders.length === 0 && !ordersLoading) {
-      fetchUserOrders()
-    }
 
     return (
       <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
@@ -2379,9 +2625,17 @@ const handleServiceCreate = async () => {
             <h1 className="text-lg font-bold">Meus Pedidos</h1>
           </div>
           <button
-            onClick={fetchUserOrders}
-            className="absolute right-4 top-4 text-white hover:text-gray-200"
+            onClick={async () => {
+              console.log('🔄 Botão de atualizar pedidos clicado')
+              try {
+                await fetchUserOrders()
+              } catch (error) {
+                console.error('❌ Erro ao atualizar pedidos:', error)
+              }
+            }}
+            className="absolute right-4 top-4 text-white hover:text-gray-200 transition-colors"
             disabled={ordersLoading}
+            title="Atualizar pedidos"
           >
             {ordersLoading ? (
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
@@ -2410,7 +2664,7 @@ const handleServiceCreate = async () => {
                 <FileText className="w-12 h-12 text-gray-400" />
               </div>
               <h3 className="text-xl font-semibold text-gray-800 mb-2">Nenhum pedido encontrado</h3>
-              <p className="text-gray-600 mb-6">Você ainda não fez nenhum pedido.</p>
+              <p className="text-gray-600 mb-6">Você ainda não fez nenhum pedido. Que tal começar agora?</p>
               <button
                 onClick={() => handleScreenTransition('home')}
                 className="bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
@@ -2751,7 +3005,27 @@ const handleServiceCreate = async () => {
               </button>
             </div>
             <div className="w-32 h-32 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-              <div className="w-16 h-24 bg-white rounded-lg"></div>
+              <svg viewBox="0 0 100 100" className="w-20 h-24">
+                {/* Celular com chat */}
+                <rect x="25" y="10" width="50" height="80" rx="8" fill="#FFF" stroke="#333" strokeWidth="2"/>
+                <rect x="30" y="15" width="40" height="60" fill="#F8F9FA"/>
+                <circle cx="50" cy="20" r="2" fill="#333"/>
+                
+                {/* Avatar do usuário */}
+                <circle cx="40" cy="30" r="4" fill="#E8F5E8"/>
+                <rect x="37" y="27" width="6" height="3" fill="#4CAF50"/>
+                <rect x="37" y="31" width="6" height="6" fill="#4CAF50"/>
+                
+                {/* Mensagens de chat */}
+                <rect x="32" y="40" width="12" height="3" rx="1" fill="#FF69B4"/>
+                <rect x="32" y="45" width="8" height="3" rx="1" fill="#CCC"/>
+                <rect x="50" y="50" width="15" height="3" rx="1" fill="#4CAF50"/>
+                <rect x="55" y="55" width="10" height="3" rx="1" fill="#4CAF50"/>
+                <rect x="32" y="60" width="10" height="3" rx="1" fill="#CCC"/>
+                
+                {/* Botão home */}
+                <circle cx="50" cy="82" r="3" fill="#333"/>
+              </svg>
             </div>
           </div>
 
@@ -2774,7 +3048,7 @@ const handleServiceCreate = async () => {
                 onClick={handleServiceRequest}
                 className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center"
               >
-                <div className="text-4xl mb-3">{service.icon}</div>
+                {service.image}
                 <p className="font-semibold">{service.name}</p>
               </button>
             ))}
@@ -2788,7 +3062,7 @@ const handleServiceCreate = async () => {
                 onClick={handleServiceRequest}
                 className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center"
               >
-                <div className="text-4xl mb-3">{service.icon}</div>
+                {service.image}
                 <p className="font-semibold">{service.name}</p>
               </button>
             ))}
@@ -2827,12 +3101,26 @@ const handleServiceCreate = async () => {
           <div className="w-full max-w-md">
             <div className="text-center mb-8">
               <div className="relative inline-block mb-4">
-                <div className="w-24 h-24 bg-blue-200 rounded-full flex items-center justify-center mx-auto">
-                  <User className="w-12 h-12 text-blue-600" />
+                <div className="w-24 h-24 bg-blue-200 rounded-full flex items-center justify-center mx-auto overflow-hidden">
+                  {profileData.foto ? (
+                    <img 
+                      src={URL.createObjectURL(profileData.foto)} 
+                      alt="Foto do perfil" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-12 h-12 text-blue-600" />
+                  )}
                 </div>
-                <button className="absolute bottom-0 right-0 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white hover:bg-green-600 transition-colors">
+                <label className="absolute bottom-0 right-0 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white hover:bg-green-600 transition-colors cursor-pointer">
                   <Camera className="w-4 h-4" />
-                </button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                  />
+                </label>
               </div>
               <h2 className="text-xl font-bold text-gray-800">{loggedUser?.nome || 'Luiz Inacio Lula da Silva'}</h2>
               <p className="text-gray-600">Complete seu perfil</p>
@@ -2975,7 +3263,23 @@ const handleServiceCreate = async () => {
             }`}
           >
             <div className="flex flex-col md:flex-row items-center md:space-x-4 space-y-4 md:space-y-0">
-              <UserIcon />
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <svg viewBox="0 0 100 100" className="w-12 h-12">
+                  {/* Pessoa com camisa verde acenando */}
+                  <circle cx="50" cy="85" r="15" fill="#E8F5E8"/>
+                  <circle cx="50" cy="35" r="12" fill="#FFDBCB"/>
+                  <path d="M45 30 Q50 25 55 30" fill="#8B4513"/>
+                  <circle cx="47" cy="33" r="1" fill="#333"/>
+                  <circle cx="53" cy="33" r="1" fill="#333"/>
+                  <path d="M48 37 Q50 39 52 37" fill="none" stroke="#333" strokeWidth="1"/>
+                  <rect x="42" y="47" width="16" height="20" fill="#4CAF50"/>
+                  <rect x="35" y="52" width="8" height="12" fill="#FFDBCB"/>
+                  <rect x="57" y="52" width="8" height="12" fill="#FFDBCB"/>
+                  <circle cx="30" cy="45" r="3" fill="#FFDBCB"/>
+                  <rect x="42" y="67" width="6" height="15" fill="#333"/>
+                  <rect x="52" y="67" width="6" height="15" fill="#333"/>
+                </svg>
+              </div>
               <div className="flex-1">
                 <h3 className="text-lg md:text-xl font-bold text-gray-800 mb-2 text-center md:text-left">Contratante</h3>
                 <p className="text-sm md:text-base text-gray-600 text-center md:text-left">
@@ -2992,7 +3296,23 @@ const handleServiceCreate = async () => {
             }`}
           >
             <div className="flex flex-col md:flex-row items-center md:space-x-4 space-y-4 md:space-y-0">
-              <UserIcon />
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <svg viewBox="0 0 100 100" className="w-12 h-12">
+                  {/* Pessoa com camisa verde acenando */}
+                  <circle cx="50" cy="85" r="15" fill="#E8F5E8"/>
+                  <circle cx="50" cy="35" r="12" fill="#FFDBCB"/>
+                  <path d="M45 30 Q50 25 55 30" fill="#8B4513"/>
+                  <circle cx="47" cy="33" r="1" fill="#333"/>
+                  <circle cx="53" cy="33" r="1" fill="#333"/>
+                  <path d="M48 37 Q50 39 52 37" fill="none" stroke="#333" strokeWidth="1"/>
+                  <rect x="42" y="47" width="16" height="20" fill="#4CAF50"/>
+                  <rect x="35" y="52" width="8" height="12" fill="#FFDBCB"/>
+                  <rect x="57" y="52" width="8" height="12" fill="#FFDBCB"/>
+                  <circle cx="30" cy="45" r="3" fill="#FFDBCB"/>
+                  <rect x="42" y="67" width="6" height="15" fill="#333"/>
+                  <rect x="52" y="67" width="6" height="15" fill="#333"/>
+                </svg>
+              </div>
               <div className="flex-1">
                 <h3 className="text-lg md:text-xl font-bold text-gray-800 mb-2 text-center md:text-left">Prestador de Serviço</h3>
                 <p className="text-sm md:text-base text-gray-600 text-center md:text-left">
@@ -3310,7 +3630,8 @@ const handleServiceCreate = async () => {
                   type="text"
                   value={userData.telefone}
                   onChange={(e) => {
-                    setUserData({...userData, telefone: e.target.value})
+                    const formattedPhone = formatPhone(e.target.value)
+                    setUserData({...userData, telefone: formattedPhone})
                     clearError('telefone')
                   }}
                   placeholder="(00) 00000-0000"
