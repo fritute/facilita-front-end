@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react'
-import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, UserIcon as UserIconLucide, ShoppingCart, Truck, Package, Users } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, UserIcon as UserIconLucide, ShoppingCart, Truck, Package, Users, Sun, Moon } from 'lucide-react'
 import QRCode from 'qrcode'
 import LocationMap from './LocationMap'
 import ServiceTracking from './components/ServiceTracking'
 import ServiceRating from './components/ServiceRating'
 import CompleteProfileModal from './components/CompleteProfileModal'
 import LoadingSpinner from './components/LoadingSpinner'
+import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 
-type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking"
+type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders"
 
 // Adicione esta interface antes da função App
 interface ServiceTrackingProps {
@@ -77,8 +78,8 @@ function App() {
   'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 
   'account-type' | 'service-provider' | 'profile-setup' | 'home' | 
   'location-select' | 'service-create' | 'waiting-driver' | 
-  'tracking' | 'service-confirmed' | 'payment' | 'service-tracking' | 'profile' | 'orders' | 'service-rating'
-  >('home')  
+  'tracking' | 'service-confirmed' | 'payment' | 'service-tracking' | 'profile' | 'orders' | 'service-rating' | 'supermarket-list' | 'establishments-list'
+  >('login')  
   
 
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -118,10 +119,142 @@ function App() {
   const [createdServiceId, setCreatedServiceId] = useState<string | null>(null)
   const [userOrders, setUserOrders] = useState<any[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
+  const [orderFilter, setOrderFilter] = useState<'TODOS' | 'EM_ANDAMENTO' | 'ENTREGUE' | 'CANCELADO'>('TODOS')
   const [ordersInitialized, setOrdersInitialized] = useState(false)
   const [serviceRating, setServiceRating] = useState<number>(0)
   const [serviceComment, setServiceComment] = useState<string>('')
   const [serviceCompletionTime, setServiceCompletionTime] = useState<Date | null>(null)
+  const [selectedEstablishmentType, setSelectedEstablishmentType] = useState<string>('')
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('darkMode')
+    return saved ? JSON.parse(saved) : false
+  })
+  const [activeServiceId, setActiveServiceId] = useState<string | null>(null)
+  const [serviceStartTime, setServiceStartTime] = useState<Date | null>(null)
+
+  // Função para buscar estabelecimentos por tipo usando Google Places API
+  const getEstablishmentsByType = (type: string) => {
+    const establishments = {
+      'farmacia': [
+        {
+          id: 1,
+          name: 'Drogasil',
+          address: 'Rua Augusta, 1234 - São Paulo - SP',
+          rating: 4.5,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-drogasil-photo',
+          distance: '0.2 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Droga Raia',
+          address: 'Av. Paulista, 567 - São Paulo - SP', 
+          rating: 4.3,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-drogaraia-photo',
+          distance: '0.5 km',
+          isOpen: true
+        },
+        {
+          id: 3,
+          name: 'Farmácia São João',
+          address: 'Rua da Consolação, 890 - São Paulo - SP',
+          rating: 4.7,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-farmacia-photo',
+          distance: '0.8 km',
+          isOpen: false
+        }
+      ],
+      'mercado': [
+        {
+          id: 1,
+          name: 'Carrefour',
+          address: 'Washington Luís, 1415 - São Paulo - SP',
+          rating: 4.7,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-carrefour-photo',
+          distance: '0.3 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Atacadão',
+          address: 'Avenida Alzira Soares, 400',
+          rating: 4.7,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-atacadao-photo',
+          distance: '0.6 km',
+          isOpen: true
+        },
+        {
+          id: 3,
+          name: 'Mercado Extra',
+          address: 'Rua São Fernando, 1135 — Jardim do Golf I',
+          rating: 4.7,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-extra-photo',
+          distance: '1.2 km',
+          isOpen: true
+        }
+      ],
+      'transporte': [
+        {
+          id: 1,
+          name: 'Uber',
+          address: 'Serviço de transporte por aplicativo',
+          rating: 4.2,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-uber-photo',
+          distance: 'Disponível',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: '99',
+          address: 'Serviço de transporte por aplicativo',
+          rating: 4.1,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-99-photo',
+          distance: 'Disponível',
+          isOpen: true
+        }
+      ],
+      'servicos': [
+        {
+          id: 1,
+          name: 'Salão Bella Vista',
+          address: 'Rua das Flores, 123 - São Paulo - SP',
+          rating: 4.8,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-salao-photo',
+          distance: '0.4 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Oficina do João',
+          address: 'Av. Industrial, 456 - São Paulo - SP',
+          rating: 4.5,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-oficina-photo',
+          distance: '1.0 km',
+          isOpen: true
+        }
+      ]
+    }
+    
+    return establishments[type as keyof typeof establishments] || []
+  }
+
+  // Função para alternar tema
+  const toggleTheme = () => {
+    const newTheme = !isDarkMode
+    setIsDarkMode(newTheme)
+    localStorage.setItem('darkMode', JSON.stringify(newTheme))
+  }
+
+  // Classes de tema
+  const themeClasses = {
+    bg: isDarkMode ? 'bg-gray-900' : 'bg-gray-100',
+    bgCard: isDarkMode ? 'bg-gray-800' : 'bg-white',
+    bgPrimary: isDarkMode ? 'bg-gray-800' : 'bg-green-500',
+    text: isDarkMode ? 'text-white' : 'text-gray-800',
+    textSecondary: isDarkMode ? 'text-gray-300' : 'text-gray-600',
+    border: isDarkMode ? 'border-gray-700' : 'border-gray-200',
+    input: isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-800'
+  }
   
   const handleAddressSelection = (address: any) => {
     setSelectedAddress(address)
@@ -130,16 +263,40 @@ function App() {
   const [selectedDestination, setSelectedDestination] = useState<{address: string, lat: number, lng: number} | null>(null)
 
   const handleStartTracking = (destination: {address: string, lat: number, lng: number}) => {
+    console.log('🚀 Iniciando novo tracking para:', destination.address)
+    
     setSelectedDestination(destination)
+    
     // Define origem do prestador se não existir (usa origem selecionada como fallback)
+    const originPosition = driverOrigin || 
+      (pickupLocation ? { lat: pickupLocation.lat, lng: pickupLocation.lng } : 
+       { lat: -23.5324859, lng: -46.7916801 }) // Fallback Carapicuíba/SP
+    
     if (!driverOrigin) {
-      if (pickupLocation) {
-        setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng })
-      } else {
-        // Fallback para uma posição padrão (Carapicuíba/SP)
-        setDriverOrigin({ lat: -23.5324859, lng: -46.7916801 })
-      }
+      setDriverOrigin(originPosition)
     }
+    
+    // Criar novo serviço ativo
+    const serviceId = ServiceTrackingManager.generateServiceId()
+    const serviceState = {
+      serviceId,
+      driverPosition: originPosition,
+      progress: 0,
+      routeCoordinates: [],
+      currentRouteIndex: 0,
+      estimatedTime: 0,
+      serviceStartTime: new Date().toISOString(),
+      isServiceCompleted: false,
+      destination,
+      entregador: entregadorData,
+      originalOrigin: originPosition // Salvar origem original para referência
+    }
+    
+    console.log('💾 Salvando novo serviço:', serviceId)
+    ServiceTrackingManager.saveActiveService(serviceState)
+    setActiveServiceId(serviceId)
+    setServiceStartTime(new Date())
+    
     handleScreenTransition('service-tracking')
   }
 
@@ -147,7 +304,30 @@ function App() {
   const handleServiceCompleted = () => {
     console.log('🎉 Serviço concluído! Redirecionando para avaliação...')
     setServiceCompletionTime(new Date())
-    handleScreenTransition('service-rating')
+    
+    // Finalizar serviço ativo no gerenciador
+    ServiceTrackingManager.completeActiveService()
+    
+    // Limpar estado local
+    setActiveServiceId(null)
+    setServiceStartTime(null)
+    
+    // Redirecionar para avaliação
+    setTimeout(() => {
+      handleScreenTransition('service-rating')
+    }, 1000)
+  }
+
+  // Função para limpar serviços antigos na inicialização
+  const cleanupOldServices = () => {
+    const activeService = ServiceTrackingManager.loadActiveService()
+    if (activeService) {
+      // Se o serviço está marcado como concluído, limpar
+      if (activeService.isServiceCompleted) {
+        console.log('🧹 Limpando serviço concluído...')
+        ServiceTrackingManager.clearActiveService()
+      }
+    }
   }
 
   
@@ -385,8 +565,37 @@ function App() {
     }
   }, [currentScreen])
 
-  // Recuperar usuário logado do localStorage ao carregar a página
+  // Verificar serviço ativo quando entrar na tela Home
   useEffect(() => {
+    if (currentScreen === 'home' && !activeServiceId) {
+      const activeService = ServiceTrackingManager.loadActiveService()
+      if (activeService && !activeService.isServiceCompleted) {
+        console.log('🚚 Serviço ativo detectado na Home, redirecionando para tracking...')
+        console.log('📍 Posição atual do motorista:', activeService.driverPosition)
+        
+        setActiveServiceId(activeService.serviceId)
+        setServiceStartTime(new Date(activeService.serviceStartTime))
+        setSelectedDestination(activeService.destination)
+        setEntregadorData(activeService.entregador)
+        
+        // Restaurar origem se disponível
+        if (activeService.originalOrigin) {
+          setDriverOrigin(activeService.originalOrigin)
+        }
+        
+        // Redirecionar automaticamente para o tracking
+        setTimeout(() => {
+          handleScreenTransition('service-tracking')
+        }, 500)
+      }
+    }
+  }, [currentScreen, activeServiceId])
+
+  // Recuperar usuário logado e verificar serviço ativo ao carregar a página
+  useEffect(() => {
+    // Limpar serviços antigos primeiro
+    cleanupOldServices()
+    
     const storedUser = localStorage.getItem('loggedUser')
     const storedToken = localStorage.getItem('authToken')
     
@@ -398,7 +607,30 @@ function App() {
         console.log('🆔 ID recuperado:', user.id, 'Tipo:', typeof user.id)
         console.log('🔑 Token recuperado:', storedToken)
         
-        // Redirecionar para Home se usuário está logado
+        // Verificar se existe serviço ativo em andamento
+        const activeService = ServiceTrackingManager.loadActiveService()
+        if (activeService && !activeService.isServiceCompleted) {
+          console.log('🚚 Serviço ativo encontrado ao carregar página, redirecionando para tracking...')
+          console.log('📍 Restaurando posição do motorista:', activeService.driverPosition)
+          console.log('📊 Progresso atual:', activeService.progress)
+          
+          // Restaurar dados do serviço
+          setSelectedDestination(activeService.destination)
+          setEntregadorData(activeService.entregador)
+          setServiceStartTime(new Date(activeService.serviceStartTime))
+          setActiveServiceId(activeService.serviceId)
+          
+          // Restaurar origem se disponível
+          if (activeService.originalOrigin) {
+            setDriverOrigin(activeService.originalOrigin)
+          }
+          
+          // Forçar redirecionamento para tracking
+          setCurrentScreen('service-tracking')
+          return
+        }
+        
+        // Redirecionar para Home se usuário está logado e não há serviço ativo
         if (currentScreen === 'login') {
           console.log('🔄 Redirecionando usuário logado para Home')
           setCurrentScreen('home')
@@ -423,11 +655,7 @@ function App() {
     
     // Validar se o token existe
     if (!token) {
-      console.error('❌ Token não encontrado - redirecionando para login')
-      alert('Sessão expirada. Faça login novamente.')
-      localStorage.removeItem('authToken')
-      localStorage.removeItem('loggedUser')
-      handleScreenTransition('login')
+      console.error('❌ Token não encontrado')
       throw new Error('Token não encontrado')
     }
     
@@ -450,10 +678,6 @@ function App() {
     if (response.status === 401) {
       console.error('❌ ERRO 401 - Token inválido ou expirado na URL:', url)
       console.error('🔑 Token usado:', token.substring(0, 20) + '...')
-      alert('Sessão expirada. Faça login novamente.')
-      localStorage.removeItem('authToken')
-      localStorage.removeItem('loggedUser')
-      handleScreenTransition('login')
       throw new Error('Token inválido ou expirado')
     }
 
@@ -579,7 +803,7 @@ function App() {
     }))
   }
 
-  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment' | 'service-tracking' | 'service-confirmed' | 'tracking' | 'profile' | 'orders' | 'service-rating') => {
+  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment' | 'service-tracking' | 'service-confirmed' | 'tracking' | 'profile' | 'orders' | 'service-rating' | 'supermarket-list' | 'establishments-list') => {
     setIsTransitioning(true)
     setTimeout(() => {
       setCurrentScreen(newScreen)
@@ -986,15 +1210,47 @@ function App() {
     }
   }
 
+  // Função para normalizar número de telefone
+  const normalizePhoneNumber = (phone: string): string => {
+    // Remove todos os caracteres não numéricos
+    const numbersOnly = phone.replace(/\D/g, '')
+    
+    // Se começa com 55 (código do Brasil), remove
+    if (numbersOnly.startsWith('55') && numbersOnly.length === 13) {
+      return numbersOnly.substring(2)
+    }
+    
+    // Se começa com 0, remove (formato antigo)
+    if (numbersOnly.startsWith('0') && numbersOnly.length === 12) {
+      return numbersOnly.substring(1)
+    }
+    
+    return numbersOnly
+  }
+
+  // Função para validar se é um telefone válido
+  const isValidPhone = (phone: string): boolean => {
+    const normalized = normalizePhoneNumber(phone)
+    // Telefone brasileiro: 11 dígitos (DDD + número)
+    // DDD: 11-99, Número: 8 ou 9 dígitos
+    return /^[1-9]{2}[0-9]{8,9}$/.test(normalized)
+  }
+
   const handleRecoverySubmit = async () => {
     const newErrors: ValidationErrors = {}
 
+    if (!recoveryContact.trim()) {
+      newErrors.recoveryContact = 'Digite um e-mail ou telefone'
+      setErrors(newErrors)
+      return
+    }
+
     // Validar se é email ou telefone
     const isEmail = recoveryContact.includes('@')
-    const isPhone = /^\(\d{2}\)\s\d{4,5}-\d{4}$/.test(recoveryContact)
+    const isPhone = !isEmail && isValidPhone(recoveryContact)
 
     if (!isEmail && !isPhone) {
-      newErrors.recoveryContact = 'Digite um e-mail ou telefone válido'
+      newErrors.recoveryContact = 'Digite um e-mail válido ou telefone (11 dígitos)'
       setErrors(newErrors)
       return
     }
@@ -1010,10 +1266,11 @@ function App() {
 
     try {
       const payload = isEmail 
-        ? { email: recoveryContact }
-        : { telefone: recoveryContact.replace(/\D/g, '') }
+        ? { email: recoveryContact.trim() }
+        : { telefone: normalizePhoneNumber(recoveryContact) }
 
       console.log('Enviando requisição de recuperação:', payload)
+      console.log('Telefone normalizado:', isEmail ? 'N/A' : normalizePhoneNumber(recoveryContact))
       
       const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/recuperar-senha', {
         method: 'POST',
@@ -1121,8 +1378,8 @@ function App() {
         codigo: code,
         nova_senha: newPassword,
         ...(isEmail 
-          ? { email: recoveryContact }
-          : { telefone: recoveryContact.replace(/\D/g, '') }
+          ? { email: recoveryContact.trim() }
+          : { telefone: normalizePhoneNumber(recoveryContact) }
         )
       }
 
@@ -1419,7 +1676,15 @@ function App() {
       
       if (!loggedUser) {
         console.log('❌ Usuário não logado na tela de pedidos')
-        handleScreenTransition('login')
+        setUserOrders([])
+        return
+      }
+
+      // Verificar se há token antes de tentar buscar pedidos
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        console.log('❌ Token não encontrado - não carregando pedidos')
+        setUserOrders([])
         return
       }
 
@@ -1501,21 +1766,43 @@ const handleLocationSelect = (address: string, lat: number, lng: number) => {
 
 
 const handleServiceCreate = async () => {
+  console.log('🚀 Iniciando criação de serviço...')
+  
+  // Validações básicas
   if (!serviceDescription && !selectedServiceType) {
+    console.error('❌ Erro: Nenhum serviço selecionado')
     alert('Selecione um serviço ou descreva o que precisa')
     return
   }
   
   // Verificar se origem e destino foram selecionados
   if (!pickupLocation) {
+    console.error('❌ Erro: Local de origem não selecionado')
     alert('Selecione o local de origem (de onde buscar)')
     return
   }
   
   if (!deliveryLocation) {
+    console.error('❌ Erro: Local de destino não selecionado')
     alert('Selecione o local de entrega (para onde levar)')
     return
   }
+
+  // Verificar se usuário está logado
+  if (!loggedUser) {
+    console.error('❌ Erro: Usuário não está logado')
+    alert('Você precisa estar logado para criar um serviço')
+    return
+  }
+
+  console.log('✅ Validações básicas passaram')
+  console.log('📋 Dados do serviço:', {
+    serviceDescription,
+    selectedServiceType,
+    pickupLocation,
+    deliveryLocation,
+    loggedUser: loggedUser?.email
+  })
   
   // Calcular distância e preço entre origem e destino escolhidos
   const distance = calculateDistance(
@@ -1545,17 +1832,26 @@ const handleServiceCreate = async () => {
   setIsLoading(true)
   console.log('🔨 Criando serviço no banco antes do pagamento...')
   
-  const serviceCreated = await createService()
-  setIsLoading(false)
-  
-  if (serviceCreated) {
-    console.log('✅ Serviço criado! Pulando pagamento para teste...')
-    // TEMPORÁRIO: Pular pagamento e ir direto para confirmação
-    // para verificar se o pedido está sendo enviado ao banco
-    handleScreenTransition('service-confirmed')
-  } else {
-    console.error('❌ Falha ao criar serviço')
-    // O erro já foi tratado dentro de createService()
+  try {
+    const serviceCreated = await createService()
+    setIsLoading(false)
+    
+    if (serviceCreated) {
+      console.log('✅ Serviço criado com sucesso! Redirecionando...')
+      // Definir serviço como ativo
+      setActiveServiceId(createdServiceId)
+      setServiceStartTime(new Date())
+      // TEMPORÁRIO: Pular pagamento e ir direto para confirmação
+      // para verificar se o pedido está sendo enviado ao banco
+      handleScreenTransition('service-confirmed')
+    } else {
+      console.error('❌ Falha ao criar serviço')
+      alert('Não foi possível criar o serviço. Verifique os dados e tente novamente.')
+    }
+  } catch (error) {
+    setIsLoading(false)
+    console.error('❌ Erro inesperado ao criar serviço:', error)
+    alert('Erro inesperado ao criar serviço. Tente novamente.')
   }
 }
 
@@ -1716,6 +2012,43 @@ const handleServiceCreate = async () => {
     return categories[id] || 'Desconhecida'
   }
 
+  // Função para filtrar e ordenar pedidos
+  const getFilteredAndSortedOrders = (orders: any[]) => {
+    // Primeiro filtrar por status
+    let filtered = orders
+    if (orderFilter !== 'TODOS') {
+      filtered = orders.filter(order => order.status === orderFilter)
+    }
+    
+    // Depois ordenar: pedidos ativos primeiro, depois por data
+    const sorted = filtered.sort((a, b) => {
+      // Prioridade 1: Pedidos em andamento ficam no topo
+      const aActive = a.status === 'EM_ANDAMENTO' || a.status === 'PENDENTE'
+      const bActive = b.status === 'EM_ANDAMENTO' || b.status === 'PENDENTE'
+      
+      if (aActive && !bActive) return -1
+      if (!aActive && bActive) return 1
+      
+      // Prioridade 2: Mais recentes primeiro
+      const aDate = new Date(a.createdAt || a.data_criacao || 0)
+      const bDate = new Date(b.createdAt || b.data_criacao || 0)
+      return bDate.getTime() - aDate.getTime()
+    })
+    
+    return sorted
+  }
+
+  // Função para contar pedidos por status
+  const getOrderCounts = (orders: any[]) => {
+    return {
+      total: orders.length,
+      em_andamento: orders.filter(o => o.status === 'EM_ANDAMENTO').length,
+      entregue: orders.filter(o => o.status === 'ENTREGUE').length,
+      cancelado: orders.filter(o => o.status === 'CANCELADO').length,
+      pendente: orders.filter(o => o.status === 'PENDENTE').length
+    }
+  }
+
   // Função para buscar pedidos do contratante
   const fetchUserOrders = async () => {
     if (!loggedUser) {
@@ -1732,49 +2065,186 @@ const handleServiceCreate = async () => {
     setOrdersLoading(true)
     
     try {
-      // Buscar apenas serviços do contratante específico
-      let url = ''
+      // Buscar pedidos do contratante usando a rota específica
       let contratanteId = ''
       
+      // Priorizar id_contratante, depois id, depois outros campos possíveis
       if (loggedUser.id_contratante) {
         contratanteId = loggedUser.id_contratante.toString()
-        url = `https://servidor-facilita.onrender.com/v1/facilita/servico?id_contratante=${contratanteId}`
+      } else if (loggedUser.id) {
+        contratanteId = loggedUser.id.toString()
+      } else if ((loggedUser as any).userId) {
+        contratanteId = (loggedUser as any).userId.toString()
+      } else if ((loggedUser as any).contratante_id) {
+        contratanteId = (loggedUser as any).contratante_id.toString()
       } else {
+        console.error('❌ ID do contratante não encontrado no objeto loggedUser:', loggedUser)
+        console.error('❌ Campos disponíveis:', Object.keys(loggedUser))
         setUserOrders([])
         setOrdersLoading(false)
         return
       }
       
-      const response = await fetchWithAuth(url)
+      // Tentar diferentes formatos de URL para buscar TODOS os pedidos
+      const possibleUrls = [
+        // URLs específicas para listar todos os pedidos do contratante
+        `https://servidor-facilita.onrender.com/v1/facilita/servico?id_contratante=${contratanteId}`,
+        `https://servidor-facilita.onrender.com/v1/facilita/servico/contratante/${contratanteId}`,
+        `https://servidor-facilita.onrender.com/v1/facilita/servico/contratante/${contratanteId}/todos`,
+        `https://servidor-facilita.onrender.com/v1/facilita/servico/contratante/${contratanteId}/pedidos`,
+        `https://servidor-facilita.onrender.com/v1/facilita/servico/contratante/pedidos?id_contratante=${contratanteId}`,
+        `https://servidor-facilita.onrender.com/v1/facilita/servico/pedidos?contratante=${contratanteId}`,
+        `https://servidor-facilita.onrender.com/v1/facilita/servico/lista?contratante_id=${contratanteId}`,
+        // Tentar também com POST se GET não funcionar
+        `https://servidor-facilita.onrender.com/v1/facilita/servico/contratante/pedidos`
+      ]
+      
+      console.log('👤 Usuário logado completo:', loggedUser)
+      console.log('🔍 ID do contratante extraído:', contratanteId)
+      
+      let response: Response | null = null
+      let successUrl = ''
+      
+      // Tentar cada URL até encontrar uma que funcione
+      for (let i = 0; i < possibleUrls.length; i++) {
+        const url = possibleUrls[i]
+        console.log('🌐 Tentando URL:', url)
+        
+        try {
+          // Para a última URL, tentar POST também
+          const isLastUrl = i === possibleUrls.length - 1
+          
+          if (isLastUrl) {
+            // Tentar GET primeiro, depois POST
+            console.log('🔄 Tentando GET na última URL...')
+            response = await fetchWithAuth(url, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            })
+            
+            if (!response.ok) {
+              console.log('🔄 GET falhou, tentando POST com body...')
+              response = await fetchWithAuth(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  id_contratante: parseInt(contratanteId)
+                })
+              })
+            }
+          } else {
+            // Para outras URLs, usar apenas GET
+            response = await fetchWithAuth(url, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            })
+          }
+          
+          if (response.ok) {
+            successUrl = url
+            console.log('✅ URL funcionou:', url)
+            break
+          } else {
+            console.log('❌ URL falhou:', url, 'Status:', response.status)
+          }
+        } catch (error) {
+          console.log('❌ Erro na URL:', url, error)
+        }
+      }
+      
+      if (!response) {
+        console.error('❌ Nenhuma URL funcionou')
+        setUserOrders([])
+        setOrdersLoading(false)
+        return
+      }
       
       if (response.ok) {
         const data = await response.json()
+        console.log('✅ Resposta da API recebida:', data)
+        console.log('🔍 Tipo da resposta:', typeof data)
+        console.log('📊 É array?', Array.isArray(data))
         
         // Se a resposta for um array, usar diretamente
         // Se for um objeto com propriedade 'servicos' ou similar, extrair
-        const orders = Array.isArray(data) ? data : (data.servicos || data.services || data.data || [])
+        const orders = Array.isArray(data) ? data : (data.servicos || data.services || data.data || data.pedidos || data.orders || [])
+        console.log('📋 Pedidos extraídos:', orders)
+        console.log('📊 Quantidade de pedidos encontrados:', orders.length)
         
-        // Filtrar rigorosamente apenas pedidos do contratante atual
-        const contratanteOrders = orders.filter((order: any) => {
-          const orderContratanteId = order.id_contratante?.toString()
-          return orderContratanteId === contratanteId
-        })
+        // Log detalhado de cada pedido
+        if (orders.length > 0) {
+          console.log('📝 Detalhes dos pedidos:')
+          orders.forEach((order: any, index: number) => {
+            console.log(`   ${index + 1}. ID: ${order.id || order.id_servico}, Descrição: ${order.descricao}, Status: ${order.status}`)
+          })
+        } else {
+          console.log('⚠️ Nenhum pedido encontrado na resposta da API')
+          console.log('🔍 Propriedades disponíveis no objeto:', Object.keys(data))
+        }
         
-        setUserOrders(contratanteOrders)
+        // Mapear os dados para o formato esperado pelo componente
+        const mappedOrders = orders.map((order: any) => ({
+          id: order.id || order.id_servico,
+          descricao: order.descricao || 'Serviço',
+          status: order.status || 'PENDENTE',
+          preco: order.valor || order.preco || 0,
+          createdAt: order.createdAt || order.data_criacao || new Date().toISOString(),
+          id_categoria: order.id_categoria,
+          id_localizacao: order.id_localizacao,
+          id_contratante: order.id_contratante,
+          id_prestador: order.id_prestador
+        }))
+        
+        console.log('🔄 Pedidos mapeados:', mappedOrders)
+        console.log('📊 Total de pedidos que serão definidos:', mappedOrders.length)
+        
+        // Verificar se já temos pedidos e se estamos adicionando ou substituindo
+        if (userOrders.length > 0) {
+          console.log('⚠️ Já existiam pedidos:', userOrders.length)
+          console.log('🔄 Substituindo por novos pedidos da API')
+        }
+        
+        setUserOrders(mappedOrders)
+        
+        // Verificar se a atualização funcionou
+        setTimeout(() => {
+          console.log('✅ Verificação pós-atualização - Pedidos no estado:', userOrders.length)
+        }, 100)
         
       } else {
+        console.error('❌ Erro na requisição:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url,
+          contratanteId: contratanteId
+        })
+        
         // Tentar ler a mensagem de erro
         try {
           const errorData = await response.json()
+          console.error('❌ Dados do erro:', errorData)
           
           if (response.status === 403) {
             alert('Acesso negado ao buscar pedidos. Verifique suas permissões.')
           } else if (response.status === 404) {
+            console.log('ℹ️ Erro 404 - Possíveis causas:')
+            console.log('   • ID do contratante não existe no banco:', contratanteId)
+            console.log('   • Rota da API incorreta')
+            console.log('   • Contratante não tem pedidos')
+            console.log('   • Problema na autenticação')
             setUserOrders([])
           } else {
+            console.error('❌ Erro ao buscar pedidos:', response.status, errorData)
             alert(`Erro ao buscar pedidos: ${errorData.message || 'Erro desconhecido'}`)
           }
         } catch (e) {
+          console.error('❌ Erro ao fazer parse da resposta de erro:', e)
           alert('Erro ao buscar pedidos. Tente novamente.')
         }
         
@@ -1794,9 +2264,13 @@ const handleServiceCreate = async () => {
         }
       }
     } catch (error: any) {
-      // Se o erro foi de autenticação, não tentar fallback
+      console.error('❌ Erro ao buscar pedidos:', error)
+      
+      // Se o erro foi de autenticação, mostrar mensagem e manter na tela
       if (error.message?.includes('Token') || error.message?.includes('autenticação')) {
+        console.log('⚠️ Erro de autenticação - mantendo usuário na tela de pedidos')
         setUserOrders([])
+        setOrdersLoading(false)
         return
       }
       
@@ -1862,10 +2336,28 @@ const handleServiceCreate = async () => {
 
   // Função para criar serviço via API
   const createService = async () => {
-    if (!pickupLocation || !deliveryLocation || !loggedUser) {
-      console.error('Dados insuficientes para criar serviço')
+    console.log('🔧 Iniciando createService()...')
+    
+    // Validações detalhadas
+    if (!pickupLocation) {
+      console.error('❌ pickupLocation não definido')
+      alert('Erro: Local de origem não foi selecionado')
       return false
     }
+    
+    if (!deliveryLocation) {
+      console.error('❌ deliveryLocation não definido')
+      alert('Erro: Local de destino não foi selecionado')
+      return false
+    }
+    
+    if (!loggedUser) {
+      console.error('❌ loggedUser não definido')
+      alert('Erro: Usuário não está logado')
+      return false
+    }
+    
+    console.log('✅ Validações iniciais passaram')
 
     // Verificar se o usuário é contratante e tem perfil completo
     if (loggedUser.tipo_conta === 'CONTRATANTE') {
@@ -1960,12 +2452,37 @@ const handleServiceCreate = async () => {
       const descricaoServico = serviceDescription || selectedServiceType || 'Serviço de entrega personalizado'
       const id_categoria = getServiceCategoryId(descricaoServico)
       
+      // Validar dados antes de enviar
+      if (!id_contratante || id_contratante <= 0) {
+        console.error('❌ ID do contratante inválido:', id_contratante)
+        alert('Erro: ID do contratante não foi obtido corretamente. Tente fazer login novamente.')
+        return false
+      }
+      
+      if (!id_categoria || id_categoria <= 0) {
+        console.error('❌ ID da categoria inválido:', id_categoria)
+        alert('Erro: Categoria do serviço não foi identificada.')
+        return false
+      }
+      
+      if (!id_localizacao || id_localizacao <= 0) {
+        console.error('❌ ID da localização inválido:', id_localizacao)
+        alert('Erro: Localização não foi obtida.')
+        return false
+      }
+      
+      if (!descricaoServico || descricaoServico.trim().length < 3) {
+        console.error('❌ Descrição do serviço inválida:', descricaoServico)
+        alert('Erro: Descrição do serviço deve ter pelo menos 3 caracteres.')
+        return false
+      }
+
       const serviceData = {
-        id_contratante: id_contratante,
+        id_contratante: Number(id_contratante),
         id_prestador: 2, // ID fixo por enquanto (ainda não tem sistema de seleção de prestador)
-        id_categoria: id_categoria,
-        id_localizacao: id_localizacao,
-        descricao: descricaoServico,
+        id_categoria: Number(id_categoria),
+        id_localizacao: Number(id_localizacao),
+        descricao: descricaoServico.trim(),
         status: 'PENDENTE'
       }
 
@@ -1987,12 +2504,26 @@ const handleServiceCreate = async () => {
         id_categoria: id_categoria,
         categoria_nome: getCategoryName(id_categoria)
       })
+      console.log('✅ Validação dos dados:')
+      console.log('  - id_contratante válido:', typeof id_contratante === 'number' && id_contratante > 0)
+      console.log('  - id_categoria válido:', typeof id_categoria === 'number' && id_categoria > 0)
+      console.log('  - id_localizacao válido:', typeof id_localizacao === 'number' && id_localizacao > 0)
+      console.log('  - descricao válida:', typeof descricaoServico === 'string' && descricaoServico.length >= 3)
       console.log('==========================')
 
+      console.log('📤 Enviando requisição para API...')
+      console.log('🌐 URL:', 'https://servidor-facilita.onrender.com/v1/facilita/servico')
+      console.log('📋 Payload:', JSON.stringify(serviceData, null, 2))
+      
       const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/servico', {
         method: 'POST',
         body: JSON.stringify(serviceData)
       })
+
+      console.log('📥 Resposta recebida:')
+      console.log('  - Status:', response.status)
+      console.log('  - Status Text:', response.statusText)
+      console.log('  - OK:', response.ok)
 
       if (response.ok) {
         const data = await response.json()
@@ -2052,9 +2583,45 @@ const handleServiceCreate = async () => {
         
         return true
       } else {
-        const errorData = await response.json().catch(() => ({}))
-        console.error('❌ Erro ao criar serviço:', errorData)
-        alert(`Erro ao criar serviço: ${errorData.message || 'Erro desconhecido'}`)
+        console.error('❌ Erro na resposta da API')
+        console.error('  - Status:', response.status)
+        console.error('  - Status Text:', response.statusText)
+        
+        try {
+          const errorData = await response.json()
+          console.error('  - Erro detalhado:', JSON.stringify(errorData, null, 2))
+          
+          // Mensagens de erro específicas baseadas no status
+          let errorMessage = 'Erro desconhecido'
+          if (response.status === 400) {
+            errorMessage = `Dados inválidos: ${errorData.message || 'Verifique os dados enviados'}`
+          } else if (response.status === 401) {
+            errorMessage = 'Não autorizado. Faça login novamente.'
+          } else if (response.status === 403) {
+            errorMessage = 'Acesso negado. Verifique suas permissões.'
+          } else if (response.status === 404) {
+            errorMessage = 'Serviço não encontrado na API.'
+          } else if (response.status === 500) {
+            errorMessage = 'Erro interno do servidor. Tente novamente mais tarde.'
+          } else {
+            errorMessage = errorData.message || `Erro ${response.status}: ${response.statusText}`
+          }
+          
+          alert(`Erro ao criar serviço: ${errorMessage}`)
+        } catch (parseError) {
+          console.error('❌ Erro ao parsear resposta de erro:', parseError)
+          
+          // Tentar obter texto da resposta se JSON falhou
+          try {
+            const errorText = await response.text()
+            console.error('❌ Resposta de erro (texto):', errorText)
+            alert(`Erro ${response.status}: ${errorText || 'Erro desconhecido no servidor'}`)
+          } catch (textError) {
+            console.error('❌ Erro ao obter texto da resposta:', textError)
+            alert(`Erro ${response.status}: Erro desconhecido no servidor. Verifique sua conexão e tente novamente.`)
+          }
+        }
+        
         return false
       }
     } catch (error) {
@@ -2064,9 +2631,14 @@ const handleServiceCreate = async () => {
       if (error instanceof Error && error.message.includes('ID do contratante não encontrado')) {
         alert('Complete seu perfil de contratante antes de criar serviços.')
         setShowCompleteProfileModal(true)
+      } else if (error instanceof TypeError && error.message.includes('fetch')) {
+        alert('Erro de conexão: Verifique sua internet e tente novamente.')
+      } else if (error instanceof Error) {
+        alert(`Erro: ${error.message}`)
       } else {
-        alert('Erro de conexão ao criar serviço.')
+        alert('Erro inesperado ao criar serviço. Verifique sua conexão e tente novamente.')
       }
+      
       return false
     }
   }
@@ -2118,11 +2690,13 @@ const handleServiceCreate = async () => {
     }
   }
 
-  const FacilitaLogo = () => (
-    <div className="flex items-center justify-center mt-8 xl:mt-0">
-      <div className="flex items-center">
-        <img src="/logotcc 1.png" alt="Facilita Logo" className="facilita-logo w-[400px] h-auto" />
-      </div>
+  const FacilitaLogo = ({ className = '' }: { className?: string }) => (
+    <div className={`flex items-start justify-start ${className}`}>
+      <img 
+        src="/logotcc 1.png" 
+        alt="Facilita Logo" 
+        className="w-64 md:w-80 h-auto"
+      />
     </div>
   )
 
@@ -2161,8 +2735,8 @@ const handleServiceCreate = async () => {
         onBack={() => handleScreenTransition('service-tracking')}
         onFinish={() => handleScreenTransition('home')}
         entregador={entregadorData}
-        serviceCompletionTime={serviceCompletionTime}
-        serviceStartTime={new Date(Date.now() - 300000)} // 5 min atrás como exemplo
+        serviceCompletionTime={serviceCompletionTime || new Date()}
+        serviceStartTime={serviceStartTime || new Date(Date.now() - 300000)} // 5 min atrás como exemplo
       />
     )
   }
@@ -2608,9 +3182,61 @@ const handleServiceCreate = async () => {
 
   // Orders Screen
   if (currentScreen === 'orders') {
+    // Usar pedidos reais ou dados de exemplo apenas se não houver pedidos reais
+    const rawOrders = userOrders.length > 0 ? userOrders : [
+      {
+        id: 'exemplo-1',
+        descricao: 'Entrega de medicamentos - Drogasil',
+        status: 'ENTREGUE',
+        preco: 25.90,
+        createdAt: new Date(Date.now() - 86400000).toISOString(),
+        origem: 'Drogasil - Rua Augusta, 1234',
+        destino: 'Rua das Flores, 123 - Apto 45'
+      },
+      {
+        id: 'exemplo-2',
+        descricao: 'Compras no Carrefour',
+        status: 'EM_ANDAMENTO',
+        preco: 89.50,
+        createdAt: new Date(Date.now() - 3600000).toISOString(),
+        origem: 'Carrefour - Washington Luís, 1415',
+        destino: 'Av. Paulista, 567 - Sala 12'
+      },
+      {
+        id: 'exemplo-3',
+        descricao: 'Serviço de limpeza',
+        status: 'CANCELADO',
+        preco: 120.00,
+        createdAt: new Date(Date.now() - 172800000).toISOString(), // 2 dias atrás
+        origem: 'Salão Bella Vista',
+        destino: 'Rua da Consolação, 890'
+      },
+      {
+        id: 'exemplo-4',
+        descricao: 'Entrega de documentos',
+        status: 'PENDENTE',
+        preco: 35.00,
+        createdAt: new Date().toISOString(),
+        origem: 'Escritório Central',
+        destino: 'Banco do Brasil - Agência 1234'
+      }
+    ];
+
+    // Aplicar filtros e ordenação
+    const displayOrders = getFilteredAndSortedOrders(rawOrders);
+    const orderCounts = getOrderCounts(rawOrders);
+
+    console.log('📊 Exibindo pedidos:', {
+      userOrdersCount: userOrders.length,
+      rawOrdersCount: rawOrders.length,
+      displayOrdersCount: displayOrders.length,
+      isShowingExamples: userOrders.length === 0,
+      currentFilter: orderFilter,
+      counts: orderCounts
+    });
 
     return (
-      <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
+      <div className={`min-h-screen ${themeClasses.bg} transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
         {/* Header */}
@@ -2647,6 +3273,43 @@ const handleServiceCreate = async () => {
           </button>
         </div>
 
+        {/* Filtros */}
+        <div className={`${themeClasses.bgCard} border-b ${themeClasses.border} p-4`}>
+          <div className="max-w-4xl mx-auto">
+            <div className="flex flex-wrap gap-2 items-center justify-between">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'TODOS', label: 'Todos', count: orderCounts.total },
+                  { key: 'EM_ANDAMENTO', label: 'Em Andamento', count: orderCounts.em_andamento },
+                  { key: 'PENDENTE', label: 'Pendente', count: orderCounts.pendente },
+                  { key: 'ENTREGUE', label: 'Entregue', count: orderCounts.entregue },
+                  { key: 'CANCELADO', label: 'Cancelado', count: orderCounts.cancelado }
+                ].map((filter) => (
+                  <button
+                    key={filter.key}
+                    onClick={() => setOrderFilter(filter.key as any)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+                      orderFilter === filter.key
+                        ? 'bg-green-500 text-white shadow-lg'
+                        : `${themeClasses.bg} ${themeClasses.text} border ${themeClasses.border} hover:bg-green-50 hover:border-green-300`
+                    }`}
+                  >
+                    {filter.label} {filter.count > 0 && `(${filter.count})`}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Indicador de pedidos ativos */}
+              {orderCounts.em_andamento > 0 && (
+                <div className="flex items-center space-x-2 bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                  <span>{orderCounts.em_andamento} pedido(s) ativo(s)</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Content */}
         <div className="max-w-4xl mx-auto p-6">
           {ordersLoading ? (
@@ -2657,14 +3320,14 @@ const handleServiceCreate = async () => {
                 <p className="text-gray-600">Carregando seus pedidos...</p>
               </div>
             </div>
-          ) : userOrders.length === 0 ? (
+          ) : displayOrders.length === 0 ? (
             /* Empty State */
             <div className="text-center py-12">
-              <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-12 h-12 text-gray-400" />
+              <div className={`w-24 h-24 ${themeClasses.bgCard} rounded-full flex items-center justify-center mx-auto mb-4`}>
+                <FileText className={`w-12 h-12 ${themeClasses.textSecondary}`} />
               </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">Nenhum pedido encontrado</h3>
-              <p className="text-gray-600 mb-6">Você ainda não fez nenhum pedido. Que tal começar agora?</p>
+              <h3 className={`text-xl font-semibold ${themeClasses.text} mb-2`}>Nenhum pedido encontrado</h3>
+              <p className={`${themeClasses.textSecondary} mb-6`}>Você ainda não fez nenhum pedido. Que tal começar agora?</p>
               <button
                 onClick={() => handleScreenTransition('home')}
                 className="bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
@@ -2676,16 +3339,35 @@ const handleServiceCreate = async () => {
             /* Orders List */
             <div className="space-y-4">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">Histórico de Pedidos</h2>
-                <span className="text-sm text-gray-600">{userOrders.length} pedido(s)</span>
+                <div>
+                  <h2 className={`text-2xl font-bold ${themeClasses.text}`}>Histórico de Pedidos</h2>
+                  {userOrders.length === 0 && (
+                    <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>
+                      📋 Exibindo dados de exemplo - Nenhum pedido real encontrado
+                    </p>
+                  )}
+                </div>
+                <span className={`text-sm ${themeClasses.textSecondary}`}>{displayOrders.length} pedido(s)</span>
               </div>
 
-              {userOrders.map((order, index) => (
-                <div key={order.id || index} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+              {displayOrders.map((order, index) => {
+                const isActive = order.status === 'EM_ANDAMENTO' || order.status === 'PENDENTE'
+                
+                return (
+                <div key={order.id || index} className={`${themeClasses.bgCard} rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border ${themeClasses.border} ${
+                  isActive ? 'ring-2 ring-orange-200 bg-gradient-to-r from-orange-50 to-transparent' : ''
+                } relative`}>
+                  {/* Indicador de pedido ativo */}
+                  {isActive && (
+                    <div className="absolute -top-2 -right-2 bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg animate-pulse">
+                      {order.status === 'EM_ANDAMENTO' ? '🚚 A CAMINHO' : '⏳ PENDENTE'}
+                    </div>
+                  )}
+                  
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center mb-2">
-                        <h3 className="text-lg font-semibold text-gray-800 mr-3">
+                        <h3 className={`text-lg font-semibold ${themeClasses.text} mr-3`}>
                           {order.descricao || 'Serviço'}
                         </h3>
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -2696,11 +3378,11 @@ const handleServiceCreate = async () => {
                       </div>
                       
                       {order.id && (
-                        <p className="text-sm text-gray-600 mb-2">ID: {order.id}</p>
+                        <p className={`text-sm ${themeClasses.textSecondary} mb-2`}>ID: {order.id}</p>
                       )}
                       
                       {order.createdAt && (
-                        <p className="text-sm text-gray-600 mb-2">
+                        <p className={`text-sm ${themeClasses.textSecondary} mb-2`}>
                           Data: {new Date(order.createdAt).toLocaleDateString('pt-BR', {
                             day: '2-digit',
                             month: '2-digit', 
@@ -2764,7 +3446,8 @@ const handleServiceCreate = async () => {
                     </div>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -2924,11 +3607,11 @@ const handleServiceCreate = async () => {
   // Home Screen
   if (currentScreen === 'home') {
     return (
-      <div className={`min-h-screen bg-gray-100 flex transition-all duration-300 ${
+      <div className={`min-h-screen ${themeClasses.bg} flex transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
         {/* Sidebar */}
-        <div className="w-64 bg-green-500 text-white p-4">
+        <div className="w-64 bg-gradient-to-b from-green-500 to-green-600 text-white p-4 animate-slideInLeft shadow-xl">
           <div className="flex items-center mb-8">
             <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
               {profilePhoto ? (
@@ -2983,14 +3666,102 @@ const handleServiceCreate = async () => {
         </div>
 
         {/* Main content */}
-        <div className="flex-1 p-6">
+        <div className="flex-1 p-6 animate-slideInRight">
           <div className="flex justify-between items-center mb-6">
             <div></div>
             <div className="flex items-center space-x-4">
-              <ShoppingCart className="w-6 h-6 text-gray-600" />
-              <Mail className="w-6 h-6 text-gray-600" />
+              {/* Toggle de tema */}
+              <button
+                onClick={toggleTheme}
+                className={`p-2 rounded-full transition-all duration-300 hover:scale-110 ${
+                  isDarkMode ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-600'
+                }`}
+                title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
+              >
+                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+              
+              <ShoppingCart className={`w-6 h-6 ${themeClasses.textSecondary}`} />
+              <Mail className={`w-6 h-6 ${themeClasses.textSecondary}`} />
+              <div className="relative">
+                <svg className={`w-6 h-6 ${themeClasses.textSecondary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4 19h10a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+              </div>
             </div>
           </div>
+
+          {/* Aba de serviço ativo */}
+          {activeServiceId && (
+            <div className={`${themeClasses.bgCard} ${themeClasses.border} border rounded-lg p-4 mb-6 shadow-lg animate-slideDown`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                  <div>
+                    <h3 className={`font-semibold ${themeClasses.text}`}>Serviço em andamento</h3>
+                    <p className={`text-sm ${themeClasses.textSecondary}`}>
+                      {serviceStartTime && `Iniciado há ${Math.floor((new Date().getTime() - serviceStartTime.getTime()) / 60000)} min`}
+                    </p>
+                    {selectedDestination && (
+                      <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>
+                        📍 {selectedDestination.address.split(',')[0]}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleScreenTransition('service-tracking')}
+                    className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
+                  >
+                    Ver Status
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm('Tem certeza que deseja cancelar o serviço ativo?')) {
+                        ServiceTrackingManager.clearActiveService()
+                        setActiveServiceId(null)
+                        setServiceStartTime(null)
+                        setSelectedDestination(null)
+                      }
+                    }}
+                    className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 transition-colors text-sm"
+                    title="Cancelar serviço"
+                  >
+                    ❌
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Botão para testar tracking (apenas em desenvolvimento) */}
+          {!activeServiceId && (
+            <div className={`${themeClasses.bgCard} ${themeClasses.border} border rounded-lg p-4 mb-6 shadow-sm`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className={`font-semibold ${themeClasses.text}`}>Teste de Tracking</h3>
+                  <p className={`text-sm ${themeClasses.textSecondary}`}>
+                    Simular um serviço para testar o rastreamento
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const testDestination = {
+                      address: 'Rua de Teste, 123 - São Paulo - SP',
+                      lat: -23.5505 + (Math.random() - 0.5) * 0.01,
+                      lng: -46.6333 + (Math.random() - 0.5) * 0.01
+                    }
+                    handleStartTracking(testDestination)
+                  }}
+                  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                  🚀 Testar
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Hero section */}
           <div className="bg-green-500 text-white rounded-lg p-6 mb-6 flex items-center">
@@ -3045,11 +3816,16 @@ const handleServiceCreate = async () => {
             {serviceCards.map((service) => (
               <button
                 key={service.id}
-                onClick={handleServiceRequest}
-                className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center"
+                onClick={() => {
+                  setSelectedEstablishmentType(service.id)
+                  handleScreenTransition('establishments-list')
+                }}
+                className={`${themeClasses.bgCard} p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105 hover:rotate-1 text-center group ${themeClasses.border} border`}
               >
-                {service.image}
-                <p className="font-semibold">{service.name}</p>
+                <div className="group-hover:animate-bounce">
+                  {service.image}
+                </div>
+                <p className={`font-semibold group-hover:text-green-500 transition-colors duration-300 ${themeClasses.text}`}>{service.name}</p>
               </button>
             ))}
           </div>
@@ -3059,11 +3835,16 @@ const handleServiceCreate = async () => {
             {[...serviceCards].map((service, index) => (
               <button
                 key={`${service.id}-${index}`}
-                onClick={handleServiceRequest}
-                className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow text-center"
+                onClick={() => {
+                  setSelectedEstablishmentType(service.id)
+                  handleScreenTransition('establishments-list')
+                }}
+                className={`${themeClasses.bgCard} p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105 hover:rotate-1 text-center group ${themeClasses.border} border`}
               >
-                {service.image}
-                <p className="font-semibold">{service.name}</p>
+                <div className="group-hover:animate-bounce">
+                  {service.image}
+                </div>
+                <p className={`font-semibold group-hover:text-green-500 transition-colors duration-300 ${themeClasses.text}`}>{service.name}</p>
               </button>
             ))}
           </div>
@@ -3440,10 +4221,18 @@ const handleServiceCreate = async () => {
           
           <div className="relative z-10">
             <h2 className="text-xl md:text-2xl text-white font-bold mb-2">Recuperar senha</h2>
-            <p className="text-sm md:text-base text-gray-400 mb-6 md:mb-8">
+            <p className="text-sm md:text-base text-gray-400 mb-4">
               Digite seu e-mail ou telefone para<br />
               recuperar sua senha
             </p>
+            <div className="bg-blue-900 bg-opacity-30 border border-blue-500 rounded-lg p-3 mb-6">
+              <p className="text-blue-300 text-xs">
+                📱 <strong>Formatos aceitos:</strong><br />
+                • <strong>E-mail:</strong> usuario@exemplo.com<br />
+                • <strong>Telefone:</strong> 11987654321, (11) 98765-4321, +55 11 98765-4321<br />
+                <span className="text-blue-200">ℹ️ O sistema normaliza automaticamente qualquer formato de telefone</span>
+              </p>
+            </div>
 
             <div className="space-y-4 md:space-y-6">
               <div>
@@ -3453,16 +4242,40 @@ const handleServiceCreate = async () => {
                     type="text"
                     value={recoveryContact}
                    onChange={(e) => {
-                     setRecoveryContact(e.target.value)
+                     const value = e.target.value
+                     setRecoveryContact(value)
                      clearError('recoveryContact')
+                     
+                     // Log para mostrar como o telefone será normalizado
+                     if (value && !value.includes('@')) {
+                       const normalized = normalizePhoneNumber(value)
+                       console.log('Telefone digitado:', value)
+                       console.log('Telefone normalizado:', normalized)
+                       console.log('Válido:', isValidPhone(value))
+                     }
                    }}
-                    placeholder="Digite seu e-mail ou telefone"
+                    placeholder="exemplo@email.com ou 11987654321"
                     className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
                 </div>
                {errors.recoveryContact && (
                  <p className="text-red-500 text-sm mt-1">{errors.recoveryContact}</p>
+               )}
+               
+               {/* Mostrar preview da normalização do telefone */}
+               {recoveryContact && !recoveryContact.includes('@') && (
+                 <div className="mt-2 text-xs">
+                   {isValidPhone(recoveryContact) ? (
+                     <p className="text-green-400">
+                       ✅ Telefone válido: {normalizePhoneNumber(recoveryContact)}
+                     </p>
+                   ) : recoveryContact.length > 3 ? (
+                     <p className="text-yellow-400">
+                       ⚠️ Formato: {normalizePhoneNumber(recoveryContact)} (precisa ter 11 dígitos)
+                     </p>
+                   ) : null}
+                 </div>
                )}
               </div>
 
@@ -3505,180 +4318,463 @@ const handleServiceCreate = async () => {
     )
   }
 
-  if (currentScreen === 'cadastro') {
-    return (
-      <div className={`min-h-screen bg-gray-800 flex flex-col xl:flex-row transition-all duration-300 ${
-        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
-      }`}>
-        <div className="flex-1 p-4 md:p-8 w-full xl:max-w-lg xl:ml-[15%] xl:mt-[10%]  order-2 xl:order-1">
-          <h2 className="text-xl md:text-2xl text-white font-bold mb-6 md:mb-8">Cadastro</h2>
-          
-          <div className="space-y-4 md:space-y-6">
-            <div>
-              <label className="block text-gray-400 text-sm mb-2">Nome</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={userData.nome}
-                  onChange={(e) => {
-                    setUserData({...userData, nome: e.target.value})
-                    clearError('nome')
-                  }}
-                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-                <User className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
-              </div>
-              {errors.nome && (
-                <p className="text-red-500 text-sm mt-1">{errors.nome}</p>
-              )}
-            </div>
-  
-            <div>
-              <label className="block text-gray-400 text-sm mb-2">E-mail</label>
-              <div className="relative">
-                <input
-                  type="email"
-                  value={userData.email}
-                  onChange={(e) => {
-                    setUserData({...userData, email: e.target.value})
-                    clearError('email')
-                  }}
-                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-                <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
-              </div>
-              {errors.email && (
-                <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-              )}
-            </div>
-  
-            <div>
-              <label className="block text-gray-400 text-sm mb-2">Confirmar Email</label>
-              <div className="relative">
-                <input
-                  type="email"
-                  value={userData.confirmarEmail}
-                  onChange={(e) => {
-                    setUserData({...userData, confirmarEmail: e.target.value})
-                    clearError('confirmarEmail')
-                  }}
-                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-                <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
-              </div>
-              {errors.confirmarEmail && (
-                <p className="text-red-500 text-sm mt-1">{errors.confirmarEmail}</p>
-              )}
-            </div>
-  
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">Senha</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={userData.senha}
-                    onChange={(e) => {
-                      setUserData({...userData, senha: e.target.value})
-                      clearError('senha')
-                    }}
-                    className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3.5 h-5 w-5 text-gray-400"
-                  >
-                    {showPassword ? <EyeOff /> : <Eye />}
-                  </button>
-                </div>
-                {errors.senha && (
-                  <p className="text-red-500 text-sm mt-1">{errors.senha}</p>
-                )}
-              </div>
-  
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">Confirmar Senha</label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    value={userData.confirmarSenha}
-                    onChange={(e) => {
-                      setUserData({...userData, confirmarSenha: e.target.value})
-                      clearError('confirmarSenha')
-                    }}
-                    className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-3.5 h-5 w-5 text-gray-400"
-                  >
-                    {showConfirmPassword ? <EyeOff /> : <Eye />}
-                  </button>
-                </div>
-                {errors.confirmarSenha && (
-                  <p className="text-red-500 text-sm mt-1">{errors.confirmarSenha}</p>
-                )}
-              </div>
-            </div>
+  // Generic Establishments List Screen
+  if (currentScreen === 'establishments-list') {
+    const establishments = getEstablishmentsByType(selectedEstablishmentType)
+    const typeNames = {
+      'farmacia': 'Farmácias',
+      'mercado': 'Mercados',
+      'transporte': 'Transporte',
+      'servicos': 'Serviços'
+    }
+    
+    const typeName = typeNames[selectedEstablishmentType as keyof typeof typeNames] || 'Estabelecimentos'
 
-            <div>
-              <label className="block text-gray-400 text-sm mb-2">Telefone</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={userData.telefone}
-                  onChange={(e) => {
-                    const formattedPhone = formatPhone(e.target.value)
-                    setUserData({...userData, telefone: formattedPhone})
-                    clearError('telefone')
-                  }}
-                  placeholder="(00) 00000-0000"
-                  className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
-                <Phone className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
-              </div>
-              {errors.telefone && (
-                <p className="text-red-500 text-sm mt-1">{errors.telefone}</p>
-              )}
-            </div>
-     
-  
-            <button
-              onClick={handleCadastro}
-              className="w-full bg-green-500 text-white py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-600 transition-colors"
+    return (
+      <div className={`min-h-screen ${themeClasses.bg} transition-all duration-500 ${
+        isTransitioning ? 'opacity-0 translate-y-full' : 'opacity-100 translate-y-0'
+      }`}>
+        {/* Header com animação */}
+        <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 relative shadow-lg animate-slideDown">
+          <button
+            onClick={() => handleScreenTransition('home')}
+            className="absolute left-4 top-4 text-white hover:text-gray-200 transition-all duration-300 hover:scale-110"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-center text-xl font-bold animate-fadeIn">{typeName}</h1>
+          <p className="text-center text-green-100 text-sm mt-1 animate-fadeIn animation-delay-200">
+            Estabelecimentos próximos a você
+          </p>
+        </div>
+
+        {/* Content com animações escalonadas */}
+        <div className="p-4 space-y-4">
+          {establishments.map((establishment, index) => (
+            <div 
+              key={establishment.id} 
+              className={`${themeClasses.bgCard} rounded-xl p-4 shadow-md border ${themeClasses.border} flex items-center space-x-4 
+                hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1
+                animate-slideUp cursor-pointer group`}
+              style={{ animationDelay: `${index * 100}ms` }}
+              onClick={() => {
+                // Definir origem automaticamente quando selecionar estabelecimento
+                setSelectedOriginLocation(establishment.address)
+                setPickupLocation({
+                  address: establishment.address,
+                  lat: -23.5505, // Coordenadas exemplo para São Paulo
+                  lng: -46.6333
+                })
+                // Navegar para seleção de destino
+                handleScreenTransition('service-create')
+              }}
             >
-              Próximo
-            </button>
-  
-            <p className="text-center text-gray-400 text-sm">
-              Já possui uma conta?{' '}
-              <button
-                onClick={() => handleScreenTransition('login')}
-                className="text-green-500 hover:underline"
-              >
-                Entrar
-              </button>
+              {/* Logo/Imagem com animação */}
+              <div className="relative w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center overflow-hidden group-hover:scale-110 transition-transform duration-300">
+                {establishment.image ? (
+                  <img 
+                    src={establishment.image} 
+                    alt={establishment.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback para ícone se imagem não carregar
+                      e.currentTarget.style.display = 'none'
+                    }}
+                  />
+                ) : (
+                  <svg className="w-8 h-8 text-gray-400 group-hover:text-green-500 transition-colors duration-300" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v1.586l8 8 8-8V5a2 2 0 00-2-2H4zm2 8a2 2 0 11-4 0 2 2 0 014 0zm8 0a2 2 0 11-4 0 2 2 0 014 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+                
+                {/* Badge de status */}
+                <div className={`absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
+                  establishment.isOpen ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                }`}></div>
+              </div>
+              
+              {/* Info com animações */}
+              <div className="flex-1 min-w-0">
+                <h3 className={`font-semibold ${themeClasses.text} mb-1 group-hover:text-green-600 transition-colors duration-300 truncate`}>
+                  {establishment.name}
+                </h3>
+                <div className={`flex items-center text-sm ${themeClasses.textSecondary} mb-2`}>
+                  <MapPin className="w-4 h-4 mr-1 text-green-500 group-hover:animate-bounce" />
+                  <span className="truncate">{establishment.address}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Star className="w-4 h-4 text-yellow-400 fill-current group-hover:animate-spin" />
+                    <span className={`text-sm ${themeClasses.textSecondary} ml-1`}>{establishment.rating}</span>
+                  </div>
+                  <div className={`flex items-center text-sm ${themeClasses.textSecondary}`}>
+                    <Clock className="w-4 h-4 mr-1" />
+                    <span>{establishment.distance}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seta indicativa com animação */}
+              <div className="text-green-500 group-hover:translate-x-2 transition-transform duration-300">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          ))}
+          
+          {establishments.length === 0 && (
+            <div className="text-center py-12 animate-fadeIn">
+              <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                <Search className="w-12 h-12 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">Nenhum estabelecimento encontrado</h3>
+              <p className="text-gray-600">Tente novamente ou escolha outro tipo de serviço.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Service Rating Screen (Static)
+  if (currentScreen === 'service-rating') {
+    return (
+      <div className={`min-h-screen ${themeClasses.bg} transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-y-full' : 'opacity-100 translate-y-0'
+      }`}>
+        {/* Header */}
+        <div className="bg-green-500 text-white p-4 relative shadow-lg">
+          <button
+            onClick={() => handleScreenTransition('home')}
+            className="absolute left-4 top-4 text-white hover:text-gray-200 transition-all duration-300 hover:scale-110"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-center text-xl font-bold">Avaliar Serviço</h1>
+        </div>
+
+        {/* Content */}
+        <div className="flex flex-col items-center justify-center p-6 space-y-6">
+          {/* Avatar do prestador */}
+          <div className="w-24 h-24 rounded-full overflow-hidden shadow-lg">
+            <img 
+              src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" 
+              alt="Prestador" 
+              className="w-full h-full object-cover"
+            />
+          </div>
+
+          {/* Nome e descrição */}
+          <div className="text-center">
+            <h2 className={`text-xl font-bold ${themeClasses.text} mb-2`}>José Silva</h2>
+            <p className={`${themeClasses.textSecondary} mb-1`}>
+              Sua opinião ajuda a melhorar a experiência de todos.
+            </p>
+            <p className={`text-sm ${themeClasses.textSecondary}`}>
+              Acompanhamento: +55 (11) 99999-9999
             </p>
           </div>
+
+          {/* Estrelas de avaliação */}
+          <div className="flex space-x-2">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                className="transition-all duration-200 hover:scale-110"
+              >
+                <Star 
+                  className="w-8 h-8 text-yellow-400 fill-current hover:text-yellow-500" 
+                />
+              </button>
+            ))}
+          </div>
+
+          {/* Comentário */}
+          <div className="w-full max-w-md">
+            <textarea
+              placeholder="Deixe um comentário sobre o serviço (opcional)"
+              className={`w-full p-4 rounded-lg border ${themeClasses.input} ${themeClasses.border} resize-none h-24`}
+              maxLength={200}
+            />
+          </div>
+
+          {/* Botão de finalizar */}
+          <button
+            onClick={() => {
+              // Limpar serviço ativo e voltar para home
+              setActiveServiceId(null)
+              setServiceStartTime(null)
+              handleScreenTransition('home')
+            }}
+            className="bg-green-500 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors shadow-lg"
+          >
+            Finalizar Avaliação
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Supermarket List Screen
+  if (currentScreen === 'supermarket-list') {
+    const supermarkets = [
+      {
+        id: 1,
+        name: 'Carrefour',
+        address: 'Washington Luís, 1415 - São Paulo - SP',
+        rating: 4.7,
+        image: '/carrefour-logo.png'
+      },
+      {
+        id: 2,
+        name: 'Atacadão',
+        address: 'Avenida Alzira Soares, 400',
+        rating: 4.7,
+        image: '/atacadao-logo.png'
+      },
+      {
+        id: 3,
+        name: 'Mercado Extra',
+        address: 'Rua São Fernando, 1135 — Jardim do Golf I',
+        rating: 4.7,
+        image: '/extra-logo.png'
+      },
+      {
+        id: 4,
+        name: 'Atacadão',
+        address: 'Avenida Alzira Soares, 400',
+        rating: 4.7,
+        image: '/atacadao-logo.png'
+      },
+      {
+        id: 5,
+        name: 'Atacadão',
+        address: 'Avenida Alzira Soares, 400',
+        rating: 4.7,
+        image: '/atacadao-logo.png'
+      }
+    ]
+
+    return (
+      <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        {/* Header */}
+        <div className="bg-white shadow-sm p-4 relative">
+          <button
+            onClick={() => handleScreenTransition('home')}
+            className="absolute left-4 top-4 text-gray-600 hover:text-gray-800"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-center text-xl font-bold text-gray-800">Mercado</h1>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 space-y-3">
+          {supermarkets.map((supermarket) => (
+            <div key={supermarket.id} className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 flex items-center space-x-4">
+              {/* Logo placeholder */}
+              <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                <svg className="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v1.586l8 8 8-8V5a2 2 0 00-2-2H4zm2 8a2 2 0 11-4 0 2 2 0 014 0zm8 0a2 2 0 11-4 0 2 2 0 014 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              
+              {/* Info */}
+              <div className="flex-1">
+                <h3 className="font-semibold text-gray-800 mb-1">{supermarket.name}</h3>
+                <div className="flex items-center text-sm text-gray-600 mb-1">
+                  <MapPin className="w-4 h-4 mr-1 text-green-500" />
+                  <span>{supermarket.address}</span>
+                </div>
+                <div className="flex items-center">
+                  <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                  <span className="text-sm text-gray-600 ml-1">{supermarket.rating}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (currentScreen === 'cadastro') {
+    return (
+      <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        {/* Coluna da Esquerda (Imagem e Logo) */}
+        <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 relative order-2 md:order-1">
+          <FacilitaLogo className="mb-8" />
+          <img 
+            src="/undraw_order-delivered_puaw 3.png" 
+            alt="Ilustração de entrega" 
+            className="w-full max-w-md xl:max-w-lg 2xl:max-w-xl h-auto object-contain"
+          />
         </div>
   
-        <div className="flex-1 flex flex-col justify-center items-end p-8 order-1 xl:order-2 relative">
+        {/* Coluna da Direita (Formulário) */}
+        <div className="w-full md:w-1/2 bg-gray-700 min-h-screen p-6 xl:p-12 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
           <img
             src="./Vector copy.png"
             alt="Decoração da tela de cadastro de usuário"
             className="absolute top-0 right-0 transform -scale-x-100 opacity-20 w-64 h-auto pointer-events-none"
           />
-          <div className="absolute top-4 right-4 md:top-8 md:right-8 z-30">
-            <FacilitaLogo />
-          </div>
-          <div className="flex-1 flex items-center justify-center p-4 md:p-8">
-            <img 
-              src="/undraw_order-delivered_puaw 3.png" 
-              alt="Ilustração de entrega" 
-              className="w-full max-w-md h-auto object-contain"
-            />
+          <div className="relative z-10 w-full max-w-md xl:max-w-lg 2xl:max-w-xl mx-auto">
+            <h1 className="text-4xl md:text-5xl xl:text-6xl text-white font-bold mb-8 text-center">Cadastro</h1>
+            <div className="space-y-3 xl:space-y-4">
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">Nome</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={userData.nome}
+                    onChange={(e) => {
+                      setUserData({...userData, nome: e.target.value})
+                      clearError('nome')
+                    }}
+                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <User className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                </div>
+                {errors.nome && (
+                  <p className="text-red-500 text-sm mt-1">{errors.nome}</p>
+                )}
+              </div>
+    
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">E-mail</label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={userData.email}
+                    onChange={(e) => {
+                      setUserData({...userData, email: e.target.value})
+                      clearError('email')
+                    }}
+                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                </div>
+                {errors.email && (
+                  <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+                )}
+              </div>
+    
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">Confirmar Email</label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={userData.confirmarEmail}
+                    onChange={(e) => {
+                      setUserData({...userData, confirmarEmail: e.target.value})
+                      clearError('confirmarEmail')
+                    }}
+                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                </div>
+                {errors.confirmarEmail && (
+                  <p className="text-red-500 text-sm mt-1">{errors.confirmarEmail}</p>
+                )}
+              </div>
+    
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-gray-400 text-sm mb-2">Senha</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={userData.senha}
+                      onChange={(e) => {
+                        setUserData({...userData, senha: e.target.value})
+                        clearError('senha')
+                      }}
+                      className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3.5 h-5 w-5 text-gray-400"
+                    >
+                      {showPassword ? <EyeOff /> : <Eye />}
+                    </button>
+                  </div>
+                  {errors.senha && (
+                    <p className="text-red-500 text-sm mt-1">{errors.senha}</p>
+                  )}
+                </div>
+    
+                <div>
+                  <label className="block text-gray-400 text-sm mb-2">Confirmar Senha</label>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={userData.confirmarSenha}
+                      onChange={(e) => {
+                        setUserData({...userData, confirmarSenha: e.target.value})
+                        clearError('confirmarSenha')
+                      }}
+                      className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-3.5 h-5 w-5 text-gray-400"
+                    >
+                      {showConfirmPassword ? <EyeOff /> : <Eye />}
+                    </button>
+                  </div>
+                  {errors.confirmarSenha && (
+                    <p className="text-red-500 text-sm mt-1">{errors.confirmarSenha}</p>
+                  )}
+                </div>
+              </div>
+  
+              <div>
+                <label className="block text-gray-400 text-sm mb-2">Telefone</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={userData.telefone}
+                    onChange={(e) => {
+                      const formattedPhone = formatPhone(e.target.value)
+                      setUserData({...userData, telefone: formattedPhone})
+                      clearError('telefone')
+                    }}
+                    placeholder="(00) 00000-0000"
+                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <Phone className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                </div>
+                {errors.telefone && (
+                  <p className="text-red-500 text-sm mt-1">{errors.telefone}</p>
+                )}
+              </div>
+      
+              <div className="flex justify-center">
+                <button
+                  onClick={handleCadastro}
+                  className="bg-green-500 text-white py-3 px-16 rounded-full font-semibold hover:bg-green-600 transition-colors"
+                >
+                  Próximo
+                </button>
+              </div>
+    
+              <p className="text-center text-gray-400 text-sm">
+                Já possui uma conta?{' '}
+                <button
+                  onClick={() => handleScreenTransition('login')}
+                  className="text-green-500 hover:underline"
+                >
+                  Entrar
+                </button>
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -3686,30 +4782,39 @@ const handleServiceCreate = async () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
+    <div className={`min-h-screen ${isDarkMode ? 'bg-gray-800' : 'bg-gray-800'} flex flex-col md:flex-row transition-all duration-300 ${
       isTransitioning ? 'opacity-0 -translate-x-full' : 'opacity-100 translate-x-0'
     }`}>
-      <div className="w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
-        <div className="absolute top-4 left-4 md:top-8 md:left-8">
-          <FacilitaLogo />
-        </div>
-        <div className="flex-1 flex items-center justify-center p-4 md:p-8">
-          <img 
-            src="/undraw_order-delivered_puaw 3.png" 
-            alt="Ilustração de entrega" 
-            className="w-full max-w-md h-auto object-contain"
-          />
-        </div>
+      {/* Coluna da Esquerda (Imagem e Logo) */}
+      <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 relative order-2 md:order-1">
+        <FacilitaLogo className="mb-8" />
+        <img 
+          src="/undraw_order-delivered_puaw 3.png" 
+          alt="Ilustração de entrega" 
+          className="w-full max-w-md xl:max-w-lg 2xl:max-w-xl h-auto object-contain"
+        />
       </div>
       
-      <div className="w-full md:w-1/2 bg-gray-700 min-h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
+      {/* Coluna da Direita (Formulário) */}
+      <div className="w-full md:w-1/2 bg-gray-700 min-h-screen p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
+        {/* Toggle de tema */}
+        <button
+          onClick={toggleTheme}
+          className={`absolute top-4 right-4 p-2 rounded-full transition-all duration-300 hover:scale-110 z-20 ${
+            isDarkMode ? 'bg-yellow-500 text-white' : 'bg-gray-600 text-gray-300'
+          }`}
+          title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
+        >
+          {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
+        
         <img
           src="./Vector copy.png"
           alt="Decoração da tela de login do usuário"
           className="absolute top-0 right-0 transform -scale-x-100 opacity-20 w-64 h-auto pointer-events-none"
         />
         
-        <div className="relative z-10 w-full max-w-md mx-auto">
+        <div className="relative z-10 w-full max-w-md xl:max-w-lg 2xl:max-w-xl mx-auto">
           <h2 className="text-2xl md:text-3xl text-white font-bold mb-4 text-center">Entrar no Facilita</h2>
           <p className="text-sm md:text-base text-gray-400 mb-6 text-center">
             Não possui uma conta?{' '}
@@ -3755,7 +4860,7 @@ const handleServiceCreate = async () => {
                   className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="••••••••••"
                 />
-                <Lock className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                <Lock className="absolute right-3 top-3.h-5 w-5 text-gray-400" />
               </div>
              {errors.loginSenha && (
                <p className="text-red-500 text-sm mt-1">{errors.loginSenha}</p>

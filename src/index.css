@@ -2,6 +2,157 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Animações Profissionais */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(34, 197, 94, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.8);
+  }
+}
+
+/* Classes de animação */
+.animate-slideDown {
+  animation: slideDown 0.6s ease-out;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.6s ease-out;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.8s ease-out;
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.6s ease-out;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.6s ease-out;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.5s ease-out;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* Delays para animações escalonadas */
+.animation-delay-100 {
+  animation-delay: 100ms;
+}
+
+.animation-delay-200 {
+  animation-delay: 200ms;
+}
+
+.animation-delay-300 {
+  animation-delay: 300ms;
+}
+
+.animation-delay-400 {
+  animation-delay: 400ms;
+}
+
+.animation-delay-500 {
+  animation-delay: 500ms;
+}
+
+/* Transições suaves para elementos interativos */
+.smooth-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Gradientes personalizados */
+.gradient-green {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.gradient-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -77,34 +228,6 @@
 }
 
 
-@media (max-width: 640px) {
-  .facilita-logo {
-    margin: 0 auto; /* Centraliza horizontalmente */
-    padding-top: 2rem; /* Adiciona espaçamento superior */
-    width: 100%; /* Ajusta o tamanho da logo */
-    max-width: 400px; /* Define um limite máximo para o tamanho */
-    transform: translateY(10%);
-    transform: translateX(-30%);
-    margin-top: -30%;
-  }
-}
-
-@media (max-width: 640px) {
-  .cadastro-image {
-    transform: translateX(0) translateY(20%); /* Remove deslocamento */
-    margin: 0 auto; /* Centraliza horizontalmente */
-    width: 60%; /* Ajusta o tamanho da imagem */
-    max-width: 300px; /* Define um limite máximo para o tamanho */
-    
-  }
-}
-
-.move-down {
-  margin-top: 17rem; /* Move o elemento para baixo */
-}
-.move-right {
-  margin-left: 6rem; /* Move o elemento para a direita */
-}
 
 /* Estilos para Leaflet Map */
 .leaflet-container {

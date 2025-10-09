@@ -5,6 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ArrowLeft, MessageSquare, Star, Clock, CheckCircle } from 'lucide-react';
 import ChatModal from './ChatModal';
+import { ServiceTrackingManager, ServiceTrackingState } from '../utils/serviceTrackingUtils';
 
 // Fix para ícones do Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -58,28 +59,66 @@ interface ServiceTrackingProps {
 }
 
 const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceCompleted, entregador, destination, driverOrigin }) => {
-  // Posição inicial do motorista vem do prestador (driverOrigin)
-  const initialDriverPosition = {
-    lat: driverOrigin.lat,
-    lng: driverOrigin.lng
+  // Carregar estado do serviço ativo
+  const savedState = ServiceTrackingManager.loadActiveService();
+  
+  // Log para debug
+  console.log('🔄 ServiceTracking iniciado');
+  console.log('💾 Estado salvo encontrado:', savedState ? 'Sim' : 'Não');
+  if (savedState) {
+    console.log('📊 Progresso salvo:', savedState.progress);
+    console.log('📍 Posição salva:', savedState.driverPosition);
+    console.log('🛣️ Rota salva:', savedState.routeCoordinates?.length || 0, 'pontos');
+    console.log('📏 Índice da rota salvo:', savedState.currentRouteIndex);
+  }
+  
+  // CORREÇÃO: Usar sempre a posição salva se existir
+  const initialDriverPosition = savedState?.driverPosition || {
+    lat: driverOrigin?.lat || -23.5324859,
+    lng: driverOrigin?.lng || -46.7916801
   };
+  
+  console.log('📍 Posição inicial definida:', initialDriverPosition);
 
   const [driverPosition, setDriverPosition] = useState<{ lat: number; lng: number }>(initialDriverPosition);
-  const [progress, setProgress] = useState(0);
-  const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
-  const [currentRouteIndex, setCurrentRouteIndex] = useState(0);
-  const [estimatedTime, setEstimatedTime] = useState<number>(0);
+  const [progress, setProgress] = useState(savedState?.progress || 0);
+  const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>(savedState?.routeCoordinates || []);
+  const [currentRouteIndex, setCurrentRouteIndex] = useState(savedState?.currentRouteIndex || 0);
+  const [estimatedTime, setEstimatedTime] = useState<number>(savedState?.estimatedTime || 0);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [serviceStartTime] = useState<Date>(new Date()); // Horário de início do serviço
+  const [serviceStartTime] = useState<Date>(savedState?.serviceStartTime ? new Date(savedState.serviceStartTime) : new Date());
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [isServiceCompleted, setIsServiceCompleted] = useState(false);
+  const [isServiceCompleted, setIsServiceCompleted] = useState(savedState?.isServiceCompleted || false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [hasShownCompletionMessage, setHasShownCompletionMessage] = useState(false);
 
-  // Buscar rota real usando OSRM
+  // Buscar rota real usando OSRM (apenas se não tiver rota salva)
   useEffect(() => {
+    if (routeCoordinates.length > 0) {
+      console.log('🛣️ Rota já carregada do estado salvo:', routeCoordinates.length, 'pontos');
+      
+      // CORREÇÃO: Garantir que a posição do motorista está correta baseada no índice salvo
+      if (savedState && savedState.currentRouteIndex < routeCoordinates.length) {
+        const savedPosition = routeCoordinates[savedState.currentRouteIndex];
+        const correctPosition = { lat: savedPosition[0], lng: savedPosition[1] };
+        
+        console.log('🔄 Ajustando posição do motorista para índice salvo:', savedState.currentRouteIndex);
+        console.log('📍 Posição corrigida:', correctPosition);
+        
+        setDriverPosition(correctPosition);
+      }
+      return;
+    }
+
+    console.log('🗺️ Buscando nova rota...');
+    // Usar a posição original para calcular a rota (não a posição atual do motorista)
+    const routeOrigin = driverOrigin || { lat: -23.5324859, lng: -46.7916801 };
+    
     const fetchRoute = async () => {
       try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${initialDriverPosition.lng},${initialDriverPosition.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`;
+        const url = `https://router.project-osrm.org/route/v1/driving/${routeOrigin.lng},${routeOrigin.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`;
         
+        console.log('📡 Fazendo requisição OSRM:', url);
         const response = await fetch(url);
         const data = await response.json();
         
@@ -92,24 +131,44 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
           setRouteCoordinates(coordinates);
           setEstimatedTime(Math.round(route.duration / 60)); // Converter para minutos
           
-          console.log('Rota calculada:', {
+          console.log('✅ Rota calculada:', {
             distancia: `${(route.distance / 1000).toFixed(2)} km`,
             tempo: `${Math.round(route.duration / 60)} min`,
             pontos: coordinates.length
           });
+          
+          // CORREÇÃO: Se é uma nova rota, começar do início
+          if (!savedState) {
+            setDriverPosition({ lat: coordinates[0][0], lng: coordinates[0][1] });
+            setCurrentRouteIndex(0);
+          }
         }
       } catch (error) {
-        console.error('Erro ao buscar rota:', error);
-        // Fallback: linha reta
-        setRouteCoordinates([
-          [initialDriverPosition.lat, initialDriverPosition.lng],
-          [destination.lat, destination.lng]
-        ]);
+        console.error('❌ Erro ao buscar rota:', error);
+        // Fallback: linha reta com mais pontos para simular movimento
+        const fallbackRoute: [number, number][] = [];
+        const steps = 20; // 20 pontos entre origem e destino
+        
+        for (let i = 0; i <= steps; i++) {
+          const ratio = i / steps;
+          const lat = routeOrigin.lat + (destination.lat - routeOrigin.lat) * ratio;
+          const lng = routeOrigin.lng + (destination.lng - routeOrigin.lng) * ratio;
+          fallbackRoute.push([lat, lng]);
+        }
+        
+        setRouteCoordinates(fallbackRoute);
+        console.log('🔄 Usando rota fallback com', fallbackRoute.length, 'pontos');
+        
+        // CORREÇÃO: Se é uma nova rota, começar do início
+        if (!savedState) {
+          setDriverPosition({ lat: fallbackRoute[0][0], lng: fallbackRoute[0][1] });
+          setCurrentRouteIndex(0);
+        }
       }
     };
 
     fetchRoute();
-  }, [destination, driverOrigin.lat, driverOrigin.lng]);
+  }, [destination, driverOrigin?.lat, driverOrigin?.lng, routeCoordinates.length, savedState]);
 
   // Atualizar horário atual a cada segundo
   useEffect(() => {
@@ -120,48 +179,117 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
     return () => clearInterval(timeInterval);
   }, []);
 
+  // Salvar estado sempre que houver mudanças importantes
+  useEffect(() => {
+    if (savedState && !isServiceCompleted) {
+      const currentState: ServiceTrackingState = {
+        serviceId: savedState.serviceId,
+        driverPosition,
+        progress,
+        routeCoordinates,
+        currentRouteIndex,
+        estimatedTime,
+        serviceStartTime: serviceStartTime.toISOString(),
+        isServiceCompleted,
+        destination,
+        entregador
+      };
+      
+      ServiceTrackingManager.saveActiveService(currentState);
+      console.log('💾 Estado salvo:', {
+        progresso: Math.round(progress),
+        posicao: `${driverPosition.lat.toFixed(4)}, ${driverPosition.lng.toFixed(4)}`,
+        indiceRota: currentRouteIndex,
+        concluido: isServiceCompleted
+      });
+    }
+  }, [driverPosition, progress, routeCoordinates, currentRouteIndex, estimatedTime, serviceStartTime, isServiceCompleted, destination, entregador, savedState]);
+
   // Detectar quando o prestador chegou e encerrar automaticamente
   useEffect(() => {
-    if (progress >= 100 && !isServiceCompleted) {
+    if (progress >= 100 && !isServiceCompleted && !hasShownCompletionMessage) {
       console.log('🎉 Prestador chegou ao destino! Encerrando serviço automaticamente...');
+      setHasShownCompletionMessage(true);
       
-      // Aguardar 3 segundos para mostrar que chegou, depois encerrar
+      // Mostrar mensagem de chegada por 3 segundos, depois encerrar
       const completionTimer = setTimeout(() => {
+        console.log('✅ Finalizando serviço e redirecionando para avaliação...');
         setIsServiceCompleted(true);
-        onServiceCompleted();
+        
+        // Aguardar um pouco mais antes de chamar onServiceCompleted
+        setTimeout(() => {
+          onServiceCompleted();
+        }, 500);
       }, 3000);
 
       return () => clearTimeout(completionTimer);
     }
-  }, [progress, isServiceCompleted, onServiceCompleted]);
+  }, [progress, isServiceCompleted, onServiceCompleted, hasShownCompletionMessage]);
 
   // Simular movimento do motorista ao longo da rota
   useEffect(() => {
-    if (routeCoordinates.length === 0) return;
+    if (routeCoordinates.length === 0 || isPaused || isServiceCompleted) {
+      if (routeCoordinates.length === 0) {
+        console.log('⏳ Aguardando rota ser carregada...');
+      } else if (isPaused) {
+        console.log('⏸️ Movimento pausado pelo usuário');
+      } else if (isServiceCompleted) {
+        console.log('✅ Serviço concluído, parando movimento');
+      }
+      return;
+    }
 
+    // CORREÇÃO: Verificar se já chegou ao final baseado no índice salvo
+    if (currentRouteIndex >= routeCoordinates.length - 1) {
+      console.log('🏁 Já estava no final da rota!');
+      setProgress(100);
+      return;
+    }
+
+    console.log('🚗 Continuando movimento do índice:', currentRouteIndex, 'de', routeCoordinates.length);
+    
     const interval = setInterval(() => {
-      setCurrentRouteIndex(prev => {
+      setCurrentRouteIndex((prev: number) => {
         const nextIndex = prev + 1;
         
         if (nextIndex >= routeCoordinates.length) {
+          console.log('🏁 Chegou ao final da rota!');
           setProgress(100);
           return prev; // Chegou ao destino
         }
         
         // Atualizar posição do motorista
         const newPosition = routeCoordinates[nextIndex];
-        setDriverPosition({ lat: newPosition[0], lng: newPosition[1] });
+        const newDriverPosition = { lat: newPosition[0], lng: newPosition[1] };
+        setDriverPosition(newDriverPosition);
         
         // Calcular progresso
-        const newProgress = (nextIndex / routeCoordinates.length) * 100;
+        const newProgress = Math.min(100, (nextIndex / (routeCoordinates.length - 1)) * 100);
         setProgress(newProgress);
+        
+        console.log(`🚗 Movimento: ${nextIndex}/${routeCoordinates.length} (${Math.round(newProgress)}%)`);
+        console.log(`📍 Nova posição: ${newDriverPosition.lat.toFixed(4)}, ${newDriverPosition.lng.toFixed(4)}`);
         
         return nextIndex;
       });
-    }, 2000); // Move para o próximo ponto a cada 2 segundos
+    }, 3000); // Move para o próximo ponto a cada 3 segundos
 
     return () => clearInterval(interval);
-  }, [routeCoordinates]);
+  }, [routeCoordinates, isPaused, isServiceCompleted, currentRouteIndex]);
+
+  // Função para pausar/retomar o tracking
+  const toggleTracking = () => {
+    setIsPaused(!isPaused);
+  };
+
+  // Limpar estado salvo quando o componente for desmontado (apenas se serviço não foi completado)
+  useEffect(() => {
+    return () => {
+      if (!isServiceCompleted) {
+        console.log('Mantendo estado salvo para continuidade...');
+      }
+    };
+  }, [isServiceCompleted]);
 
   // Funções para formatação de horário
   const formatTime = (date: Date) => {
@@ -312,16 +440,21 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
             <div className="flex-1">
               <p className="text-sm opacity-90">Status</p>
               <p className="font-bold text-lg">
-                {progress >= 100 ? 'Prestador chegou!' : 'Prestador em rota'}
+                {progress >= 100 ? '🎉 Prestador chegou!' : isPaused ? '⏸️ Tracking pausado' : '🚗 Prestador em rota'}
               </p>
               {progress >= 100 && (
                 <div className="mt-2 space-y-1">
                   <p className="text-sm opacity-90">
-                    🎉 Serviço será finalizado automaticamente em instantes...
+                    ✅ Pedido finalizado! Redirecionando para avaliação...
                   </p>
                   <p className="text-xs opacity-75">
                     Horário de chegada: {formatTime(currentTime)}
                   </p>
+                  <div className="mt-2 bg-white bg-opacity-20 rounded-lg p-2">
+                    <p className="text-xs opacity-90">
+                      💾 Progresso salvo automaticamente - você pode fechar o app sem perder o acompanhamento
+                    </p>
+                  </div>
                 </div>
               )}
               {progress < 100 && (
@@ -333,18 +466,37 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
                     ></div>
                   </div>
                   <p className="text-xs opacity-75 mt-1">
-                    Progresso: {Math.round(progress)}%
+                    Progresso: {Math.round(progress)}% {isPaused && '(Pausado)'}
                   </p>
+                  {savedState && (
+                    <p className="text-xs opacity-60 mt-1">
+                      💾 Progresso salvo - continue de onde parou
+                    </p>
+                  )}
                 </div>
               )}
             </div>
-            <button 
-              onClick={() => setIsChatOpen(true)}
-              className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold hover:bg-opacity-90 transition-all flex items-center space-x-2 ml-4"
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span>Conversar</span>
-            </button>
+            <div className="flex flex-col space-y-2 ml-4">
+              <button 
+                onClick={() => setIsChatOpen(true)}
+                className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold hover:bg-opacity-90 transition-all flex items-center space-x-2"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Conversar</span>
+              </button>
+              {progress < 100 && (
+                <button 
+                  onClick={toggleTracking}
+                  className={`px-4 py-2 rounded-full font-semibold hover:bg-opacity-90 transition-all text-sm ${
+                    isPaused 
+                      ? 'bg-yellow-500 text-white' 
+                      : 'bg-white bg-opacity-20 text-white'
+                  }`}
+                >
+                  {isPaused ? '▶️ Retomar' : '⏸️ Pausar'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
