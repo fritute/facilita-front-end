@@ -61,19 +61,13 @@ interface RegisterData {
 }
 
 interface LoggedUser {
+  id?: number // ID do usuário na tabela usuario
+  id_contratante?: number // ID na tabela contratante (se for CONTRATANTE)
   nome: string
   email: string
   telefone: string
   tipo_conta: 'CONTRATANTE' | 'PRESTADOR'
   foto?: string
-}
-
-interface ServiceRequest {
-  id: string
-  description: string
-  location: string
-  price: number
-  status: 'pending' | 'accepted' | 'in_progress' | 'completed'
 }
 
 function App() {
@@ -112,7 +106,6 @@ function App() {
   const [isSelectingOrigin, setIsSelectingOrigin] = useState(false)
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
   const [pixCode, setPixCode] = useState<string>('')
-  const [driverFound, setDriverFound] = useState(false)
   const [selectedAddress, setSelectedAddress] = useState<any>(null)
   const [pickupLocation, setPickupLocation] = useState<{address: string, lat: number, lng: number} | null>(null)
   const [deliveryLocation, setDeliveryLocation] = useState<{address: string, lat: number, lng: number} | null>(null)
@@ -280,18 +273,7 @@ function App() {
     }
   }
 
-  // Simulate driver search
-  useEffect(() => {
-    if (currentScreen === 'waiting-driver') {
-      const timer = setTimeout(() => {
-        setDriverFound(true)
-        setTimeout(() => {
-          handleScreenTransition('payment')
-        }, 2000)
-      }, 5000)
-      return () => clearTimeout(timer)
-    }
-  }, [currentScreen])
+  // Removido: useEffect de waiting-driver (agora criamos o serviço antes de ir para pagamento)
 
   // Generate PIX QR Code when payment screen loads
   useEffect(() => {
@@ -311,6 +293,7 @@ function App() {
         const user = JSON.parse(storedUser)
         setLoggedUser(user)
         console.log('👤 Usuário recuperado do localStorage:', user)
+        console.log('🆔 ID recuperado:', user.id, 'Tipo:', typeof user.id)
         console.log('🔑 Token recuperado:', storedToken)
         
         // Redirecionar para Home se usuário está logado
@@ -495,7 +478,11 @@ function App() {
         
         // Armazenar dados do usuário vindos do banco
         if (data.usuario) {
+          console.log('📋 Dados brutos do usuário da API:', data.usuario)
+          console.log('🆔 ID do usuário recebido:', data.usuario.id, 'Tipo:', typeof data.usuario.id)
+          
           const user: LoggedUser = {
+            id: data.usuario.id,
             nome: data.usuario.nome,
             email: data.usuario.email,
             telefone: data.usuario.telefone,
@@ -507,6 +494,7 @@ function App() {
           
           setLoggedUser(user)
           console.log('👤 Usuário logado:', user)
+          console.log('🆔 ID armazenado no state:', user.id)
           
           // Redirecionar baseado no tipo de conta
           if (user.tipo_conta === 'CONTRATANTE') {
@@ -622,9 +610,10 @@ function App() {
       email: userData.email,
       telefone: userData.telefone.replace(/\D/g, ''),
       senha_hash: userData.senha,
+      tipo_conta: selectedAccountType
     }
 
-    console.log('📤 Enviando cadastro:', { ...registerData, senha_hash: '***' })
+    console.log('📤 Enviando cadastro:', { ...registerData, senha_hash: '***', tipo_conta: selectedAccountType })
 
     try {
       const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/register', {
@@ -640,11 +629,90 @@ function App() {
       if (response.ok) {
         const data = await response.json()
         console.log('✅ Cadastro bem-sucedido:', data)
-        // Após cadastrado, direciona conforme tipo de conta escolhido
-        if (selectedAccountType === 'CONTRATANTE') {
-          handleScreenTransition('profile-setup')
+        
+        // Se a API retornar token diretamente no cadastro, usar
+        if (data.token) {
+          localStorage.setItem('authToken', data.token)
+          console.log('🔑 Token do cadastro armazenado:', data.token)
+          console.log('📝 Dados do usuário retornados no cadastro:', data.usuario)
+          
+          // Armazenar dados do usuário
+          const user: LoggedUser = {
+            id: data.usuario?.id,
+            nome: userData.nome,
+            email: userData.email,
+            telefone: userData.telefone,
+            tipo_conta: selectedAccountType
+          }
+          
+          localStorage.setItem('loggedUser', JSON.stringify(user))
+          setLoggedUser(user)
+          console.log('👤 Usuário cadastrado e logado:', user)
+          console.log('🆔 ID do usuário cadastrado:', user.id)
+          
+          // Redirecionar conforme tipo de conta
+          if (selectedAccountType === 'CONTRATANTE') {
+            handleScreenTransition('profile-setup')
+          } else {
+            handleScreenTransition('home')
+          }
         } else {
-          handleScreenTransition('home')
+          // Se não retornar token, fazer login automático
+          console.log('🔄 Token não retornado no cadastro, fazendo login automático...')
+          
+          try {
+            const loginResponse = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/login', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                login: userData.email,
+                senha: userData.senha
+              })
+            })
+            
+            if (loginResponse.ok) {
+              const loginData = await loginResponse.json()
+              console.log('✅ Login automático bem-sucedido:', loginData)
+              
+              // Armazenar token
+              if (loginData.token) {
+                localStorage.setItem('authToken', loginData.token)
+                console.log('🔑 Token do login armazenado:', loginData.token)
+              }
+              
+              // Armazenar dados do usuário
+              console.log('📝 Dados do usuário no login automático:', loginData.usuario)
+              const user: LoggedUser = {
+                id: loginData.usuario?.id,
+                nome: userData.nome,
+                email: userData.email,
+                telefone: userData.telefone,
+                tipo_conta: selectedAccountType
+              }
+              
+              localStorage.setItem('loggedUser', JSON.stringify(user))
+              setLoggedUser(user)
+              console.log('👤 Usuário logado:', user)
+              console.log('🆔 ID do usuário no login automático:', user.id)
+              
+              // Redirecionar conforme tipo de conta
+              if (selectedAccountType === 'CONTRATANTE') {
+                handleScreenTransition('profile-setup')
+              } else {
+                handleScreenTransition('home')
+              }
+            } else {
+              console.error('❌ Erro no login automático')
+              alert('Cadastro realizado! Faça login para continuar.')
+              handleScreenTransition('login')
+            }
+          } catch (loginError) {
+            console.error('❌ Erro no login automático:', loginError)
+            alert('Cadastro realizado! Faça login para continuar.')
+            handleScreenTransition('login')
+          }
         }
       } else {
         const errorData = await response.json()
@@ -876,29 +944,132 @@ function App() {
       return
     }
 
+    if (!loggedUser?.id) {
+      alert('Erro: ID do usuário não encontrado. Faça login novamente.')
+      return
+    }
+
     try {
-      // Monta payload exatamente como solicitado
+      // Monta payload - o backend pode pegar id_usuario do token JWT
+      // Mas vamos enviar explicitamente também para garantir
       const payload = {
+        id_usuario: loggedUser.id, // ID do usuário logado
         id_localizacao: 1, // Fixo por enquanto
+        necessidade: profileData.necessidade.toUpperCase(),
+        cpf: profileData.cpf.replace(/\D/g, ''),
+      }
+      
+      // Payload alternativo sem id_usuario (caso o backend pegue do token)
+      const payloadSemId = {
+        id_localizacao: 1,
         necessidade: profileData.necessidade.toUpperCase(),
         cpf: profileData.cpf.replace(/\D/g, ''),
       }
 
       console.log('📤 Enviando dados do contratante:', payload)
+      console.log('🔑 Token disponível:', localStorage.getItem('authToken') ? 'Sim' : 'Não')
+      console.log('🔑 Token completo:', localStorage.getItem('authToken'))
+      console.log('👤 Usuário logado:', loggedUser)
+      console.log('👤 ID do usuário:', loggedUser?.id)
 
-      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/register', {
+      console.log('🌐 Fazendo requisição para:', 'https://servidor-facilita.onrender.com/v1/facilita/contratante/register')
+      console.log('📦 Payload COM id_usuario:', JSON.stringify(payload, null, 2))
+      console.log('📦 Payload SEM id_usuario (alternativo):', JSON.stringify(payloadSemId, null, 2))
+      
+      // Tentar primeiro com id_usuario
+      let response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/register', {
         method: 'POST',
         body: JSON.stringify(payload)
       })
 
+      console.log('📥 Status da resposta (tentativa 1 - COM id_usuario):', response.status)
+      console.log('📥 Response OK?:', response.ok)
+
+      // Se falhar com erro 400, tentar sem id_usuario (backend pode pegar do token)
+      if (!response.ok && response.status === 400) {
+        console.log('⚠️ Erro 400 com id_usuario, tentando SEM id_usuario...')
+        const errorData = await response.json().catch(() => ({}))
+        console.log('📋 Erro da primeira tentativa:', errorData)
+        
+        // Tentar novamente sem id_usuario
+        response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/register', {
+          method: 'POST',
+          body: JSON.stringify(payloadSemId)
+        })
+        
+        console.log('📥 Status da resposta (tentativa 2 - SEM id_usuario):', response.status)
+        console.log('📥 Response OK?:', response.ok)
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        console.error('Erro ao registrar contratante:', errorData)
-        alert(`Falha ao completar perfil de contratante: ${errorData.message || response.status}`)
+        console.error('❌ Erro ao registrar contratante (ambas tentativas):')
+        console.error('Status:', response.status)
+        console.error('Dados do erro:', JSON.stringify(errorData, null, 2))
+        console.error('Payload COM id enviado:', JSON.stringify(payload, null, 2))
+        console.error('Payload SEM id enviado:', JSON.stringify(payloadSemId, null, 2))
+        
+        let errorMessage = errorData.message || errorData.error || 'Erro desconhecido'
+        
+        if (response.status === 500) {
+          errorMessage = `Erro no servidor (500): ${errorMessage}. Verifique se todos os campos estão corretos e se o backend está funcionando.`
+        } else if (response.status === 400) {
+          errorMessage = `Erro 400 (Bad Request): ${errorMessage}. Campos esperados pelo backend podem estar incorretos.`
+        } else if (response.status === 401) {
+          errorMessage = `Erro 401 (Não autorizado): Token inválido ou expirado. Faça login novamente.`
+        } else if (response.status === 409) {
+          errorMessage = `Erro 409 (Conflito): ${errorMessage}. Contratante já pode estar cadastrado.`
+        }
+        
+        alert(`Falha ao completar perfil de contratante: ${errorMessage}`)
         return
       }
 
-      alert('Perfil de contratante salvo com sucesso!')
+      const successData = await response.json()
+      console.log('✅ Perfil de contratante salvo com sucesso!')
+      console.log('✅ Resposta completa do backend:', JSON.stringify(successData, null, 2))
+      
+      // IMPORTANTE: Atualizar o token se o backend retornar um novo
+      if (successData.token) {
+        localStorage.setItem('authToken', successData.token)
+        console.log('🔑 NOVO TOKEN recebido e salvo após completar perfil!')
+        console.log('🔑 Novo token:', successData.token.substring(0, 50) + '...')
+      }
+      
+      // Extrair o ID do contratante da resposta (pode vir em vários lugares)
+      const idContratante = successData.id || 
+                           successData.contratante?.id || 
+                           successData.usuario?.contratante?.id
+      console.log('✅ ID do contratante criado:', idContratante)
+      
+      // Extrair dados completos do usuário se disponíveis
+      const usuarioCompleto = successData.usuario || successData.contratante?.usuario
+      
+      // Atualizar o usuário logado com TODOS os dados
+      if (loggedUser) {
+        const updatedUser: LoggedUser = {
+          id: usuarioCompleto?.id || loggedUser.id,
+          id_contratante: idContratante,
+          nome: usuarioCompleto?.nome || loggedUser.nome,
+          email: usuarioCompleto?.email || loggedUser.email,
+          telefone: usuarioCompleto?.telefone || loggedUser.telefone,
+          tipo_conta: usuarioCompleto?.tipo_conta || loggedUser.tipo_conta
+        }
+        
+        setLoggedUser(updatedUser)
+        localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
+        console.log('✅ Usuário atualizado com dados completos:', updatedUser)
+        console.log('✅ ID do usuário:', updatedUser.id)
+        console.log('✅ ID do contratante:', updatedUser.id_contratante)
+      } else {
+        console.warn('⚠️ loggedUser não disponível para atualização')
+      }
+      
+      // Resetar flag de verificação para forçar nova checagem
+      setHasCheckedProfile(false)
+      setShowCompleteProfileModal(false)
+      
+      alert('✅ Perfil de contratante salvo com sucesso!\n🔑 Token de autenticação atualizado.')
       handleScreenTransition('home')
     } catch (e) {
       console.error('Erro ao registrar contratante:', e)
@@ -934,13 +1105,33 @@ function App() {
 
     console.log('🔍 Verificando perfil do contratante...')
 
+    // Usar id_contratante se disponível, senão usar id do usuário
+    const idParaBuscar = loggedUser.id_contratante || loggedUser.id
+    
+    if (!idParaBuscar) {
+      console.error('❌ ID do usuário/contratante não disponível')
+      setShowCompleteProfileModal(true)
+      setHasCheckedProfile(true)
+      return
+    }
+
     try {
-      // Tentar buscar dados do contratante
-      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/me')
+      // Usar o ID do contratante (ou usuário como fallback) para buscar dados
+      console.log('🔍 Fazendo requisição para /contratante com ID:', idParaBuscar)
+      console.log('🔍 Usando:', loggedUser.id_contratante ? 'id_contratante' : 'id_usuario')
       
-      console.log('📥 Resposta da API /contratante/me:', {
+      // Se temos id_contratante, usar direto. Senão, usar query param com id_usuario
+      const url = loggedUser.id_contratante 
+        ? `https://servidor-facilita.onrender.com/v1/facilita/contratante/${idParaBuscar}`
+        : `https://servidor-facilita.onrender.com/v1/facilita/contratante?id_usuario=${idParaBuscar}`
+      
+      console.log('🔍 URL completa:', url)
+      const response = await fetchWithAuth(url)
+      
+      console.log('📥 Resposta da API /contratante/{id}:', {
         status: response.status,
-        ok: response.ok
+        ok: response.ok,
+        url: response.url
       })
       
       if (response.status === 404) {
@@ -950,7 +1141,30 @@ function App() {
       } else if (response.ok) {
         // Contratante já tem perfil completo
         const data = await response.json()
-        console.log('✅ Contratante com perfil completo:', data)
+        console.log('✅ Resposta da verificação de perfil:', JSON.stringify(data, null, 2))
+        
+        // A API pode retornar um array ou um objeto
+        const contratanteData = Array.isArray(data) ? data[0] : data
+        
+        // Quando busca por query param id_usuario, retorna dados do CONTRATANTE
+        // { id: 10, id_usuario: 32, ... }
+        const idContratante = contratanteData?.id
+        
+        console.log('🔍 Extraindo ID do contratante da verificação:')
+        console.log('  - contratanteData.id (id_contratante):', contratanteData?.id)
+        console.log('  - contratanteData.id_usuario:', contratanteData?.id_usuario)
+        console.log('  - ID extraído:', idContratante)
+        
+        // Se não temos id_contratante salvo ainda, salvar agora
+        if (idContratante && !loggedUser.id_contratante) {
+          const updatedUser = {
+            ...loggedUser,
+            id_contratante: idContratante
+          }
+          setLoggedUser(updatedUser)
+          localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
+          console.log('✅ ID do contratante salvo no usuário (da verificação):', idContratante)
+        }
       } else {
         // Outro erro - assumir que não tem perfil
         console.log('⚠️ Status inesperado, assumindo sem perfil. Status:', response.status)
@@ -993,6 +1207,29 @@ function App() {
             </div>
             <h2 className="text-2xl font-bold text-white mb-2">Entrando...</h2>
             <p className="text-gray-400">Verificando suas credenciais</p>
+          </div>
+          
+          <div className="flex justify-center space-x-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce"></div>
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Tela de loading durante criação de serviço
+  if (isLoading && currentScreen === 'service-create') {
+    return (
+      <div className="min-h-screen bg-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="mb-8">
+            <div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <LoadingSpinner size="lg" color="white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Criando serviço...</h2>
+            <p className="text-gray-400">Aguarde enquanto processamos sua solicitação</p>
           </div>
           
           <div className="flex justify-center space-x-2">
@@ -1063,8 +1300,21 @@ const handleServiceCreate = async () => {
     setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng })
   }
   
-  // Ir para a tela de procurar motorista
-  handleScreenTransition('waiting-driver')
+  // NOVO FLUXO: Criar serviço no banco primeiro
+  setIsLoading(true)
+  console.log('🔨 Criando serviço no banco antes do pagamento...')
+  
+  const serviceCreated = await createService()
+  setIsLoading(false)
+  
+  if (serviceCreated) {
+    console.log('✅ Serviço criado! Redirecionando para pagamento...')
+    // Ir direto para tela de pagamento com o id_servico já criado
+    handleScreenTransition('payment')
+  } else {
+    console.error('❌ Falha ao criar serviço')
+    // O erro já foi tratado dentro de createService()
+  }
 }
 
   const copyPixCode = () => {
@@ -1112,16 +1362,83 @@ const handleServiceCreate = async () => {
   // Função para obter ID do contratante
   const getContratanteId = async () => {
     try {
-      // Tentar buscar dados do contratante logado
-      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/me')
-      if (response.ok) {
-        const data = await response.json()
-        return data.id || data.id_contratante || 3 // fallback para ID 3
+      // Priorizar id_contratante se disponível
+      if (loggedUser?.id_contratante) {
+        console.log('✅ Usando id_contratante salvo:', loggedUser.id_contratante)
+        return loggedUser.id_contratante
       }
+      
+      // Fallback: buscar pelo id_usuario na API
+      if (loggedUser?.id) {
+        console.log('⚠️ id_contratante não disponível, buscando na API usando id_usuario:', loggedUser.id)
+        
+        // Tentar buscar usando endpoint que aceita id_usuario como query param ou path
+        // Primeiro tentar: /contratante?id_usuario=32
+        console.log('🔍 Tentativa 1: Buscar por id_usuario via query param')
+        console.log('🔍 URL:', `https://servidor-facilita.onrender.com/v1/facilita/contratante?id_usuario=${loggedUser.id}`)
+        
+        let response = await fetchWithAuth(`https://servidor-facilita.onrender.com/v1/facilita/contratante?id_usuario=${loggedUser.id}`)
+        
+        if (response.ok) {
+          const data = await response.json()
+          console.log('✅ Resposta da API recebida')
+          console.log('📋 Resposta completa:', JSON.stringify(data, null, 2))
+          
+          // A API pode retornar um array ou um objeto
+          const contratanteData = Array.isArray(data) ? data[0] : data
+          console.log('📋 Dados do contratante:', contratanteData)
+          
+          // Quando busca por id_usuario, retorna dados do CONTRATANTE diretamente
+          // { id: 10, id_usuario: 32, necessidade: "...", usuario: {...} }
+          // O campo "id" aqui JÁ É o id_contratante!
+          const idContratante = contratanteData?.id
+          const idUsuario = contratanteData?.id_usuario || contratanteData?.usuario?.id
+          
+          console.log('🔍 Extraindo IDs da resposta:')
+          console.log('  - contratanteData.id (id_contratante):', contratanteData?.id)
+          console.log('  - contratanteData.id_usuario:', contratanteData?.id_usuario)
+          console.log('  - contratanteData.usuario.id:', contratanteData?.usuario?.id)
+          console.log('  - ID do contratante extraído:', idContratante)
+          
+          if (!idContratante) {
+            console.error('❌ ERRO: ID do contratante não encontrado na resposta!')
+            console.error('Resposta completa:', JSON.stringify(data, null, 2))
+            throw new Error('ID do contratante não retornado pela API')
+          }
+          
+          // Validar que estamos usando o ID correto
+          if (idContratante === idUsuario) {
+            console.warn('⚠️ AVISO: id_contratante é igual a id_usuario. Isso pode indicar um problema!')
+            console.warn('Verifique se a API está retornando os dados corretos.')
+          }
+          
+          // Salvar o id_contratante para uso futuro
+          const updatedUser = {
+            ...loggedUser,
+            id_contratante: idContratante
+          }
+          setLoggedUser(updatedUser)
+          localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
+          console.log('✅ ID do contratante salvo:', idContratante)
+          console.log('⚠️ IMPORTANTE: Retornando', idContratante, '(id da tabela contratante), NÃO', loggedUser.id, '(id_usuario)')
+          
+          return idContratante
+        } else if (response.status === 404) {
+          console.error('❌ Contratante não encontrado no banco')
+          console.error('❌ Isso significa que o perfil não foi completado ainda')
+          throw new Error('Perfil de contratante não encontrado. Complete seu cadastro.')
+        } else {
+          console.error('❌ Erro ao buscar contratante. Status:', response.status)
+          throw new Error(`Erro ao buscar contratante: ${response.status}`)
+        }
+      }
+      
+      console.error('❌ ID do usuário não disponível')
+      throw new Error('ID do contratante não encontrado')
     } catch (error) {
-      console.warn('Não foi possível obter ID do contratante, usando ID padrão')
+      console.error('❌ Erro ao obter ID do contratante:', error)
+      throw error
     }
-    return 3 // ID fixo como fallback
   }
 
   // Função para mapear tipo de serviço para categoria
@@ -1168,13 +1485,30 @@ const handleServiceCreate = async () => {
     
     try {
       console.log('📋 Buscando pedidos do usuário...')
+      console.log('👤 ID do usuário:', loggedUser.id)
+      console.log('👤 ID do contratante:', loggedUser.id_contratante)
       
-      // Primeiro, tentar buscar via API de serviços
-      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/servico')
+      // Tentar buscar serviços do contratante específico
+      let url = 'https://servidor-facilita.onrender.com/v1/facilita/servico'
+      
+      // Se temos id_contratante, buscar serviços desse contratante
+      if (loggedUser.id_contratante) {
+        url = `https://servidor-facilita.onrender.com/v1/facilita/servico?id_contratante=${loggedUser.id_contratante}`
+        console.log('🔍 Buscando serviços do contratante:', loggedUser.id_contratante)
+      } else if (loggedUser.id) {
+        // Fallback: tentar buscar por id_usuario
+        url = `https://servidor-facilita.onrender.com/v1/facilita/servico?id_usuario=${loggedUser.id}`
+        console.log('🔍 Buscando serviços do usuário:', loggedUser.id)
+      }
+      
+      console.log('🌐 URL da requisição:', url)
+      const response = await fetchWithAuth(url)
+      
+      console.log('📥 Status da resposta:', response.status)
       
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ Pedidos obtidos da API:', data)
+        console.log('✅ Pedidos obtidos da API:', JSON.stringify(data, null, 2))
         
         // Se a resposta for um array, usar diretamente
         // Se for um objeto com propriedade 'servicos' ou similar, extrair
@@ -1189,6 +1523,23 @@ const handleServiceCreate = async () => {
         setUserOrders(userOrders)
       } else {
         console.error('❌ Erro ao buscar pedidos:', response.status)
+        
+        // Tentar ler a mensagem de erro
+        try {
+          const errorData = await response.json()
+          console.error('❌ Detalhes do erro:', errorData)
+          
+          if (response.status === 403) {
+            console.error('❌ ERRO 403: Acesso negado')
+            console.error('Possíveis causas:')
+            console.error('1. Token sem permissões corretas')
+            console.error('2. Endpoint requer autenticação específica')
+            console.error('3. Usuário não tem permissão para acessar esses dados')
+            alert('Acesso negado ao buscar pedidos. Verifique suas permissões.')
+          }
+        } catch (e) {
+          console.error('Não foi possível ler detalhes do erro')
+        }
         
         // Fallback: buscar do localStorage
         const savedService = localStorage.getItem('currentService')
@@ -1273,9 +1624,94 @@ const handleServiceCreate = async () => {
       return false
     }
 
+    // Verificar se o usuário é contratante e tem perfil completo
+    if (loggedUser.tipo_conta === 'CONTRATANTE') {
+      if (!loggedUser.id) {
+        console.error('❌ ID do usuário não disponível')
+        alert('Erro: ID do usuário não encontrado. Faça login novamente.')
+        return false
+      }
+      
+      try {
+        // Usar id_contratante se disponível, senão id_usuario
+        const idParaVerificar = loggedUser.id_contratante || loggedUser.id
+        console.log('🔍 Verificando perfil antes de criar serviço. ID:', idParaVerificar)
+        console.log('🔍 Usando:', loggedUser.id_contratante ? 'id_contratante' : 'id_usuario')
+        
+        // Se temos id_contratante, usar direto. Senão, usar query param com id_usuario
+        const url = loggedUser.id_contratante 
+          ? `https://servidor-facilita.onrender.com/v1/facilita/contratante/${idParaVerificar}`
+          : `https://servidor-facilita.onrender.com/v1/facilita/contratante?id_usuario=${idParaVerificar}`
+        
+        console.log('🔍 URL verificação perfil:', url)
+        const profileCheck = await fetchWithAuth(url)
+        
+        if (!profileCheck.ok) {
+          // Tentar ler detalhes do erro
+          const errorDetails = await profileCheck.json().catch(() => ({}))
+          console.error('❌ Perfil de contratante incompleto')
+          console.error('Status:', profileCheck.status)
+          console.error('Detalhes:', errorDetails)
+          
+          if (profileCheck.status === 404) {
+            console.log('📋 Perfil não encontrado - mostrando modal para completar cadastro')
+            setShowCompleteProfileModal(true)
+            // Não mostrar alert, apenas abrir o modal
+          } else if (profileCheck.status === 400) {
+            alert(`Erro ao verificar perfil: ${errorDetails.message || 'Dados inválidos'}. Por favor, complete seu perfil novamente.`)
+            setShowCompleteProfileModal(true)
+          } else {
+            alert('Por favor, complete seu perfil antes de criar um serviço.')
+            setShowCompleteProfileModal(true)
+          }
+          
+          return false
+        }
+        
+        // Perfil OK - logar dados para debug
+        const profileData = await profileCheck.json()
+        console.log('✅ Perfil do contratante verificado:', JSON.stringify(profileData, null, 2))
+        
+        // A API pode retornar um array ou um objeto
+        const contratanteData = Array.isArray(profileData) ? profileData[0] : profileData
+        
+        // Quando busca por query param id_usuario, retorna dados do CONTRATANTE
+        // { id: 10, id_usuario: 32, ... }
+        const idContratante = contratanteData?.id
+        
+        console.log('🔍 Extraindo ID antes de criar serviço:')
+        console.log('  - contratanteData.id (id_contratante):', contratanteData?.id)
+        console.log('  - contratanteData.id_usuario:', contratanteData?.id_usuario)
+        console.log('  - ID extraído:', idContratante)
+        
+        // Salvar id_contratante se ainda não temos
+        if (idContratante && !loggedUser.id_contratante) {
+          const updatedUser = {
+            ...loggedUser,
+            id_contratante: idContratante
+          }
+          setLoggedUser(updatedUser)
+          localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
+          console.log('✅ ID do contratante salvo (da verificação antes de criar serviço):', idContratante)
+        }
+        
+      } catch (error) {
+        console.error('❌ Erro ao verificar perfil:', error)
+        alert('Erro ao verificar perfil. Complete seu cadastro antes de continuar.')
+        setShowCompleteProfileModal(true)
+        return false
+      }
+    }
+
     try {
       // Obter IDs necessários
+      console.log('🔍 Obtendo ID do contratante...')
+      console.log('🔍 loggedUser.id (usuario):', loggedUser?.id)
+      console.log('🔍 loggedUser.id_contratante:', loggedUser?.id_contratante)
+      
       const id_contratante = await getContratanteId()
+      console.log('✅ ID do contratante obtido:', id_contratante)
+      
       const id_localizacao = await getCurrentLocationId()
       
       const descricaoServico = serviceDescription || selectedServiceType || 'Serviço de entrega personalizado'
@@ -1292,6 +1728,12 @@ const handleServiceCreate = async () => {
 
       console.log('=== CRIAÇÃO DE SERVIÇO ===')
       console.log('📤 Payload para API:', serviceData)
+      console.log('⚠️ IMPORTANTE: id_contratante deve ser o ID da tabela CONTRATANTE, não da tabela USUARIO')
+      console.log('📊 Comparação:', {
+        id_usuario: loggedUser?.id,
+        id_contratante_enviado: id_contratante,
+        id_contratante_salvo: loggedUser?.id_contratante
+      })
       console.log('🗺 Localizações:', {
         origem: pickupLocation,
         destino: deliveryLocation,
@@ -1311,8 +1753,41 @@ const handleServiceCreate = async () => {
 
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ Serviço criado com sucesso:', data)
-        const serviceId = data.id || data.servico_id || data.service_id || 'unknown'
+        console.log('✅ Serviço criado com sucesso!')
+        console.log('📋 Resposta completa:', JSON.stringify(data, null, 2))
+        
+        // A API retorna: { status_code: 201, message: "...", data: { id: ... } }
+        // Extrair ID do serviço de vários formatos possíveis
+        let serviceId = data.id || 
+                       data.servico_id || 
+                       data.service_id ||
+                       data.data?.id ||  // Dentro de "data"
+                       data.data?.servico_id
+        
+        // Se a resposta for um objeto com propriedade 'servico' ou 'service'
+        if (!serviceId && data.servico) {
+          serviceId = data.servico.id
+        }
+        if (!serviceId && data.service) {
+          serviceId = data.service.id
+        }
+        if (!serviceId && data.data?.servico) {
+          serviceId = data.data.servico.id
+        }
+        
+        console.log('🔍 Tentando extrair ID do serviço:')
+        console.log('  - data.id:', data.id)
+        console.log('  - data.data?.id:', data.data?.id)
+        console.log('  - data.servico?.id:', data.servico?.id)
+        console.log('  - ID extraído:', serviceId)
+        
+        if (!serviceId) {
+          console.error('❌ ID do serviço não encontrado na resposta:', data)
+          alert('Erro: Serviço criado mas ID não foi retornado. Entre em contato com o suporte.')
+          return false
+        }
+        
+        console.log('🆔 ID do serviço criado:', serviceId)
         setCreatedServiceId(serviceId)
         
         // Salvar dados do serviço no localStorage para referência
@@ -1341,33 +1816,59 @@ const handleServiceCreate = async () => {
       }
     } catch (error) {
       console.error('❌ Erro na requisição de criação de serviço:', error)
-      alert('Erro de conexão ao criar serviço.')
+      
+      // Verificar se é erro de perfil incompleto
+      if (error instanceof Error && error.message.includes('ID do contratante não encontrado')) {
+        alert('Complete seu perfil de contratante antes de criar serviços.')
+        setShowCompleteProfileModal(true)
+      } else {
+        alert('Erro de conexão ao criar serviço.')
+      }
       return false
     }
   }
 
-  // Função para confirmar pagamento e criar serviço
+  // Função para confirmar pagamento (serviço já foi criado)
   const handlePaymentConfirmation = async () => {
+    if (!createdServiceId) {
+      alert('Erro: ID do serviço não encontrado. Tente criar o serviço novamente.')
+      return
+    }
+    
     setIsLoading(true)
     
     try {
-      console.log('💳 Iniciando processo de pagamento e criação de serviço...')
+      console.log('💳 Iniciando processo de confirmação de pagamento...')
       
-      // Simular processamento do pagamento (em produção, aqui seria a validação do PIX)
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Converter preço de reais para centavos
+      const valorEmCentavos = Math.round((servicePrice > 0 ? servicePrice : 119.99) * 100)
       
-      // Criar o serviço via API
-      const serviceCreated = await createService()
+      const paymentData = {
+        id_servico: createdServiceId,
+        valor: valorEmCentavos,
+        metodo: 'PIX'
+      }
       
-      if (serviceCreated) {
-        console.log('✅ Pagamento confirmado e serviço criado!')
-        // Se o serviço foi criado com sucesso, ir para tela de confirmação
+      console.log('📤 Enviando confirmação de pagamento:', paymentData)
+      
+      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/pagamento', {
+        method: 'POST',
+        body: JSON.stringify(paymentData)
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Pagamento confirmado:', data)
+        
+        // Ir para tela de confirmação
         handleScreenTransition('service-confirmed')
       } else {
-        console.error('❌ Falha na criação do serviço')
+        const errorData = await response.json().catch(() => ({}))
+        console.error('❌ Erro ao confirmar pagamento:', errorData)
+        alert(`Erro ao confirmar pagamento: ${errorData.message || 'Erro desconhecido'}`)
       }
     } catch (error) {
-      console.error('Erro no processo de confirmação:', error)
+      console.error('❌ Erro no processo de confirmação:', error)
       alert('Erro no processo de pagamento. Tente novamente.')
     } finally {
       setIsLoading(false)
@@ -1687,25 +2188,13 @@ const handleServiceCreate = async () => {
             <Search className="w-10 h-10 text-white" />
           </div>
           
-          {!driverFound ? (
-            <>
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Procurando motorista...</h2>
-              <p className="text-gray-600 mb-6">Aguarde enquanto encontramos o melhor prestador para você</p>
-              <div className="flex justify-center space-x-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce"></div>
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <div className="w-8 h-8 border-2 border-white border-l-0 border-t-0 transform rotate-45"></div>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Motorista encontrado!</h2>
-              <p className="text-gray-600">Redirecionando para o pagamento...</p>
-            </>
-          )}
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Procurando motorista...</h2>
+          <p className="text-gray-600 mb-6">Aguarde enquanto encontramos o melhor prestador para você</p>
+          <div className="flex justify-center space-x-2">
+            <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce"></div>
+            <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+            <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          </div>
         </div>
       </div>
     )
@@ -2371,10 +2860,10 @@ const handleServiceCreate = async () => {
                 >
                   <option value="">Selecione sua necessidade</option>
                   <option value="IDOSO">Idoso</option>
-                  <option value="MOBILIDADE">Problemas de mobilidade</option>
-                  <option value="VISUAL">Deficiência visual</option>
-                  <option value="AUDITIVA">Deficiência auditiva</option>
-                  <option value="NENHUMA">Nenhuma necessidade especial</option>
+                  <option value="DEF_MOTORA">Deficiência motora</option>
+                  <option value="DEF_VISUAL">Deficiência visual</option>
+                  <option value="DEF_AUDITIVA">Deficiência auditiva</option>
+                  <option value="DEF_INTELECTUAL">Deficiência intelectual</option>
                 </select>
               </div>
 
@@ -2532,24 +3021,24 @@ const handleServiceCreate = async () => {
       <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
+        <div className="w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
           <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
-          <div className=" flex-1 flex items-center justify-center p-8">
+          <div className="flex-1 flex items-center justify-center p-4 md:p-8">
             <img 
               src="/undraw_order-delivered_puaw 3.png" 
               alt="Ilustração de entrega" 
-              className="w-[700px] h-auto"
+              className="w-full max-w-md h-auto object-contain"
             />
           </div>
         </div>
         
-        <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col order-1 md:order-2">
+        <div className="w-full md:w-1/2 bg-gray-700 min-h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
           <img
             src="./Vector copy.png"
             alt="Decoração da tela de verificação de código"
-            className="absolute top-0 left-0 w-32 h-24 md:w-40 md:h-32 transform -scale-x-100 z-10"
+            className="absolute top-0 right-0 transform -scale-x-100 opacity-20 w-64 h-auto pointer-events-none"
           />
           
           <div className="relative z-10 text-center">
@@ -2609,26 +3098,24 @@ const handleServiceCreate = async () => {
       <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
+        <div className="w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
           <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
-          <div className=" flex-1 flex items-center justify-center p-8 
-">
+          <div className="flex-1 flex items-center justify-center p-4 md:p-8">
             <img 
               src="/undraw_order-delivered_puaw 3.png" 
               alt="Ilustração de entrega" 
-              className="w-[700px] h-auto
-"
+              className="w-full max-w-md h-auto object-contain"
             />
           </div>
         </div>
         
-        <div className="w-1/2 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2">
+        <div className="w-full md:w-1/2 bg-gray-700 min-h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
           <img
             src="./Vector copy.png"
             alt="Decoração da tela de recuperação de senha"
-            className="absolute top-0 left-0 w-32 h-24 md:w-40 md:h-32 object-cover transform -scale-x-100 z-10"
+            className="absolute top-0 right-0 transform -scale-x-100 opacity-20 w-64 h-auto pointer-events-none"
           />
           
           <div className="relative z-10">
@@ -2706,7 +3193,7 @@ const handleServiceCreate = async () => {
         <div className="flex-1 p-4 md:p-8 w-full xl:max-w-lg xl:ml-[15%] xl:mt-[10%]  order-2 xl:order-1">
           <h2 className="text-xl md:text-2xl text-white font-bold mb-6 md:mb-8">Cadastro</h2>
           
-          <div className="cadastro-form space-y-4 md:space-y-6 mt-100">
+          <div className="space-y-4 md:space-y-6">
             <div>
               <label className="block text-gray-400 text-sm mb-2">Nome</label>
               <div className="relative">
@@ -2860,19 +3347,17 @@ const handleServiceCreate = async () => {
           <img
             src="./Vector copy.png"
             alt="Decoração da tela de cadastro de usuário"
-            className="translate-x-[-1350px] translate-y-[-30px]"
+            className="absolute top-0 right-0 transform -scale-x-100 opacity-20 w-64 h-auto pointer-events-none"
           />
           <div className="absolute top-4 right-4 md:top-8 md:right-8 z-30">
             <FacilitaLogo />
           </div>
-          <div className=" flex-1 flex items-center justify-center p-8 transform translate-x-[-200px] translate-y-[20px] cadastro-image">
-            <div className="relative max-w-xs md:max-w-sm">
-              <img 
-                src="/undraw_order-delivered_puaw 3.png" 
-                alt="Ilustração de entrega" 
-                className="w-[1000px] h-auto"
-              />
-            </div>
+          <div className="flex-1 flex items-center justify-center p-4 md:p-8">
+            <img 
+              src="/undraw_order-delivered_puaw 3.png" 
+              alt="Ilustração de entrega" 
+              className="w-full max-w-md h-auto object-contain"
+            />
           </div>
         </div>
       </div>
@@ -2883,29 +3368,29 @@ const handleServiceCreate = async () => {
     <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
       isTransitioning ? 'opacity-0 -translate-x-full' : 'opacity-100 translate-x-0'
     }`}>
-      <div className="w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1 ">
+      <div className="w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
         <div className="absolute top-4 left-4 md:top-8 md:left-8">
           <FacilitaLogo />
         </div>
-        <div className=" flex-1 flex items-center justify-center p-8">
+        <div className="flex-1 flex items-center justify-center p-4 md:p-8">
           <img 
             src="/undraw_order-delivered_puaw 3.png" 
             alt="Ilustração de entrega" 
-            className="w-[700px] h-auto move-down"
+            className="w-full max-w-md h-auto object-contain"
           />
         </div>
       </div>
       
-      <div className="flex-1 bg-gray-700 h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 move-right">
+      <div className="w-full md:w-1/2 bg-gray-700 min-h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
         <img
           src="./Vector copy.png"
           alt="Decoração da tela de login do usuário"
-          className=" transform -scale-x-100 z-1 move-right translate-x-[28px] translate-y-[-179px]"
+          className="absolute top-0 right-0 transform -scale-x-100 opacity-20 w-64 h-auto pointer-events-none"
         />
         
-        <div className="relative z-10 transform translate-y-[-120px] ">
-          <h2 className="text-2xl md:text-3xl text-white font-bold mb-2 transform translate-y-[-85px] trasform translate-x-[270px]">Entrar no Facilita</h2>
-          <p className="text-sm md:text-base text-gray-400 mb-6 md:mb-8 transform translate-y-[-20px] trasform translate-x-[270px]">
+        <div className="relative z-10 w-full max-w-md mx-auto">
+          <h2 className="text-2xl md:text-3xl text-white font-bold mb-4 text-center">Entrar no Facilita</h2>
+          <p className="text-sm md:text-base text-gray-400 mb-6 text-center">
             Não possui uma conta?{' '}
             <button
               onClick={() => handleScreenTransition('cadastro')}
@@ -2915,7 +3400,7 @@ const handleServiceCreate = async () => {
             </button>
           </p>
 
-          <div className="login-form max-w-md mx-auto space-y-4 md:space-y-6 transform translate-y-[85px]">
+          <div className="space-y-4 md:space-y-6">
             <div>
               <label className="block text-gray-400 text-sm mb-2">E-mail ou Telefone</label>
               <div className="relative">
@@ -2962,7 +3447,7 @@ const handleServiceCreate = async () => {
               </button>
             </div>
 
-            <div className="flex items-center max-w-md mx-auto">
+            <div className="flex items-center">
               <input
                 type="checkbox"
                 checked={termsAccepted}
@@ -2990,7 +3475,7 @@ const handleServiceCreate = async () => {
             <button
               onClick={handleLogin}
               disabled={isLoginLoading}
-              className={`max-w-md mx-auto w-full py-3 rounded-lg text-sm md:text-base font-semibold transition-colors flex items-center justify-center ${
+              className={`w-full py-3 rounded-lg text-sm md:text-base font-semibold transition-colors flex items-center justify-center ${
                 isLoginLoading 
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-green-500 hover:bg-green-600'
@@ -3098,8 +3583,12 @@ const handleServiceCreate = async () => {
           handleScreenTransition('profile-setup')
         }}
         onSkip={() => {
-          console.log('⏭️ Usuário escolheu pular perfil')
+          console.log('⏭️ Usuário escolheu pular perfil - voltando para home')
           setShowCompleteProfileModal(false)
+          // Voltar para home se o usuário pular
+          if (currentScreen === 'service-create') {
+            handleScreenTransition('home')
+          }
         }}
         userName={loggedUser?.nome || 'Usuário'}
       />
