@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import { MapPin, Navigation, FileText, ArrowLeft } from 'lucide-react'
 
 // Fix para ícones do Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -409,6 +409,19 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Header com botão voltar */}
+      <div className="bg-green-500 text-white p-4 relative">
+        <button
+          onClick={() => onScreenChange('home')}
+          className="absolute left-4 top-4 text-white hover:text-gray-200 transition-colors"
+        >
+          <ArrowLeft className="w-6 h-6" />
+        </button>
+        <div className="text-center">
+          <h1 className="text-lg font-bold">Selecionar Localização</h1>
+        </div>
+      </div>
+      
       {/* Map area */}
       <div className="h-96 relative">
         <MapContainer 
@@ -631,7 +644,6 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
           )}
         </div>
       </div>
-
       {/* Bottom navigation */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4">
         <div className="flex justify-center space-x-8">
@@ -648,13 +660,7 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
             <div className="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center mb-1">
               <FileText />
             </div>
-            <span className="text-xs">Serviço</span>
-          </button>
-          <button className="flex flex-col items-center text-gray-400">
-            <div className="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center mb-1">
-              <span className="text-gray-600 font-bold">$</span>
-            </div>
-            <span className="text-xs">Pagamento</span>
+            <span className="text-xs font-medium">Pedidos</span>
           </button>
         </div>
       </div>

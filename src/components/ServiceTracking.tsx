@@ -225,7 +225,9 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
         
         // Se chegou ao último ponto, definir progresso como 100%
         if (nextIndex === routeCoordinates.length - 1) {
-          setTimeout(() => setProgress(100), 100);
+          setTimeout(() => {
+            setProgress(100);
+          }, 100);
         }
         
         return nextIndex;
@@ -440,17 +442,28 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
                 <MessageSquare className="w-4 h-4" />
                 <span>Conversar</span>
               </button>
+              
               {progress < 100 && (
-                <button 
-                  onClick={toggleTracking}
-                  className={`px-4 py-2 rounded-full font-semibold hover:bg-opacity-90 transition-all text-sm ${
-                    isPaused 
-                      ? 'bg-yellow-500 text-white' 
-                      : 'bg-white bg-opacity-20 text-white'
-                  }`}
-                >
-                  {isPaused ? '▶️ Retomar' : '⏸️ Pausar'}
-                </button>
+                <>
+                  <button
+                    onClick={toggleTracking}
+                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                  >
+                    {isPaused ? 'Retomar' : 'Pausar'}
+                  </button>
+                  
+                  <button 
+                    onClick={() => {
+                      setProgress(100);
+                      setTimeout(() => {
+                        onServiceCompleted();
+                      }, 500);
+                    }}
+                    className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+                  >
+                    Encerrar
+                  </button>
+                </>
               )}
             </div>
           </div>

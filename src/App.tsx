@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, UserIcon as UserIconLucide, ShoppingCart, Truck, Package, Users, Sun, Moon } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, User as UserIconLucide, ShoppingCart, Truck, Package, Users, Sun, Moon } from 'lucide-react'
 import QRCode from 'qrcode'
 import LocationMap from './LocationMap'
 import ServiceTracking from './components/ServiceTracking'
@@ -7,8 +7,8 @@ import ServiceRating from './components/ServiceRating'
 import CompleteProfileModal from './components/CompleteProfileModal'
 import LoadingSpinner from './components/LoadingSpinner'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
-
-type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders"
+//TELAS PARA TESTES E PARA MOVER
+type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password"
 
 // Adicione esta interface antes da função App
 interface ServiceTrackingProps {
@@ -72,14 +72,9 @@ interface LoggedUser {
 }
 
 function App() {
-  // 'waiting-driver', 'payment', 'service-tracking', 'service-confirmed', etc.
-  const [currentScreen, setCurrentScreen] = useState<
-  'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 
-  'account-type' | 'service-provider' | 'profile-setup' | 'home' | 
-  'location-select' | 'service-create' | 'waiting-driver' | 
-  'payment' | 'service-tracking' | 'service-confirmed' | 'service-rating' | 'orders' | 'profile' | 'supermarket-list' | 'establishments-list'
-  >('home')
-  
+//PARA MUDAR A TELA PARA TESTES
+  const [currentScreen, setCurrentScreen] = useState<Screen>('home')
+
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
@@ -117,7 +112,6 @@ function App() {
   const [createdServiceId, setCreatedServiceId] = useState<string | null>(null)
   const [userOrders, setUserOrders] = useState<any[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
-  const [orderFilter, setOrderFilter] = useState<'TODOS' | 'EM_ANDAMENTO' | 'ENTREGUE' | 'CANCELADO'>('TODOS')
   const [ordersInitialized, setOrdersInitialized] = useState(false)
   const [serviceRating, setServiceRating] = useState<number>(0)
   const [serviceComment, setServiceComment] = useState<string>('')
@@ -127,8 +121,21 @@ function App() {
     const saved = localStorage.getItem('darkMode')
     return saved ? JSON.parse(saved) : false
   })
+  
+  // Estados para alteração de senha
+  const [changePasswordData, setChangePasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  })
+  const [changePasswordError, setChangePasswordError] = useState('')
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState('')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null)
   const [serviceStartTime, setServiceStartTime] = useState<Date | null>(null)
+  const [orderFilter, setOrderFilter] = useState<'TODOS' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO'>('TODOS')
 
   // Função para buscar estabelecimentos por tipo com integração OpenStreetMap
   const getEstablishmentsByType = (type: string) => {
@@ -379,13 +386,13 @@ function App() {
 
   // Classes de tema
   const themeClasses = {
-    bg: isDarkMode ? 'bg-gray-900' : 'bg-gray-100',
+    bg: isDarkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100',
     bgCard: isDarkMode ? 'bg-gray-800' : 'bg-white',
     bgPrimary: isDarkMode ? 'bg-gray-800' : 'bg-green-500',
     text: isDarkMode ? 'text-white' : 'text-gray-800',
     textSecondary: isDarkMode ? 'text-gray-300' : 'text-gray-600',
     border: isDarkMode ? 'border-gray-700' : 'border-gray-200',
-    input: isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-800'
+    input: isDarkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-white border-gray-300 text-gray-800 placeholder-gray-500'
   }
   
   const handleAddressSelection = (address: any) => {
@@ -988,6 +995,87 @@ function App() {
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     return emailRegex.test(email)
+  }
+
+  // Função para alterar senha
+  const handleChangePassword = async () => {
+    setChangePasswordError('')
+    setChangePasswordSuccess('')
+
+    // Validações
+    if (!changePasswordData.currentPassword) {
+      setChangePasswordError('Digite sua senha atual')
+      return
+    }
+
+    if (!changePasswordData.newPassword) {
+      setChangePasswordError('Digite a nova senha')
+      return
+    }
+
+    if (!changePasswordData.confirmPassword) {
+      setChangePasswordError('Confirme a nova senha')
+      return
+    }
+
+    if (changePasswordData.newPassword !== changePasswordData.confirmPassword) {
+      setChangePasswordError('As senhas não coincidem')
+      return
+    }
+
+    // Validar senha forte
+    const passwordValidation = validatePassword(changePasswordData.newPassword)
+    if (!passwordValidation.isValid) {
+      const errorMessages = Object.values(passwordValidation.errors).filter(msg => msg !== '')
+      setChangePasswordError(errorMessages.join(', '))
+      return
+    }
+
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        setChangePasswordError('Sessão expirada. Faça login novamente.')
+        return
+      }
+
+      const response = await fetch('http://localhost:8080/v1/facilita/usuario/alterar-senha', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          senha_atual: changePasswordData.currentPassword,
+          nova_senha: changePasswordData.newPassword
+        })
+      })
+
+      if (response.ok) {
+        setChangePasswordSuccess('Senha alterada com sucesso!')
+        setChangePasswordData({
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: ''
+        })
+        
+        // Voltar para o perfil após 2 segundos
+        setTimeout(() => {
+          handleScreenTransition('profile')
+        }, 2000)
+      } else {
+        const errorData = await response.json()
+        if (response.status === 400) {
+          setChangePasswordError('Senha atual incorreta')
+        } else if (response.status === 401) {
+          setChangePasswordError('Sessão expirada. Faça login novamente.')
+        } else {
+          setChangePasswordError(errorData.message || 'Erro ao alterar senha')
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao alterar senha:', error)
+      setChangePasswordError('Erro de conexão. Tente novamente.')
+    }
   }
 
   // Função para validar senha forte
@@ -3174,9 +3262,9 @@ const handleServiceCreate = async () => {
             <button
               onClick={handlePaymentConfirmation}
               disabled={isLoading}
-              className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+              className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl ${
                 isLoading 
-                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
+                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed transform-none' 
                   : 'bg-green-500 text-white hover:bg-green-600'
               }`}
             >
@@ -3753,6 +3841,171 @@ const handleServiceCreate = async () => {
     )
   }
 
+  // Change Password Screen
+  if (currentScreen === 'change-password') {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <button
+              onClick={() => handleScreenTransition('profile')}
+              className="absolute top-4 left-4 text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">Perfil</h1>
+          </div>
+
+          {/* Profile Photo */}
+          <div className="flex justify-center mb-8">
+            <div className="relative">
+              <div className="w-24 h-24 bg-gray-300 rounded-full flex items-center justify-center overflow-hidden">
+                {loggedUser?.foto ? (
+                  <img 
+                    src={loggedUser.foto} 
+                    alt="Perfil" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+                    <span className="text-white text-2xl font-bold">
+                      {loggedUser?.nome?.charAt(0)?.toUpperCase() || 'U'}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <button className="absolute bottom-0 right-0 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white hover:bg-green-600 transition-colors">
+                <span className="text-lg">+</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Form */}
+          <div className="bg-white rounded-xl shadow-lg p-6 space-y-6">
+            <h2 className="text-lg font-semibold text-gray-800 text-center mb-6">Alterar senha</h2>
+            
+            {/* Current Password */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Digite a senha atual
+              </label>
+              <div className="relative">
+                <input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={changePasswordData.currentPassword}
+                  onChange={(e) => setChangePasswordData(prev => ({
+                    ...prev,
+                    currentPassword: e.target.value
+                  }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Digite a senha atual"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                >
+                  {showCurrentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* New Password */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nova Senha
+              </label>
+              <div className="relative">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={changePasswordData.newPassword}
+                  onChange={(e) => setChangePasswordData(prev => ({
+                    ...prev,
+                    newPassword: e.target.value
+                  }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Nova Senha"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                >
+                  {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm New Password */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Confirmar nova senha
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmNewPassword ? 'text' : 'password'}
+                  value={changePasswordData.confirmPassword}
+                  onChange={(e) => setChangePasswordData(prev => ({
+                    ...prev,
+                    confirmPassword: e.target.value
+                  }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Confirmar nova senha"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                >
+                  {showConfirmNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {changePasswordError && (
+              <div className="text-center text-red-600 text-sm">
+                {changePasswordError}
+              </div>
+            )}
+
+            {/* Success Message */}
+            {changePasswordSuccess && (
+              <div className="text-center text-green-600 text-sm">
+                {changePasswordSuccess}
+              </div>
+            )}
+
+            {/* Password Requirements */}
+            <div className="text-xs text-gray-500 space-y-1">
+              <p>A senha deve conter:</p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>Mínimo de 6 caracteres</li>
+                <li>Pelo menos 1 letra maiúscula</li>
+                <li>Pelo menos 1 número</li>
+                <li>Pelo menos 1 símbolo (!@#$%^&*)</li>
+              </ul>
+            </div>
+
+            {/* Save Button */}
+            <button
+              onClick={handleChangePassword}
+              disabled={!changePasswordData.currentPassword || !changePasswordData.newPassword || !changePasswordData.confirmPassword}
+              className="w-full bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
+            >
+              Salvar
+            </button>
+          </div>
+
+          {/* Footer vazio */}
+          <div className="mt-12 mb-8">
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Profile Screen
   if (currentScreen === 'profile') {
     return (
@@ -3773,9 +4026,9 @@ const handleServiceCreate = async () => {
         </div>
 
         {/* Content */}
-        <div className="max-w-2xl mx-auto p-6">
+        <div className="max-w-2xl mx-auto p-6 space-y-6">
           {/* Profile Header */}
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="bg-white rounded-xl shadow-lg p-8 backdrop-blur-sm border border-gray-100">
             <div className="flex flex-col items-center text-center">
               {/* Profile Photo */}
               <div className="relative mb-4">
@@ -3880,11 +4133,14 @@ const handleServiceCreate = async () => {
           </div>
 
           {/* Other Configurations */}
-          <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+          <div className="bg-white rounded-xl shadow-lg p-6 backdrop-blur-sm border border-gray-100">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Outras Configurações</h3>
             
             <div className="space-y-4">
-              <button className="w-full flex items-center justify-between py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+              <button 
+                onClick={() => handleScreenTransition('change-password')}
+                className="w-full flex items-center justify-between py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+              >
                 <div className="flex items-center">
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
                     <Lock className="w-4 h-4 text-blue-600" />
@@ -3899,7 +4155,7 @@ const handleServiceCreate = async () => {
               {/* Botão Sair */}
               <button 
                 onClick={handleLogout}
-                className="w-full flex items-center justify-between py-3 px-4 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                className="w-full flex items-center justify-between py-3 px-4 bg-red-50 hover:bg-red-100 rounded-lg transition-all duration-200 transform hover:scale-[1.01] hover:shadow-md"
               >
                 <div className="flex items-center">
                   <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mr-3">
@@ -3925,7 +4181,7 @@ const handleServiceCreate = async () => {
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
         {/* Sidebar */}
-        <div className="w-64 bg-gradient-to-b from-green-500 to-green-600 text-white p-4 animate-slideInLeft shadow-xl">
+        <div className="w-64 bg-gradient-to-b from-green-500 via-green-600 to-green-700 text-white p-4 animate-slideInLeft shadow-2xl backdrop-blur-sm">
           <div className="flex items-center mb-8">
             <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
               {profilePhoto ? (
@@ -3970,15 +4226,15 @@ const handleServiceCreate = async () => {
         </div>
 
         {/* Main content */}
-        <div className="flex-1 p-6 animate-slideInRight">
-          <div className="flex justify-between items-center mb-6">
+        <div className="flex-1 p-6 animate-slideInRight backdrop-blur-sm">
+          <div className="flex justify-between items-center mb-8">
             <div></div>
             <div className="flex items-center space-x-4">
               {/* Toggle de tema */}
               <button
                 onClick={toggleTheme}
-                className={`p-2 rounded-full transition-all duration-300 hover:scale-110 ${
-                  isDarkMode ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-600'
+                className={`p-3 rounded-full transition-all duration-300 hover:scale-110 shadow-lg hover:shadow-xl ${
+                  isDarkMode ? 'bg-yellow-500 text-white hover:bg-yellow-400' : 'bg-white text-gray-600 hover:bg-gray-50'
                 }`}
                 title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
               >
@@ -4105,18 +4361,18 @@ const handleServiceCreate = async () => {
           </div>
 
           {/* Search bar */}
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+          <div className="relative mb-8">
+            <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400 transition-colors duration-200" />
             <input
               type="text"
               placeholder="Solicite seu serviço"
               onClick={handleServiceRequest}
-              className="w-full pl-10 pr-4 py-3 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              className="w-full pl-10 pr-4 py-4 border border-blue-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer transition-all duration-200 hover:border-blue-400 hover:shadow-lg shadow-sm bg-white/80 backdrop-blur-sm"
             />
           </div>
 
           {/* Service cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {serviceCards.map((service) => (
               <button
                 key={service.id}
@@ -4124,9 +4380,9 @@ const handleServiceCreate = async () => {
                   setSelectedEstablishmentType(service.id)
                   handleScreenTransition('establishments-list')
                 }}
-                className={`${themeClasses.bgCard} p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105 hover:rotate-1 text-center group ${themeClasses.border} border`}
+                className={`${themeClasses.bgCard} p-6 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 text-center group ${themeClasses.border} border backdrop-blur-sm`}
               >
-                <div className="group-hover:animate-bounce">
+                <div className="group-hover:animate-pulse transition-all duration-300">
                   {service.image}
                 </div>
                 <p className={`font-semibold group-hover:text-green-500 transition-colors duration-300 ${themeClasses.text}`}>{service.name}</p>
@@ -4297,7 +4553,7 @@ const handleServiceCreate = async () => {
           <button
             onClick={handleServiceProviderSubmit}
             disabled={isLoading}
-            className="bg-green-500 text-white px-8 md:px-12 py-3 rounded-full font-semibold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-green-500 text-white px-8 md:px-12 py-3 rounded-full font-semibold hover:bg-green-600 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
           >
             {isLoading ? 'Cadastrando...' : 'Voltar'}
           </button>
@@ -4394,7 +4650,7 @@ const handleServiceCreate = async () => {
           <button
             onClick={handleAccountTypeSubmit}
             disabled={!selectedAccountType || isLoading}
-            className="w-full bg-green-500 text-white py-3 md:py-4 rounded-full text-base md:text-lg font-semibold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-green-500 text-white py-3 md:py-4 rounded-full text-base md:text-lg font-semibold hover:bg-green-600 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
           >
             {isLoading ? 'Processando...' : 'Entrar'}
           </button>
