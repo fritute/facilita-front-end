@@ -13,15 +13,15 @@ type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" 
 // Adicione esta interface antes da função App
 interface ServiceTrackingProps {
   onBack: () => void
-  entregador: Entregador
+  entregador: EntregadorData
   destination: {
-    address: string
     lat: number
     lng: number
   }
 }
 
-interface Entregador {
+interface EntregadorData {
+  id?: number
   nome: string
   telefone: string
   veiculo: string
@@ -72,16 +72,14 @@ interface LoggedUser {
 }
 
 function App() {
-  // 🔧 MODO DESENVOLVEDOR: Mude aqui para testar diferentes telas
   // 'waiting-driver', 'payment', 'service-tracking', 'service-confirmed', etc.
   const [currentScreen, setCurrentScreen] = useState<
   'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 
   'account-type' | 'service-provider' | 'profile-setup' | 'home' | 
   'location-select' | 'service-create' | 'waiting-driver' | 
-  'tracking' | 'service-confirmed' | 'payment' | 'service-tracking' | 'profile' | 'orders' | 'service-rating' | 'supermarket-list' | 'establishments-list'
-  >('login')  
+  'payment' | 'service-tracking' | 'service-confirmed' | 'service-rating' | 'orders' | 'profile' | 'supermarket-list' | 'establishments-list'
+  >('home')
   
-
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
@@ -123,7 +121,7 @@ function App() {
   const [ordersInitialized, setOrdersInitialized] = useState(false)
   const [serviceRating, setServiceRating] = useState<number>(0)
   const [serviceComment, setServiceComment] = useState<string>('')
-  const [serviceCompletionTime, setServiceCompletionTime] = useState<Date | null>(null)
+  const [serviceCompletionTime, setServiceCompletionTime] = useState<Date | null>(new Date())
   const [selectedEstablishmentType, setSelectedEstablishmentType] = useState<string>('')
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('darkMode')
@@ -132,7 +130,7 @@ function App() {
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null)
   const [serviceStartTime, setServiceStartTime] = useState<Date | null>(null)
 
-  // Função para buscar estabelecimentos por tipo usando Google Places API
+  // Função para buscar estabelecimentos por tipo com integração OpenStreetMap
   const getEstablishmentsByType = (type: string) => {
     const establishments = {
       'farmacia': [
@@ -193,44 +191,178 @@ function App() {
           isOpen: true
         }
       ],
-      'transporte': [
+      'restaurante': [
         {
           id: 1,
-          name: 'Uber',
-          address: 'Serviço de transporte por aplicativo',
+          name: 'McDonald\'s',
+          address: 'Av. Paulista, 1000 - São Paulo - SP',
           rating: 4.2,
-          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-uber-photo',
-          distance: 'Disponível',
-          isOpen: true
-        },
-        {
-          id: 2,
-          name: '99',
-          address: 'Serviço de transporte por aplicativo',
-          rating: 4.1,
-          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-99-photo',
-          distance: 'Disponível',
-          isOpen: true
-        }
-      ],
-      'servicos': [
-        {
-          id: 1,
-          name: 'Salão Bella Vista',
-          address: 'Rua das Flores, 123 - São Paulo - SP',
-          rating: 4.8,
-          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-salao-photo',
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-mcdonalds-photo',
           distance: '0.4 km',
           isOpen: true
         },
         {
           id: 2,
-          name: 'Oficina do João',
-          address: 'Av. Industrial, 456 - São Paulo - SP',
-          rating: 4.5,
-          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-oficina-photo',
-          distance: '1.0 km',
+          name: 'Outback Steakhouse',
+          address: 'Shopping Eldorado - São Paulo - SP',
+          rating: 4.6,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-outback-photo',
+          distance: '0.7 km',
           isOpen: true
+        },
+        {
+          id: 3,
+          name: 'Famiglia Mancini',
+          address: 'Rua Avanhandava, 81 - São Paulo - SP',
+          rating: 4.8,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-mancini-photo',
+          distance: '1.1 km',
+          isOpen: true
+        }
+      ],
+      'posto': [
+        {
+          id: 1,
+          name: 'Posto Shell',
+          address: 'Av. Faria Lima, 2000 - São Paulo - SP',
+          rating: 4.3,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-shell-photo',
+          distance: '0.6 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Posto Ipiranga',
+          address: 'Rua Augusta, 500 - São Paulo - SP',
+          rating: 4.1,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-ipiranga-photo',
+          distance: '0.9 km',
+          isOpen: true
+        },
+        {
+          id: 3,
+          name: 'Posto BR',
+          address: 'Av. Rebouças, 1500 - São Paulo - SP',
+          rating: 4.0,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-br-photo',
+          distance: '1.3 km',
+          isOpen: true
+        }
+      ],
+      'banco': [
+        {
+          id: 1,
+          name: 'Banco do Brasil',
+          address: 'Av. Paulista, 800 - São Paulo - SP',
+          rating: 3.8,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-bb-photo',
+          distance: '0.3 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Itaú Unibanco',
+          address: 'Rua Augusta, 300 - São Paulo - SP',
+          rating: 4.0,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-itau-photo',
+          distance: '0.5 km',
+          isOpen: true
+        },
+        {
+          id: 3,
+          name: 'Santander',
+          address: 'Av. Faria Lima, 1000 - São Paulo - SP',
+          rating: 3.9,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-santander-photo',
+          distance: '0.8 km',
+          isOpen: false
+        }
+      ],
+      'hospital': [
+        {
+          id: 1,
+          name: 'Hospital das Clínicas',
+          address: 'Av. Dr. Enéas de Carvalho Aguiar, 255 - São Paulo - SP',
+          rating: 4.2,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-hc-photo',
+          distance: '2.1 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Hospital Sírio-Libanês',
+          address: 'Rua Dona Adma Jafet, 91 - São Paulo - SP',
+          rating: 4.7,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-sirio-photo',
+          distance: '1.8 km',
+          isOpen: true
+        },
+        {
+          id: 3,
+          name: 'Hospital Albert Einstein',
+          address: 'Av. Albert Einstein, 627 - São Paulo - SP',
+          rating: 4.8,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-einstein-photo',
+          distance: '3.2 km',
+          isOpen: true
+        }
+      ],
+      'shopping': [
+        {
+          id: 1,
+          name: 'Shopping Eldorado',
+          address: 'Av. Rebouças, 3970 - São Paulo - SP',
+          rating: 4.4,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-eldorado-photo',
+          distance: '1.5 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Shopping Iguatemi',
+          address: 'Av. Brigadeiro Faria Lima, 2232 - São Paulo - SP',
+          rating: 4.6,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-iguatemi-photo',
+          distance: '2.0 km',
+          isOpen: true
+        },
+        {
+          id: 3,
+          name: 'Shopping Center Norte',
+          address: 'Travessa Casalbuono, 120 - São Paulo - SP',
+          rating: 4.3,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-centernorte-photo',
+          distance: '4.2 km',
+          isOpen: true
+        }
+      ],
+      'correios': [
+        {
+          id: 1,
+          name: 'Correios - Agência Central',
+          address: 'Praça do Correio, 1 - São Paulo - SP',
+          rating: 3.5,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-correios-photo',
+          distance: '0.8 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Correios - Paulista',
+          address: 'Av. Paulista, 1500 - São Paulo - SP',
+          rating: 3.7,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-correios2-photo',
+          distance: '0.4 km',
+          isOpen: true
+        },
+        {
+          id: 3,
+          name: 'Correios - Vila Madalena',
+          address: 'Rua Harmonia, 200 - São Paulo - SP',
+          rating: 3.6,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-correios3-photo',
+          distance: '2.3 km',
+          isOpen: false
         }
       ]
     }
@@ -263,14 +395,12 @@ function App() {
   const [selectedDestination, setSelectedDestination] = useState<{address: string, lat: number, lng: number} | null>(null)
 
   const handleStartTracking = (destination: {address: string, lat: number, lng: number}) => {
-    console.log('🚀 Iniciando novo tracking para:', destination.address)
-    
     setSelectedDestination(destination)
     
-    // Define origem do prestador se não existir (usa origem selecionada como fallback)
+    // Define origem do prestador próxima para teste rápido
     const originPosition = driverOrigin || 
       (pickupLocation ? { lat: pickupLocation.lat, lng: pickupLocation.lng } : 
-       { lat: -23.5324859, lng: -46.7916801 }) // Fallback Carapicuíba/SP
+       { lat: -23.5505, lng: -46.6333 }) // Centro de São Paulo para teste rápido
     
     if (!driverOrigin) {
       setDriverOrigin(originPosition)
@@ -292,7 +422,6 @@ function App() {
       originalOrigin: originPosition // Salvar origem original para referência
     }
     
-    console.log('💾 Salvando novo serviço:', serviceId)
     ServiceTrackingManager.saveActiveService(serviceState)
     setActiveServiceId(serviceId)
     setServiceStartTime(new Date())
@@ -302,7 +431,6 @@ function App() {
 
   // Função chamada quando o serviço é concluído automaticamente
   const handleServiceCompleted = () => {
-    console.log('🎉 Serviço concluído! Redirecionando para avaliação...')
     setServiceCompletionTime(new Date())
     
     // Finalizar serviço ativo no gerenciador
@@ -315,7 +443,7 @@ function App() {
     // Redirecionar para avaliação
     setTimeout(() => {
       handleScreenTransition('service-rating')
-    }, 1000)
+    }, 500)
   }
 
   // Função para limpar serviços antigos na inicialização
@@ -324,7 +452,6 @@ function App() {
     if (activeService) {
       // Se o serviço está marcado como concluído, limpar
       if (activeService.isServiceCompleted) {
-        console.log('🧹 Limpando serviço concluído...')
         ServiceTrackingManager.clearActiveService()
       }
     }
@@ -332,11 +459,12 @@ function App() {
 
   
   const [entregadorData, setEntregadorData] = useState({
-    nome: 'João Silva',
-    telefone: '(11) 99999-9999',
-    veiculo: 'Honda CG 160',
+    id: 2, // ID do prestador
+    nome: 'José Silva',
+    telefone: '(11) 98704-6715',
+    veiculo: 'Moto Honda CG 160',
     placa: 'ABC1D23',
-    rating: 4.8,
+    rating: 4.9,
     tempoEstimado: '15',
     distancia: '2.5 km'
   })
@@ -363,7 +491,146 @@ function App() {
     'Rua Paraná, cohab 1, Carapicuíba'
   ]
 
-  // Service cards with images
+  // Estado para localização do usuário
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number, address: string} | null>(null)
+  const [nearbyPlaces, setNearbyPlaces] = useState<any[]>([])
+  const [loadingPlaces, setLoadingPlaces] = useState(false)
+
+  // Função para buscar CEP usando ViaCEP
+  const fetchAddressFromCEP = async (cep: string) => {
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const data = await response.json()
+      
+      if (!data.erro) {
+        return {
+          address: `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}`,
+          city: data.localidade,
+          state: data.uf,
+          neighborhood: data.bairro
+        }
+      }
+      return null
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error)
+      return null
+    }
+  }
+
+  // Função para buscar lugares próximos usando OpenStreetMap Nominatim
+  const searchNearbyPlaces = async (lat: number, lng: number, category: string) => {
+    setLoadingPlaces(true)
+    try {
+      // Mapear categorias para tags do OpenStreetMap
+      const categoryMap: {[key: string]: string} = {
+        'farmacia': 'amenity=pharmacy',
+        'mercado': 'shop=supermarket',
+        'restaurante': 'amenity=restaurant',
+        'posto': 'amenity=fuel',
+        'banco': 'amenity=bank',
+        'hospital': 'amenity=hospital',
+        'shopping': 'shop=mall',
+        'correios': 'amenity=post_office'
+      }
+
+      const tag = categoryMap[category] || 'amenity=*'
+      const radius = 5000 // 5km de raio
+      
+      // Usar Overpass API para buscar lugares próximos
+      const overpassQuery = `
+        [out:json][timeout:25];
+        (
+          node[${tag}](around:${radius},${lat},${lng});
+          way[${tag}](around:${radius},${lat},${lng});
+          relation[${tag}](around:${radius},${lat},${lng});
+        );
+        out center meta;
+      `
+      
+      const response = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `data=${encodeURIComponent(overpassQuery)}`
+      })
+      
+      const data = await response.json()
+      
+      // Processar resultados
+      const places = data.elements.map((element: any) => {
+        const lat = element.lat || element.center?.lat
+        const lon = element.lon || element.center?.lon
+        const name = element.tags?.name || element.tags?.brand || 'Estabelecimento'
+        const address = `${element.tags?.['addr:street'] || ''} ${element.tags?.['addr:housenumber'] || ''}`.trim() || 'Endereço não disponível'
+        
+        return {
+          id: element.id,
+          name,
+          address,
+          lat,
+          lon,
+          rating: Math.random() * 2 + 3, // Rating simulado entre 3-5
+          distance: calculateDistance(userLocation?.lat || 0, userLocation?.lng || 0, lat, lon).toFixed(1),
+          isOpen: Math.random() > 0.2, // 80% chance de estar aberto
+          phone: element.tags?.phone || '',
+          website: element.tags?.website || ''
+        }
+      }).slice(0, 10) // Limitar a 10 resultados
+      
+      setNearbyPlaces(places)
+    } catch (error) {
+      console.error('Erro ao buscar lugares próximos:', error)
+      // Fallback para dados mock se a API falhar
+      setNearbyPlaces(getEstablishmentsByType(category))
+    } finally {
+      setLoadingPlaces(false)
+    }
+  }
+
+  // Função para obter localização do usuário
+  const getUserLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude
+          const lng = position.coords.longitude
+          
+          // Buscar endereço usando geocoding reverso
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
+            )
+            const data = await response.json()
+            const address = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+            
+            setUserLocation({ lat, lng, address })
+          } catch (error) {
+            console.error('Erro ao buscar endereço:', error)
+            setUserLocation({ lat, lng, address: `${lat.toFixed(4)}, ${lng.toFixed(4)}` })
+          }
+        },
+        (error) => {
+          console.error('Erro ao obter localização:', error)
+          // Localização padrão (São Paulo)
+          setUserLocation({
+            lat: -23.5505,
+            lng: -46.6333,
+            address: 'São Paulo, SP'
+          })
+        }
+      )
+    } else {
+      // Localização padrão se geolocalização não estiver disponível
+      setUserLocation({
+        lat: -23.5505,
+        lng: -46.6333,
+        address: 'São Paulo, SP'
+      })
+    }
+  }
+
+  // Service cards with Undraw-inspired icons
   const serviceCards = [
     { 
       id: 'farmacia', 
@@ -371,15 +638,15 @@ function App() {
       image: (
         <div className="w-16 h-16 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
           <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Farmácia - Médicos com cruz verde */}
-            <circle cx="20" cy="30" r="8" fill="#4CAF50"/>
-            <rect x="16" y="40" width="8" height="20" fill="#4CAF50"/>
-            <circle cx="80" cy="35" r="8" fill="#FF69B4"/>
-            <rect x="76" y="45" width="8" height="18" fill="#FF69B4"/>
-            <rect x="40" y="20" width="20" height="20" rx="10" fill="#E8F5E8"/>
-            <rect x="47" y="25" width="6" height="10" fill="#4CAF50"/>
-            <rect x="42" y="28" width="16" height="4" fill="#4CAF50"/>
-            <rect x="15" y="70" width="70" height="8" fill="#4CAF50"/>
+            {/* Undraw-inspired pharmacy icon */}
+            <circle cx="50" cy="30" r="12" fill="#6C63FF"/>
+            <rect x="44" y="45" width="12" height="25" rx="6" fill="#6C63FF"/>
+            <rect x="35" y="20" width="30" height="20" rx="10" fill="#4CAF50"/>
+            <rect x="47" y="25" width="6" height="10" fill="#FFF"/>
+            <rect x="42" y="28" width="16" height="4" fill="#FFF"/>
+            <circle cx="25" cy="75" r="8" fill="#FF6B6B"/>
+            <circle cx="75" cy="75" r="8" fill="#4ECDC4"/>
+            <rect x="20" y="80" width="60" height="4" fill="#6C63FF"/>
           </svg>
         </div>
       )
@@ -388,24 +655,123 @@ function App() {
       id: 'mercado', 
       name: 'Mercado', 
       image: (
+        <div className="w-16 h-16 mx-auto mb-3 bg-blue-100 rounded-full flex items-center justify-center">
+          <svg viewBox="0 0 100 100" className="w-12 h-12">
+            {/* Undraw-inspired supermarket icon */}
+            <rect x="20" y="35" width="40" height="30" fill="#6C63FF" rx="5"/>
+            <rect x="15" y="30" width="50" height="8" fill="#4ECDC4"/>
+            <circle cx="25" cy="75" r="5" fill="#333"/>
+            <circle cx="55" cy="75" r="5" fill="#333"/>
+            <rect x="10" y="25" width="6" height="25" fill="#FF6B6B"/>
+            <path d="M65 30 Q75 25 75 35 Q75 45 65 40" fill="none" stroke="#333" strokeWidth="2"/>
+            
+            {/* Products in cart */}
+            <rect x="25" y="40" width="8" height="6" fill="#4CAF50"/>
+            <rect x="35" y="38" width="6" height="8" fill="#FF9800"/>
+            <circle cx="48" cy="45" r="4" fill="#E91E63"/>
+            <rect x="45" y="52" width="10" height="4" fill="#2196F3"/>
+          </svg>
+        </div>
+      )
+    },
+    { 
+      id: 'restaurante', 
+      name: 'Restaurante', 
+      image: (
         <div className="w-16 h-16 mx-auto mb-3 bg-red-100 rounded-full flex items-center justify-center">
           <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Carrinho de compras vermelho */}
-            <rect x="25" y="35" width="35" height="25" fill="#DC2626" stroke="#B91C1C" strokeWidth="2"/>
-            <rect x="20" y="30" width="45" height="8" fill="#EF4444"/>
-            <circle cx="30" cy="70" r="4" fill="#333"/>
-            <circle cx="55" cy="70" r="4" fill="#333"/>
-            <rect x="15" y="25" width="8" height="20" fill="#333"/>
-            <rect x="65" y="35" width="3" height="15" fill="#333"/>
-            
-            {/* Produtos no carrinho */}
-            <rect x="28" y="40" width="8" height="6" fill="#4CAF50"/>
-            <rect x="38" y="38" width="6" height="8" fill="#FF9800"/>
-            <rect x="46" y="42" width="10" height="4" fill="#2196F3"/>
-            <circle cx="52" cy="48" r="3" fill="#F44336"/>
-            
-            {/* Alça do carrinho */}
-            <path d="M65 35 Q75 30 75 40 Q75 50 65 45" fill="none" stroke="#333" strokeWidth="2"/>
+            {/* Undraw-inspired restaurant icon */}
+            <circle cx="50" cy="40" r="20" fill="#FF6B6B"/>
+            <rect x="45" y="60" width="10" height="15" fill="#6C63FF"/>
+            <path d="M30 35 Q50 25 70 35" fill="none" stroke="#FFF" strokeWidth="3"/>
+            <circle cx="40" cy="40" r="3" fill="#FFF"/>
+            <circle cx="50" cy="38" r="3" fill="#FFF"/>
+            <circle cx="60" cy="40" r="3" fill="#FFF"/>
+            <rect x="25" y="75" width="50" height="4" fill="#4ECDC4"/>
+            <path d="M35 30 L40 25 L45 30" fill="#4CAF50"/>
+            <path d="M55 30 L60 25 L65 30" fill="#4CAF50"/>
+          </svg>
+        </div>
+      )
+    },
+    { 
+      id: 'posto', 
+      name: 'Posto', 
+      image: (
+        <div className="w-16 h-16 mx-auto mb-3 bg-yellow-100 rounded-full flex items-center justify-center">
+          <svg viewBox="0 0 100 100" className="w-12 h-12">
+            {/* Undraw-inspired gas station icon */}
+            <rect x="25" y="45" width="30" height="35" fill="#6C63FF"/>
+            <rect x="20" y="40" width="40" height="8" fill="#4ECDC4"/>
+            <circle cx="40" cy="30" r="8" fill="#FF6B6B"/>
+            <rect x="60" y="35" width="8" height="25" fill="#FFD93D"/>
+            <circle cx="64" cy="32" r="3" fill="#4CAF50"/>
+            <path d="M68 35 Q75 30 80 35 Q75 40 68 35" fill="#333"/>
+            <rect x="30" y="50" width="20" height="4" fill="#FFF"/>
+            <rect x="30" y="60" width="15" height="4" fill="#FFF"/>
+            <rect x="30" y="70" width="18" height="4" fill="#FFF"/>
+          </svg>
+        </div>
+      )
+    },
+    { 
+      id: 'banco', 
+      name: 'Banco', 
+      image: (
+        <div className="w-16 h-16 mx-auto mb-3 bg-indigo-100 rounded-full flex items-center justify-center">
+          <svg viewBox="0 0 100 100" className="w-12 h-12">
+            {/* Undraw-inspired bank icon */}
+            <rect x="20" y="50" width="60" height="30" fill="#6C63FF"/>
+            <polygon points="50,25 15,45 85,45" fill="#4ECDC4"/>
+            <rect x="30" y="55" width="6" height="20" fill="#FFF"/>
+            <rect x="40" y="55" width="6" height="20" fill="#FFF"/>
+            <rect x="50" y="55" width="6" height="20" fill="#FFF"/>
+            <rect x="60" y="55" width="6" height="20" fill="#FFF"/>
+            <rect x="15" y="80" width="70" height="6" fill="#333"/>
+            <circle cx="50" cy="35" r="4" fill="#FFD93D"/>
+            <text x="50" y="38" textAnchor="middle" fontSize="6" fill="#333">$</text>
+          </svg>
+        </div>
+      )
+    },
+    { 
+      id: 'hospital', 
+      name: 'Hospital', 
+      image: (
+        <div className="w-16 h-16 mx-auto mb-3 bg-pink-100 rounded-full flex items-center justify-center">
+          <svg viewBox="0 0 100 100" className="w-12 h-12">
+            {/* Undraw-inspired hospital icon */}
+            <rect x="25" y="35" width="50" height="45" fill="#6C63FF"/>
+            <rect x="20" y="30" width="60" height="8" fill="#4ECDC4"/>
+            <rect x="45" y="15" width="10" height="20" fill="#FF6B6B"/>
+            <rect x="40" y="20" width="20" height="10" fill="#FF6B6B"/>
+            <rect x="35" y="45" width="8" height="8" fill="#FFF"/>
+            <rect x="47" y="45" width="8" height="8" fill="#FFF"/>
+            <rect x="59" y="45" width="8" height="8" fill="#FFF"/>
+            <rect x="35" y="60" width="8" height="8" fill="#FFF"/>
+            <rect x="47" y="60" width="8" height="8" fill="#FFF"/>
+            <rect x="59" y="60" width="8" height="8" fill="#FFF"/>
+          </svg>
+        </div>
+      )
+    },
+    { 
+      id: 'shopping', 
+      name: 'Shopping', 
+      image: (
+        <div className="w-16 h-16 mx-auto mb-3 bg-purple-100 rounded-full flex items-center justify-center">
+          <svg viewBox="0 0 100 100" className="w-12 h-12">
+            {/* Undraw-inspired shopping mall icon */}
+            <rect x="15" y="40" width="70" height="40" fill="#6C63FF"/>
+            <rect x="10" y="35" width="80" height="8" fill="#4ECDC4"/>
+            <rect x="25" y="50" width="15" height="15" fill="#FF6B6B"/>
+            <rect x="45" y="50" width="15" height="15" fill="#4CAF50"/>
+            <rect x="65" y="50" width="15" height="15" fill="#FFD93D"/>
+            <circle cx="32" cy="57" r="2" fill="#FFF"/>
+            <circle cx="52" cy="57" r="2" fill="#FFF"/>
+            <circle cx="72" cy="57" r="2" fill="#FFF"/>
+            <rect x="40" y="25" width="20" height="15" fill="#FF6B6B"/>
+            <polygon points="50,20 45,30 55,30" fill="#4ECDC4"/>
           </svg>
         </div>
       )
@@ -416,55 +782,17 @@ function App() {
       image: (
         <div className="w-16 h-16 mx-auto mb-3 bg-orange-100 rounded-full flex items-center justify-center">
           <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Caixa de correios realista */}
-            <rect x="25" y="40" width="50" height="35" fill="#FF8C00" stroke="#D2691E" strokeWidth="2"/>
-            <rect x="20" y="35" width="60" height="8" fill="#8B4513"/>
-            <rect x="30" y="45" width="12" height="8" fill="#FFF"/>
-            <rect x="58" y="45" width="12" height="8" fill="#FFF"/>
-            <text x="36" y="51" fontSize="6" fill="#000">📦</text>
-            <text x="64" y="51" fontSize="6" fill="#000">♻️</text>
-            <rect x="40" y="60" width="20" height="3" fill="#8B4513"/>
-            <circle cx="30" cy="78" r="2" fill="#228B22"/>
-            <circle cx="70" cy="78" r="2" fill="#228B22"/>
-          </svg>
-        </div>
-      )
-    },
-    { 
-      id: 'shopping', 
-      name: 'Shopping', 
-      image: (
-        <div className="w-16 h-16 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Cesta de compras verde */}
-            <rect x="25" y="40" width="50" height="30" fill="#22C55E" stroke="#16A34A" strokeWidth="2"/>
-            <rect x="20" y="35" width="60" height="8" fill="#15803D"/>
-            
-            {/* Grade da cesta */}
-            <line x1="30" y1="40" x2="30" y2="70" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="35" y1="40" x2="35" y2="70" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="40" y1="40" x2="40" y2="70" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="45" y1="40" x2="45" y2="70" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="50" y1="40" x2="50" y2="70" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="55" y1="40" x2="55" y2="70" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="60" y1="40" x2="60" y2="70" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="65" y1="40" x2="65" y2="70" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="70" y1="40" x2="70" y2="70" stroke="#16A34A" strokeWidth="1"/>
-            
-            <line x1="25" y1="45" x2="75" y2="45" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="25" y1="50" x2="75" y2="50" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="25" y1="55" x2="75" y2="55" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="25" y1="60" x2="75" y2="60" stroke="#16A34A" strokeWidth="1"/>
-            <line x1="25" y1="65" x2="75" y2="65" stroke="#16A34A" strokeWidth="1"/>
-            
-            {/* Alças da cesta */}
-            <path d="M20 35 Q15 30 15 40 Q15 50 20 45" fill="none" stroke="#333" strokeWidth="2"/>
-            <path d="M80 35 Q85 30 85 40 Q85 50 80 45" fill="none" stroke="#333" strokeWidth="2"/>
-            
-            {/* Produtos na cesta */}
-            <rect x="30" y="48" width="8" height="6" fill="#FFF"/>
-            <rect x="40" y="52" width="6" height="8" fill="#FFF"/>
-            <circle cx="60" cy="55" r="4" fill="#FFF"/>
+            {/* Undraw-inspired post office icon */}
+            <rect x="25" y="40" width="50" height="35" fill="#FFD93D"/>
+            <rect x="20" y="35" width="60" height="8" fill="#FF6B6B"/>
+            <rect x="35" y="50" width="30" height="20" fill="#6C63FF"/>
+            <rect x="40" y="55" width="20" height="3" fill="#FFF"/>
+            <rect x="40" y="60" width="15" height="3" fill="#FFF"/>
+            <rect x="40" y="65" width="18" height="3" fill="#FFF"/>
+            <circle cx="30" cy="78" r="3" fill="#4ECDC4"/>
+            <circle cx="70" cy="78" r="3" fill="#4ECDC4"/>
+            <rect x="45" y="25" width="10" height="15" fill="#4CAF50"/>
+            <polygon points="50,20 47,30 53,30" fill="#4CAF50"/>
           </svg>
         </div>
       )
@@ -565,31 +893,7 @@ function App() {
     }
   }, [currentScreen])
 
-  // Verificar serviço ativo quando entrar na tela Home
-  useEffect(() => {
-    if (currentScreen === 'home' && !activeServiceId) {
-      const activeService = ServiceTrackingManager.loadActiveService()
-      if (activeService && !activeService.isServiceCompleted) {
-        console.log('🚚 Serviço ativo detectado na Home, redirecionando para tracking...')
-        console.log('📍 Posição atual do motorista:', activeService.driverPosition)
-        
-        setActiveServiceId(activeService.serviceId)
-        setServiceStartTime(new Date(activeService.serviceStartTime))
-        setSelectedDestination(activeService.destination)
-        setEntregadorData(activeService.entregador)
-        
-        // Restaurar origem se disponível
-        if (activeService.originalOrigin) {
-          setDriverOrigin(activeService.originalOrigin)
-        }
-        
-        // Redirecionar automaticamente para o tracking
-        setTimeout(() => {
-          handleScreenTransition('service-tracking')
-        }, 500)
-      }
-    }
-  }, [currentScreen, activeServiceId])
+  
 
   // Recuperar usuário logado e verificar serviço ativo ao carregar a página
   useEffect(() => {
@@ -607,28 +911,6 @@ function App() {
         console.log('🆔 ID recuperado:', user.id, 'Tipo:', typeof user.id)
         console.log('🔑 Token recuperado:', storedToken)
         
-        // Verificar se existe serviço ativo em andamento
-        const activeService = ServiceTrackingManager.loadActiveService()
-        if (activeService && !activeService.isServiceCompleted) {
-          console.log('🚚 Serviço ativo encontrado ao carregar página, redirecionando para tracking...')
-          console.log('📍 Restaurando posição do motorista:', activeService.driverPosition)
-          console.log('📊 Progresso atual:', activeService.progress)
-          
-          // Restaurar dados do serviço
-          setSelectedDestination(activeService.destination)
-          setEntregadorData(activeService.entregador)
-          setServiceStartTime(new Date(activeService.serviceStartTime))
-          setActiveServiceId(activeService.serviceId)
-          
-          // Restaurar origem se disponível
-          if (activeService.originalOrigin) {
-            setDriverOrigin(activeService.originalOrigin)
-          }
-          
-          // Forçar redirecionamento para tracking
-          setCurrentScreen('service-tracking')
-          return
-        }
         
         // Redirecionar para Home se usuário está logado e não há serviço ativo
         if (currentScreen === 'login') {
@@ -646,7 +928,19 @@ function App() {
         localStorage.removeItem('authToken')
       }
     }
+    
+    // Obter localização do usuário ao carregar a página
+    if (!userLocation) {
+      getUserLocation()
+    }
   }, [currentScreen])
+
+  // useEffect para buscar lugares próximos quando necessário
+  useEffect(() => {
+    if (currentScreen === 'establishments-list' && userLocation && selectedEstablishmentType) {
+      searchNearbyPlaces(userLocation.lat, userLocation.lng, selectedEstablishmentType)
+    }
+  }, [currentScreen, userLocation, selectedEstablishmentType])
 
 
   // Função helper para fazer requisições autenticadas
@@ -2730,6 +3024,9 @@ const handleServiceCreate = async () => {
 
   // Service Rating Screen
   if (currentScreen === 'service-rating') {
+    // Obter ID do serviço atual
+    const currentServiceId = parseInt(localStorage.getItem('currentServiceId') || '4')
+    
     return (
       <ServiceRating
         onBack={() => handleScreenTransition('service-tracking')}
@@ -2737,6 +3034,7 @@ const handleServiceCreate = async () => {
         entregador={entregadorData}
         serviceCompletionTime={serviceCompletionTime || new Date()}
         serviceStartTime={serviceStartTime || new Date(Date.now() - 300000)} // 5 min atrás como exemplo
+        serviceId={currentServiceId}
       />
     )
   }
@@ -3597,6 +3895,22 @@ const handleServiceCreate = async () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
+              
+              {/* Botão Sair */}
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center justify-between py-3 px-4 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+              >
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                    <ArrowLeft className="w-4 h-4 text-red-600" />
+                  </div>
+                  <span className="font-medium text-red-800">Sair</span>
+                </div>
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -3653,16 +3967,6 @@ const handleServiceCreate = async () => {
             </button>
           </nav>
           
-          {/* Botão de logout */}
-          <div className="mt-8 pt-4 border-t border-white border-opacity-20">
-            <button 
-              onClick={handleLogout}
-              className="w-full flex items-center p-3 hover:bg-red-500 hover:bg-opacity-20 rounded-lg transition-colors text-red-200 hover:text-white"
-            >
-              <ArrowLeft className="w-5 h-5 mr-3" />
-              <span>Sair</span>
-            </button>
-          </div>
         </div>
 
         {/* Main content */}
@@ -3830,24 +4134,6 @@ const handleServiceCreate = async () => {
             ))}
           </div>
 
-          {/* Additional service cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-            {[...serviceCards].map((service, index) => (
-              <button
-                key={`${service.id}-${index}`}
-                onClick={() => {
-                  setSelectedEstablishmentType(service.id)
-                  handleScreenTransition('establishments-list')
-                }}
-                className={`${themeClasses.bgCard} p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105 hover:rotate-1 text-center group ${themeClasses.border} border`}
-              >
-                <div className="group-hover:animate-bounce">
-                  {service.image}
-                </div>
-                <p className={`font-semibold group-hover:text-green-500 transition-colors duration-300 ${themeClasses.text}`}>{service.name}</p>
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     )
@@ -4320,12 +4606,16 @@ const handleServiceCreate = async () => {
 
   // Generic Establishments List Screen
   if (currentScreen === 'establishments-list') {
-    const establishments = getEstablishmentsByType(selectedEstablishmentType)
+    const establishments = nearbyPlaces.length > 0 ? nearbyPlaces : getEstablishmentsByType(selectedEstablishmentType)
     const typeNames = {
       'farmacia': 'Farmácias',
       'mercado': 'Mercados',
-      'transporte': 'Transporte',
-      'servicos': 'Serviços'
+      'restaurante': 'Restaurantes',
+      'posto': 'Postos de Combustível',
+      'banco': 'Bancos',
+      'hospital': 'Hospitais',
+      'shopping': 'Shopping Centers',
+      'correios': 'Correios'
     }
     
     const typeName = typeNames[selectedEstablishmentType as keyof typeof typeNames] || 'Estabelecimentos'
@@ -4344,10 +4634,67 @@ const handleServiceCreate = async () => {
           </button>
           <h1 className="text-center text-xl font-bold animate-fadeIn">{typeName}</h1>
           <p className="text-center text-green-100 text-sm mt-1 animate-fadeIn animation-delay-200">
-            Estabelecimentos próximos a você
+            {userLocation ? `Próximos a ${userLocation.address.split(',')[0]}` : 'Estabelecimentos próximos a você'}
           </p>
+          
+          {/* Botão para atualizar localização */}
+          <button
+            onClick={() => {
+              getUserLocation()
+              if (userLocation) {
+                searchNearbyPlaces(userLocation.lat, userLocation.lng, selectedEstablishmentType)
+              }
+            }}
+            className="absolute right-4 top-4 text-white hover:text-gray-200 transition-all duration-300 hover:scale-110"
+            disabled={loadingPlaces}
+          >
+            {loadingPlaces ? (
+              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <MapPin className="w-6 h-6" />
+            )}
+          </button>
+        </div>
+        
+        {/* Barra de busca por CEP */}
+        <div className="p-4 bg-white border-b">
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              placeholder="Digite seu CEP para buscar próximo a você"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              onKeyPress={async (e) => {
+                if (e.key === 'Enter') {
+                  const cep = e.currentTarget.value.replace(/\D/g, '')
+                  if (cep.length === 8) {
+                    const addressData = await fetchAddressFromCEP(cep)
+                    if (addressData) {
+                      // Simular coordenadas baseadas no endereço (em produção, usar geocoding)
+                      const lat = -23.5505 + (Math.random() - 0.5) * 0.1
+                      const lng = -46.6333 + (Math.random() - 0.5) * 0.1
+                      setUserLocation({ lat, lng, address: addressData.address })
+                      searchNearbyPlaces(lat, lng, selectedEstablishmentType)
+                    }
+                  }
+                }
+              }}
+            />
+            <button className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+              <Search className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
+        {/* Loading indicator */}
+        {loadingPlaces && (
+          <div className="p-8 text-center">
+            <div className="inline-flex items-center space-x-2">
+              <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-gray-600">Buscando estabelecimentos próximos...</span>
+            </div>
+          </div>
+        )}
+        
         {/* Content com animações escalonadas */}
         <div className="p-4 space-y-4">
           {establishments.map((establishment, index) => (
@@ -4362,8 +4709,8 @@ const handleServiceCreate = async () => {
                 setSelectedOriginLocation(establishment.address)
                 setPickupLocation({
                   address: establishment.address,
-                  lat: -23.5505, // Coordenadas exemplo para São Paulo
-                  lng: -46.6333
+                  lat: establishment.lat || -23.5505,
+                  lng: establishment.lon || establishment.lng || -46.6333
                 })
                 // Navegar para seleção de destino
                 handleScreenTransition('service-create')
@@ -4405,13 +4752,23 @@ const handleServiceCreate = async () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <Star className="w-4 h-4 text-yellow-400 fill-current group-hover:animate-spin" />
-                    <span className={`text-sm ${themeClasses.textSecondary} ml-1`}>{establishment.rating}</span>
+                    <span className={`text-sm ${themeClasses.textSecondary} ml-1`}>
+                      {typeof establishment.rating === 'number' ? establishment.rating.toFixed(1) : establishment.rating}
+                    </span>
                   </div>
                   <div className={`flex items-center text-sm ${themeClasses.textSecondary}`}>
                     <Clock className="w-4 h-4 mr-1" />
-                    <span>{establishment.distance}</span>
+                    <span>{establishment.distance}{typeof establishment.distance === 'number' ? ' km' : ''}</span>
                   </div>
                 </div>
+                
+                {/* Informações adicionais se disponíveis */}
+                {establishment.phone && (
+                  <div className={`flex items-center text-xs ${themeClasses.textSecondary} mt-1`}>
+                    <Phone className="w-3 h-3 mr-1" />
+                    <span>{establishment.phone}</span>
+                  </div>
+                )}
               </div>
 
               {/* Seta indicativa com animação */}
@@ -4423,13 +4780,19 @@ const handleServiceCreate = async () => {
             </div>
           ))}
           
-          {establishments.length === 0 && (
+          {!loadingPlaces && establishments.length === 0 && (
             <div className="text-center py-12 animate-fadeIn">
               <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                 <Search className="w-12 h-12 text-gray-400" />
               </div>
               <h3 className="text-xl font-semibold text-gray-800 mb-2">Nenhum estabelecimento encontrado</h3>
-              <p className="text-gray-600">Tente novamente ou escolha outro tipo de serviço.</p>
+              <p className="text-gray-600 mb-4">Tente buscar por CEP ou permita o acesso à sua localização.</p>
+              <button
+                onClick={getUserLocation}
+                className="bg-green-500 text-white px-6 py-2 rounded-lg hover:bg-green-600 transition-colors"
+              >
+                Usar Minha Localização
+              </button>
             </div>
           )}
         </div>
@@ -4437,84 +4800,6 @@ const handleServiceCreate = async () => {
     )
   }
 
-  // Service Rating Screen (Static)
-  if (currentScreen === 'service-rating') {
-    return (
-      <div className={`min-h-screen ${themeClasses.bg} transition-all duration-300 ${
-        isTransitioning ? 'opacity-0 translate-y-full' : 'opacity-100 translate-y-0'
-      }`}>
-        {/* Header */}
-        <div className="bg-green-500 text-white p-4 relative shadow-lg">
-          <button
-            onClick={() => handleScreenTransition('home')}
-            className="absolute left-4 top-4 text-white hover:text-gray-200 transition-all duration-300 hover:scale-110"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <h1 className="text-center text-xl font-bold">Avaliar Serviço</h1>
-        </div>
-
-        {/* Content */}
-        <div className="flex flex-col items-center justify-center p-6 space-y-6">
-          {/* Avatar do prestador */}
-          <div className="w-24 h-24 rounded-full overflow-hidden shadow-lg">
-            <img 
-              src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" 
-              alt="Prestador" 
-              className="w-full h-full object-cover"
-            />
-          </div>
-
-          {/* Nome e descrição */}
-          <div className="text-center">
-            <h2 className={`text-xl font-bold ${themeClasses.text} mb-2`}>José Silva</h2>
-            <p className={`${themeClasses.textSecondary} mb-1`}>
-              Sua opinião ajuda a melhorar a experiência de todos.
-            </p>
-            <p className={`text-sm ${themeClasses.textSecondary}`}>
-              Acompanhamento: +55 (11) 99999-9999
-            </p>
-          </div>
-
-          {/* Estrelas de avaliação */}
-          <div className="flex space-x-2">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                className="transition-all duration-200 hover:scale-110"
-              >
-                <Star 
-                  className="w-8 h-8 text-yellow-400 fill-current hover:text-yellow-500" 
-                />
-              </button>
-            ))}
-          </div>
-
-          {/* Comentário */}
-          <div className="w-full max-w-md">
-            <textarea
-              placeholder="Deixe um comentário sobre o serviço (opcional)"
-              className={`w-full p-4 rounded-lg border ${themeClasses.input} ${themeClasses.border} resize-none h-24`}
-              maxLength={200}
-            />
-          </div>
-
-          {/* Botão de finalizar */}
-          <button
-            onClick={() => {
-              // Limpar serviço ativo e voltar para home
-              setActiveServiceId(null)
-              setServiceStartTime(null)
-              handleScreenTransition('home')
-            }}
-            className="bg-green-500 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors shadow-lg"
-          >
-            Finalizar Avaliação
-          </button>
-        </div>
-      </div>
-    )
-  }
 
   // Supermarket List Screen
   if (currentScreen === 'supermarket-list') {

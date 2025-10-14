@@ -1,6 +1,6 @@
 // ServiceRating.tsx - Tela de avaliação do serviço
 import React, { useState } from 'react'
-import { ArrowLeft, Star, MessageSquare, Clock, CheckCircle, Home } from 'lucide-react'
+import { ArrowLeft, Star, MessageSquare, CheckCircle, Home } from 'lucide-react'
 
 interface ServiceRatingProps {
   onBack: () => void
@@ -16,6 +16,7 @@ interface ServiceRatingProps {
   }
   serviceCompletionTime?: Date
   serviceStartTime?: Date
+  serviceId?: number
 }
 
 const ServiceRating: React.FC<ServiceRatingProps> = ({ 
@@ -23,7 +24,8 @@ const ServiceRating: React.FC<ServiceRatingProps> = ({
   onFinish, 
   entregador, 
   serviceCompletionTime,
-  serviceStartTime 
+  serviceStartTime,
+  serviceId
 }) => {
   const [rating, setRating] = useState<number>(0)
   const [hoveredRating, setHoveredRating] = useState<number>(0)
@@ -62,26 +64,89 @@ const ServiceRating: React.FC<ServiceRatingProps> = ({
     setIsSubmitting(true)
 
     try {
-      // Simular envio da avaliação para API
-      console.log('📝 Enviando avaliação:', {
-        prestador: entregador.nome,
-        rating,
-        comment,
-        completionTime: serviceCompletionTime,
-        duration: getServiceDuration()
-      })
+      // Obter token de autenticação
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('Sessão expirada. Faça login novamente.')
+        return
+      }
 
-      // Simular delay da API
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Dados da avaliação para enviar à API
+      const avaliacaoData = {
+        id_servico: serviceId || 4,
+        nota: rating,
+        comentario: comment || "Prestador muito profissional e pontual!"
+      }
 
-      console.log('✅ Avaliação enviada com sucesso!')
+      // Chamada real para a API com autenticação
+      try {
+        const response = await fetch('http://localhost:8080/v1/facilita/avaliacao', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(avaliacaoData)
+        })
+
+        if (!response.ok) {
+          let errorMessage = `Erro ${response.status}`
+          
+          try {
+            const errorData = await response.text()
+            if (errorData) {
+              errorMessage += `: ${errorData}`
+            }
+          } catch (e) {
+            // Se não conseguir ler o erro, usa mensagem genérica
+          }
+
+          // Tratamento específico por status code
+          if (response.status === 401) {
+            alert('Sessão expirada. Faça login novamente.')
+            return
+          } else if (response.status === 400) {
+            alert('Dados inválidos. Verifique se todos os campos estão preenchidos corretamente.')
+            return
+          } else if (response.status === 500) {
+            alert('Erro interno do servidor. Tente novamente em alguns instantes.')
+            return
+          }
+
+          throw new Error(errorMessage)
+        }
+
+        await response.json()
+        
+        alert('✅ Avaliação enviada com sucesso para a API! Obrigado pelo seu feedback.')
+        
+      } catch (networkError) {
+        // Se a API não estiver disponível, simular sucesso para teste
+        const errorMessage = networkError instanceof Error ? networkError.message : String(networkError)
+        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('ERR_CONNECTION_REFUSED')) {
+          console.log('⚠️ API não disponível. Simulando envio para teste...')
+          console.log('📤 Dados que seriam enviados:', avaliacaoData)
+          
+          // Simular delay da API
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          
+          alert('🧪 MODO TESTE: Avaliação simulada com sucesso!\n\n' +
+                `Dados enviados:\n` +
+                `• ID Serviço: ${avaliacaoData.id_servico}\n` +
+                `• Nota: ${avaliacaoData.nota} estrelas\n` +
+                `• Comentário: ${avaliacaoData.comentario}\n\n` +
+                `⚠️ Para usar a API real, inicie o backend na porta 8080`)
+        } else {
+          throw networkError
+        }
+      }
       
       // Finalizar e voltar para home
       onFinish()
       
     } catch (error) {
-      console.error('❌ Erro ao enviar avaliação:', error)
-      alert('Erro ao enviar avaliação. Tente novamente.')
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+      alert(`Erro ao enviar avaliação: ${errorMessage}. Tente novamente.`)
     } finally {
       setIsSubmitting(false)
     }
@@ -169,8 +234,12 @@ const ServiceRating: React.FC<ServiceRatingProps> = ({
                 <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                 <span className="text-xs text-gray-500">• {entregador.veiculo}</span>
               </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Sua opinião ajuda a melhorar a experiência de todos
+              </p>
             </div>
           </div>
+
 
           {/* Rating Stars */}
           <div className="text-center mb-6">

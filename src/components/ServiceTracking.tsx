@@ -62,23 +62,11 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
   // Carregar estado do serviço ativo
   const savedState = ServiceTrackingManager.loadActiveService();
   
-  // Log para debug
-  console.log('🔄 ServiceTracking iniciado');
-  console.log('💾 Estado salvo encontrado:', savedState ? 'Sim' : 'Não');
-  if (savedState) {
-    console.log('📊 Progresso salvo:', savedState.progress);
-    console.log('📍 Posição salva:', savedState.driverPosition);
-    console.log('🛣️ Rota salva:', savedState.routeCoordinates?.length || 0, 'pontos');
-    console.log('📏 Índice da rota salvo:', savedState.currentRouteIndex);
-  }
-  
   // CORREÇÃO: Usar sempre a posição salva se existir
   const initialDriverPosition = savedState?.driverPosition || {
     lat: driverOrigin?.lat || -23.5324859,
     lng: driverOrigin?.lng || -46.7916801
   };
-  
-  console.log('📍 Posição inicial definida:', initialDriverPosition);
 
   const [driverPosition, setDriverPosition] = useState<{ lat: number; lng: number }>(initialDriverPosition);
   const [progress, setProgress] = useState(savedState?.progress || 0);
@@ -95,30 +83,21 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
   // Buscar rota real usando OSRM (apenas se não tiver rota salva)
   useEffect(() => {
     if (routeCoordinates.length > 0) {
-      console.log('🛣️ Rota já carregada do estado salvo:', routeCoordinates.length, 'pontos');
-      
       // CORREÇÃO: Garantir que a posição do motorista está correta baseada no índice salvo
       if (savedState && savedState.currentRouteIndex < routeCoordinates.length) {
         const savedPosition = routeCoordinates[savedState.currentRouteIndex];
         const correctPosition = { lat: savedPosition[0], lng: savedPosition[1] };
         
-        console.log('🔄 Ajustando posição do motorista para índice salvo:', savedState.currentRouteIndex);
-        console.log('📍 Posição corrigida:', correctPosition);
-        
         setDriverPosition(correctPosition);
       }
       return;
     }
-
-    console.log('🗺️ Buscando nova rota...');
     // Usar a posição original para calcular a rota (não a posição atual do motorista)
     const routeOrigin = driverOrigin || { lat: -23.5324859, lng: -46.7916801 };
     
     const fetchRoute = async () => {
       try {
         const url = `https://router.project-osrm.org/route/v1/driving/${routeOrigin.lng},${routeOrigin.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`;
-        
-        console.log('📡 Fazendo requisição OSRM:', url);
         const response = await fetch(url);
         const data = await response.json();
         
@@ -131,12 +110,6 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
           setRouteCoordinates(coordinates);
           setEstimatedTime(Math.round(route.duration / 60)); // Converter para minutos
           
-          console.log('✅ Rota calculada:', {
-            distancia: `${(route.distance / 1000).toFixed(2)} km`,
-            tempo: `${Math.round(route.duration / 60)} min`,
-            pontos: coordinates.length
-          });
-          
           // CORREÇÃO: Se é uma nova rota, começar do início
           if (!savedState) {
             setDriverPosition({ lat: coordinates[0][0], lng: coordinates[0][1] });
@@ -144,20 +117,22 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
           }
         }
       } catch (error) {
-        console.error('❌ Erro ao buscar rota:', error);
-        // Fallback: linha reta com mais pontos para simular movimento
+        // Fallback: rota curta e rápida para teste
         const fallbackRoute: [number, number][] = [];
-        const steps = 20; // 20 pontos entre origem e destino
+        const steps = 8; // Apenas 8 pontos para ser mais rápido
+        
+        // Usar coordenadas próximas para teste rápido
+        const testOrigin = { lat: -23.5505, lng: -46.6333 }; // Centro SP
+        const testDestination = { lat: -23.5515, lng: -46.6343 }; // Muito próximo
         
         for (let i = 0; i <= steps; i++) {
           const ratio = i / steps;
-          const lat = routeOrigin.lat + (destination.lat - routeOrigin.lat) * ratio;
-          const lng = routeOrigin.lng + (destination.lng - routeOrigin.lng) * ratio;
+          const lat = testOrigin.lat + (testDestination.lat - testOrigin.lat) * ratio;
+          const lng = testOrigin.lng + (testDestination.lng - testOrigin.lng) * ratio;
           fallbackRoute.push([lat, lng]);
         }
         
         setRouteCoordinates(fallbackRoute);
-        console.log('🔄 Usando rota fallback com', fallbackRoute.length, 'pontos');
         
         // CORREÇÃO: Se é uma nova rota, começar do início
         if (!savedState) {
@@ -196,31 +171,23 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
       };
       
       ServiceTrackingManager.saveActiveService(currentState);
-      console.log('💾 Estado salvo:', {
-        progresso: Math.round(progress),
-        posicao: `${driverPosition.lat.toFixed(4)}, ${driverPosition.lng.toFixed(4)}`,
-        indiceRota: currentRouteIndex,
-        concluido: isServiceCompleted
-      });
     }
   }, [driverPosition, progress, routeCoordinates, currentRouteIndex, estimatedTime, serviceStartTime, isServiceCompleted, destination, entregador, savedState]);
 
   // Detectar quando o prestador chegou e encerrar automaticamente
   useEffect(() => {
     if (progress >= 100 && !isServiceCompleted && !hasShownCompletionMessage) {
-      console.log('🎉 Prestador chegou ao destino! Encerrando serviço automaticamente...');
       setHasShownCompletionMessage(true);
       
-      // Mostrar mensagem de chegada por 3 segundos, depois encerrar
+      // Mostrar mensagem de chegada por 1 segundo, depois encerrar
       const completionTimer = setTimeout(() => {
-        console.log('✅ Finalizando serviço e redirecionando para avaliação...');
         setIsServiceCompleted(true);
         
         // Aguardar um pouco mais antes de chamar onServiceCompleted
         setTimeout(() => {
           onServiceCompleted();
-        }, 500);
-      }, 3000);
+        }, 300);
+      }, 1000);
 
       return () => clearTimeout(completionTimer);
     }
@@ -229,31 +196,20 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
   // Simular movimento do motorista ao longo da rota
   useEffect(() => {
     if (routeCoordinates.length === 0 || isPaused || isServiceCompleted) {
-      if (routeCoordinates.length === 0) {
-        console.log('⏳ Aguardando rota ser carregada...');
-      } else if (isPaused) {
-        console.log('⏸️ Movimento pausado pelo usuário');
-      } else if (isServiceCompleted) {
-        console.log('✅ Serviço concluído, parando movimento');
-      }
       return;
     }
 
     // CORREÇÃO: Verificar se já chegou ao final baseado no índice salvo
     if (currentRouteIndex >= routeCoordinates.length - 1) {
-      console.log('🏁 Já estava no final da rota!');
       setProgress(100);
       return;
     }
-
-    console.log('🚗 Continuando movimento do índice:', currentRouteIndex, 'de', routeCoordinates.length);
     
     const interval = setInterval(() => {
       setCurrentRouteIndex((prev: number) => {
         const nextIndex = prev + 1;
         
         if (nextIndex >= routeCoordinates.length) {
-          console.log('🏁 Chegou ao final da rota!');
           setProgress(100);
           return prev; // Chegou ao destino
         }
@@ -267,12 +223,14 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
         const newProgress = Math.min(100, (nextIndex / (routeCoordinates.length - 1)) * 100);
         setProgress(newProgress);
         
-        console.log(`🚗 Movimento: ${nextIndex}/${routeCoordinates.length} (${Math.round(newProgress)}%)`);
-        console.log(`📍 Nova posição: ${newDriverPosition.lat.toFixed(4)}, ${newDriverPosition.lng.toFixed(4)}`);
+        // Se chegou ao último ponto, definir progresso como 100%
+        if (nextIndex === routeCoordinates.length - 1) {
+          setTimeout(() => setProgress(100), 100);
+        }
         
         return nextIndex;
       });
-    }, 3000); // Move para o próximo ponto a cada 3 segundos
+    }, 1000); // Move para o próximo ponto a cada 1 segundo (mais rápido)
 
     return () => clearInterval(interval);
   }, [routeCoordinates, isPaused, isServiceCompleted, currentRouteIndex]);
@@ -285,9 +243,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
   // Limpar estado salvo quando o componente for desmontado (apenas se serviço não foi completado)
   useEffect(() => {
     return () => {
-      if (!isServiceCompleted) {
-        console.log('Mantendo estado salvo para continuidade...');
-      }
+      // Manter estado salvo para continuidade se serviço não foi completado
     };
   }, [isServiceCompleted]);
 
