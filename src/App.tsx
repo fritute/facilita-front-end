@@ -9,9 +9,11 @@ import LoadingSpinner from './components/LoadingSpinner'
 import NotificationSidebar from './components/NotificationSidebar'
 import ServiceCreateScreen from './components/ServiceCreateScreen'
 import HomeScreen from './screens/HomeScreen'
+import WalletScreen from './screens/WalletScreen'
+import ProfileScreen from './screens/ProfileScreen'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 //TELAS PARA TESTES E PARA MOVER
-type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password"
+type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet"
 
 // Adicione esta interface antes da função App
 interface ServiceTrackingProps {
@@ -147,6 +149,9 @@ function App() {
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null)
   const [serviceStartTime, setServiceStartTime] = useState<Date | null>(null)
   const [orderFilter, setOrderFilter] = useState<'TODOS' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO'>('TODOS')
+  const [walletBalance, setWalletBalance] = useState<number>(367.07)
+  const [showNotificationToast, setShowNotificationToast] = useState(false)
+  const [notificationToastMessage, setNotificationToastMessage] = useState('')
   
   // Estados para categorias de serviço
   const [serviceCategories, setServiceCategories] = useState<any[]>([])
@@ -1209,6 +1214,52 @@ function App() {
     }
   }
 
+  // Função para atualizar perfil
+  const handleUpdateProfile = async (name: string, email: string) => {
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        throw new Error('Sessão expirada')
+      }
+
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/perfil', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          nome: name,
+          email: email
+        })
+      })
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Sessão expirada. Faça login novamente.')
+        }
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || 'Erro ao atualizar perfil')
+      }
+
+      // Atualizar dados do usuário logado no estado
+      const updatedUser = {
+        ...loggedUser!,
+        nome: name,
+        email: email
+      }
+      
+      setLoggedUser(updatedUser)
+      
+      // Atualizar também no localStorage para persistir
+      localStorage.setItem('userData', JSON.stringify(updatedUser))
+      
+    } catch (error) {
+      console.error('Erro ao atualizar perfil:', error)
+      throw error
+    }
+  }
+
   // Função para validar senha forte
   const validatePassword = (password: string) => {
     // Senha deve ter pelo menos 6 caracteres, 1 maiúscula, 1 número e 1 símbolo
@@ -1316,7 +1367,7 @@ function App() {
     }))
   }
 
-  const handleScreenTransition = (newScreen: 'login' | 'cadastro' | 'success' | 'recovery' | 'verification' | 'account-type' | 'service-provider' | 'profile-setup' | 'home' | 'location-select' | 'service-create' | 'waiting-driver' | 'payment' | 'service-tracking' | 'service-confirmed' | 'tracking' | 'profile' | 'orders' | 'service-rating' | 'supermarket-list' | 'establishments-list') => {
+  const handleScreenTransition = (newScreen: Screen) => {
     setIsTransitioning(true)
     setTimeout(() => {
       setCurrentScreen(newScreen)
@@ -2236,6 +2287,49 @@ function App() {
     }
   }, [currentScreen, profileData.endereco])
 
+  // Funções para manipular notificações
+  const handleMarkAsRead = (id: string) => {
+    setNotifications(prev =>
+      prev.map(notif =>
+        notif.id === id ? { ...notif, read: true } : notif
+      )
+    )
+  }
+
+  const handleClearAllNotifications = () => {
+    setNotifications([])
+  }
+
+  const handleToggleNotifications = () => {
+    setIsNotificationOpen(prev => !prev)
+  }
+
+  // Função para tocar som de notificação
+  const playNotificationSound = () => {
+    if (notificationsEnabled) {
+      try {
+        const audio = new Audio('/notification.mp3')
+        audio.volume = 0.5
+        audio.play().catch(err => console.log('Erro ao tocar som:', err))
+      } catch (error) {
+        console.log('Som de notificação não disponível')
+      }
+    }
+  }
+
+  // Função para mostrar toast de notificação
+  const showNewNotificationToast = (message: string) => {
+    if (notificationsEnabled) {
+      setNotificationToastMessage(message)
+      setShowNotificationToast(true)
+      playNotificationSound()
+      
+      setTimeout(() => {
+        setShowNotificationToast(false)
+      }, 4000)
+    }
+  }
+
   // Tela de loading durante o login
   if (isLoginLoading) {
     return (
@@ -2301,23 +2395,6 @@ function App() {
       </>
     )
   }
-
-// Funções para manipular notificações
-const handleMarkAsRead = (id: string) => {
-  setNotifications(prev =>
-    prev.map(notif =>
-      notif.id === id ? { ...notif, read: true } : notif
-    )
-  )
-}
-
-const handleClearAllNotifications = () => {
-  setNotifications([])
-}
-
-const handleToggleNotifications = () => {
-  setIsNotificationOpen(prev => !prev)
-}
 
 const handleLocationSelect = (address: string, lat: number, lng: number) => {
   if (isSelectingOrigin) {
@@ -3487,10 +3564,10 @@ const handleServiceCreate = async () => {
                 />
                 <div>
                   <p className="font-semibold text-sm">RVJ9G33</p>
-                  <p className="text-xs text-blue-500">Entregador • {entregadorData.nome}</p>
+                  <p className="text-xs text-blue-500">Entregador • {entregadorData?.nome || 'Aguardando prestador'}</p>
                   <div className="flex items-center">
                     <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                    <span className="text-xs ml-1">{entregadorData.rating}</span>
+                    <span className="text-xs ml-1">{entregadorData?.rating || 5.0}</span>
                   </div>
                 </div>
               </div>
@@ -3503,7 +3580,7 @@ const handleServiceCreate = async () => {
         <div className="mt-6 w-full max-w-md text-sm text-gray-600 space-y-2">
           <div className="flex justify-between">
             <span>Nome</span>
-            <span className="font-medium">{entregadorData.nome}</span>
+            <span className="font-medium">{entregadorData?.nome || 'Aguardando prestador'}</span>
           </div>
           <div className="flex justify-between">
             <span>Data</span>
@@ -3513,7 +3590,7 @@ const handleServiceCreate = async () => {
             <span>Hora</span>
             <span className="font-medium">{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
-          {pickupLocation && deliveryLocation && (
+          {pickupLocation && deliveryLocation ? (
             <>
               <div className="flex justify-between">
                 <span>Origem</span>
@@ -3524,6 +3601,11 @@ const handleServiceCreate = async () => {
                 <span className="font-medium text-xs">{deliveryLocation.address.substring(0, 30)}...</span>
               </div>
             </>
+          ) : (
+            <div className="flex justify-between">
+              <span>Localizações</span>
+              <span className="font-medium text-xs">Não especificadas</span>
+            </div>
           )}
           <div className="flex justify-between">
             <span>Pagamento</span>
@@ -3587,6 +3669,9 @@ const handleServiceCreate = async () => {
         pickupLocation={pickupLocation}
         deliveryLocation={deliveryLocation}
         predefinedServices={predefinedServices}
+        serviceCategories={serviceCategories}
+        loadingCategories={loadingCategories}
+        selectedCategoryId={selectedCategoryId}
         onBack={() => handleScreenTransition('home')}
         onSelectOrigin={() => {
           setIsSelectingOrigin(true)
@@ -3598,6 +3683,10 @@ const handleServiceCreate = async () => {
         }}
         onDescriptionChange={setServiceDescription}
         onServiceTypeChange={setSelectedServiceType}
+        onCategorySelect={(categoryId: number) => {
+          setSelectedCategoryId(categoryId)
+          createServiceFromCategory(categoryId)
+        }}
         onConfirmService={handleServiceCreate}
         calculateDistance={calculateDistance}
         calculatePrice={calculatePrice}
@@ -4021,8 +4110,57 @@ const handleServiceCreate = async () => {
     )
   }
 
+  // Wallet Screen
+  if (currentScreen === 'wallet') {
+    return (
+      <WalletScreen
+        balance={walletBalance}
+        onBack={() => handleScreenTransition('home')}
+        onNotificationClick={() => setIsNotificationOpen(true)}
+        onProfileClick={() => handleScreenTransition('profile')}
+        hasUnreadNotifications={notifications.some(n => !n.read)}
+        profilePhoto={profilePhoto || loggedUser?.foto || null}
+        userName={loggedUser?.nome || 'Usuário'}
+      />
+    )
+  }
+
   // Profile Screen
   if (currentScreen === 'profile') {
+    return (
+      <ProfileScreen
+        userName={loggedUser?.nome || 'Usuário'}
+        userEmail={loggedUser?.email || ''}
+        userPhone={loggedUser?.telefone || ''}
+        userAddress=""
+        profilePhoto={profilePhoto || loggedUser?.foto || null}
+        notificationsEnabled={notificationsEnabled}
+        onBack={() => handleScreenTransition('home')}
+        onPhotoChange={(file) => {
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            setProfilePhoto(e.target?.result as string)
+          }
+          reader.readAsDataURL(file)
+        }}
+        onChangePassword={() => handleScreenTransition('change-password')}
+        onLogout={() => {
+          localStorage.removeItem('authToken')
+          localStorage.removeItem('userData')
+          setLoggedUser(null)
+          handleScreenTransition('login')
+        }}
+        onUpdateProfile={handleUpdateProfile}
+        onToggleNotifications={(enabled) => {
+          setNotificationsEnabled(enabled)
+          localStorage.setItem('notificationsEnabled', JSON.stringify(enabled))
+        }}
+      />
+    )
+  }
+
+  // OLD Profile Screen (commented for reference)
+  if (false && currentScreen === 'profile') {
     return (
       <>
       <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
@@ -4259,15 +4397,18 @@ const handleServiceCreate = async () => {
               <span>Home</span>
             </button>
             <button 
+              onClick={() => handleScreenTransition('wallet')}
+              className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors"
+            >
+              <CreditCard className="w-5 h-5 mr-3" />
+              <span>Carteira</span>
+            </button>
+            <button 
               onClick={() => handleScreenTransition('orders')}
               className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors"
             >
               <FileText className="w-5 h-5 mr-3" />
               <span>Pedidos</span>
-            </button>
-            <button className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors">
-              <MessageSquare className="w-5 h-5 mr-3" />
-              <span>Carteira</span>
             </button>
             <button 
               onClick={() => handleScreenTransition('profile')}
@@ -4335,6 +4476,16 @@ const handleServiceCreate = async () => {
                 </button>
                 <button 
                   onClick={() => {
+                    handleScreenTransition('wallet')
+                    setIsMobileMenuOpen(false)
+                  }}
+                  className="w-full flex items-center p-3 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <CreditCard className="w-5 h-5 mr-3" />
+                  <span>Carteira</span>
+                </button>
+                <button 
+                  onClick={() => {
                     handleScreenTransition('orders')
                     setIsMobileMenuOpen(false)
                   }}
@@ -4342,13 +4493,6 @@ const handleServiceCreate = async () => {
                 >
                   <FileText className="w-5 h-5 mr-3" />
                   <span>Pedidos</span>
-                </button>
-                <button 
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="w-full flex items-center p-3 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <MessageSquare className="w-5 h-5 mr-3" />
-                  <span>Carteira</span>
                 </button>
                 <button 
                   onClick={() => {
@@ -5734,6 +5878,31 @@ const handleServiceCreate = async () => {
         onMarkAsRead={handleMarkAsRead}
         onClearAll={handleClearAllNotifications}
       />
+
+      {/* Toast de Nova Notificação */}
+      {showNotificationToast && (
+        <div className="fixed top-4 right-4 z-50 animate-slideDown">
+          <div className="bg-white rounded-lg shadow-2xl p-4 max-w-sm border-l-4 border-green-500 flex items-start gap-3">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <Bell className="w-5 h-5 text-green-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-gray-900 mb-1">Nova Notificação</h4>
+              <p className="text-sm text-gray-600">{notificationToastMessage}</p>
+            </div>
+            <button
+              onClick={() => setShowNotificationToast(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
   

@@ -10,11 +10,15 @@ interface ServiceCreateScreenProps {
   pickupLocation: { address: string; lat: number; lng: number } | null
   deliveryLocation: { address: string; lat: number; lng: number } | null
   predefinedServices: Array<{ id: string; name: string; icon: string }>
+  serviceCategories: Array<any>
+  loadingCategories: boolean
+  selectedCategoryId: number | null
   onBack: () => void
   onSelectOrigin: () => void
   onSelectDestination: () => void
   onDescriptionChange: (value: string) => void
   onServiceTypeChange: (value: string) => void
+  onCategorySelect: (categoryId: number) => void
   onConfirmService: () => void
   calculateDistance: (lat1: number, lng1: number, lat2: number, lng2: number) => number
   calculatePrice: (distance: number) => number
@@ -29,11 +33,15 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
   pickupLocation,
   deliveryLocation,
   predefinedServices,
+  serviceCategories,
+  loadingCategories,
+  selectedCategoryId,
   onBack,
   onSelectOrigin,
   onSelectDestination,
   onDescriptionChange,
   onServiceTypeChange,
+  onCategorySelect,
   onConfirmService
 }) => {
   return (
@@ -139,22 +147,69 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
             </div>
           </div>
 
-          {/* Serviços predefinidos */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            {predefinedServices.map((service) => (
-              <button
-                key={service.id}
-                onClick={() => onServiceTypeChange(service.id)}
-                className={`p-4 border rounded-lg text-left transition-all ${
-                  selectedServiceType === service.id
-                    ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                    : 'border-gray-300 hover:border-green-300'
-                }`}
-              >
-                <div className="text-2xl mb-2">{service.icon}</div>
-                <p className="font-medium text-sm">{service.name}</p>
-              </button>
-            ))}
+          {/* Categorias de serviço da API */}
+          <div className="mb-6">
+            <h4 className="font-semibold mb-3 text-gray-700">Categorias disponíveis</h4>
+            {loadingCategories ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+                <p className="text-gray-600 mt-2">Carregando categorias...</p>
+              </div>
+            ) : serviceCategories.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {serviceCategories.map((category) => (
+                  <button
+                    key={category.id || category.id_categoria}
+                    onClick={() => onCategorySelect(category.id || category.id_categoria)}
+                    className={`p-4 border rounded-lg text-left transition-all hover:shadow-md ${
+                      selectedCategoryId === (category.id || category.id_categoria)
+                        ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+                        : 'border-gray-300 hover:border-green-300'
+                    }`}
+                  >
+                    <div className="flex items-center mb-2">
+                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                        <span className="text-xl">{category.icone || '📦'}</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-sm">{category.nome}</p>
+                        {category.preco_base && (
+                          <p className="text-xs text-green-600 font-medium">R$ {parseFloat(category.preco_base).toFixed(2)}</p>
+                        )}
+                      </div>
+                    </div>
+                    {category.descricao && (
+                      <p className="text-xs text-gray-600 mt-2">{category.descricao}</p>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-gray-50 rounded-lg">
+                <p className="text-gray-600">Nenhuma categoria disponível no momento</p>
+              </div>
+            )}
+          </div>
+
+          {/* Serviços predefinidos (mantidos como fallback) */}
+          <div className="mb-6">
+            <h4 className="font-semibold mb-3 text-gray-700">Ou escolha um serviço rápido</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {predefinedServices.map((service) => (
+                <button
+                  key={service.id}
+                  onClick={() => onServiceTypeChange(service.id)}
+                  className={`p-4 border rounded-lg text-left transition-all ${
+                    selectedServiceType === service.id
+                      ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
+                      : 'border-gray-300 hover:border-green-300'
+                  }`}
+                >
+                  <div className="text-2xl mb-2">{service.icon}</div>
+                  <p className="font-medium text-sm">{service.name}</p>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Botão confirmar */}

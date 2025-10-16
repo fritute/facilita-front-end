@@ -1,7 +1,7 @@
 // Constantes e configurações da aplicação
 
 // API Base URL
-export const API_BASE_URL = 'http://localhost:8080/v1/facilita'
+export const API_BASE_URL = 'https://servidor-facilita.onrender.com/v1/facilita'
 
 // API Endpoints
 export const API_ENDPOINTS = {

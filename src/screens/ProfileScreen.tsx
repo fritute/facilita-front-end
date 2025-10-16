@@ -1,5 +1,5 @@
-import React from 'react'
-import { ArrowLeft, Bell, User, Camera, Lock, LogOut } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { ArrowLeft, Bell, User, Camera, Lock, LogOut, Edit2, Check, X } from 'lucide-react'
 
 interface ProfileScreenProps {
   userName: string
@@ -7,12 +7,13 @@ interface ProfileScreenProps {
   userPhone: string
   userAddress: string
   profilePhoto: string | null
-  hasUnreadNotifications: boolean
+  notificationsEnabled: boolean
   onBack: () => void
-  onNotificationClick: () => void
   onPhotoChange: (file: File) => void
   onChangePassword: () => void
   onLogout: () => void
+  onUpdateProfile: (name: string, email: string) => Promise<void>
+  onToggleNotifications: (enabled: boolean) => void
 }
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({
@@ -21,13 +22,28 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   userPhone,
   userAddress,
   profilePhoto,
-  hasUnreadNotifications,
+  notificationsEnabled,
   onBack,
-  onNotificationClick,
   onPhotoChange,
   onChangePassword,
-  onLogout
+  onLogout,
+  onUpdateProfile,
+  onToggleNotifications
 }) => {
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [isEditingEmail, setIsEditingEmail] = useState(false)
+  const [editedName, setEditedName] = useState(userName)
+  const [editedEmail, setEditedEmail] = useState(userEmail)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [updateError, setUpdateError] = useState('')
+  const [updateSuccess, setUpdateSuccess] = useState(false)
+
+  // Atualizar os estados quando as props mudarem
+  useEffect(() => {
+    setEditedName(userName)
+    setEditedEmail(userEmail)
+  }, [userName, userEmail])
+
   const handlePhotoClick = () => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -39,6 +55,42 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       }
     }
     input.click()
+  }
+
+  const handleSaveChanges = async () => {
+    if (!editedName.trim() || !editedEmail.trim()) {
+      setUpdateError('Nome e email são obrigatórios')
+      return
+    }
+
+    setIsUpdating(true)
+    setUpdateError('')
+    setUpdateSuccess(false)
+    
+    try {
+      await onUpdateProfile(editedName.trim(), editedEmail.trim())
+      setIsEditingName(false)
+      setIsEditingEmail(false)
+      setUpdateSuccess(true)
+      
+      // Esconder mensagem de sucesso após 3 segundos
+      setTimeout(() => {
+        setUpdateSuccess(false)
+      }, 3000)
+    } catch (error: any) {
+      console.error('Erro ao salvar perfil:', error)
+      setUpdateError(error.message || 'Erro ao atualizar perfil. Tente novamente.')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditedName(userName)
+    setEditedEmail(userEmail)
+    setIsEditingName(false)
+    setIsEditingEmail(false)
+    setUpdateError('')
   }
 
   return (
@@ -54,15 +106,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <div className="text-center">
           <h1 className="text-lg font-bold">Perfil</h1>
         </div>
-        <button
-          onClick={onNotificationClick}
-          className="absolute right-4 top-4 text-white hover:text-gray-200 relative"
-        >
-          <Bell className="w-6 h-6" />
-          {hasUnreadNotifications && (
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-          )}
-        </button>
       </div>
 
       {/* Content */}
@@ -101,19 +144,95 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 space-y-4">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Informações Pessoais</h3>
           
+          {/* Error Message */}
+          {updateError && (
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+              {updateError}
+            </div>
+          )}
+
+          {/* Success Message */}
+          {updateSuccess && (
+            <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Perfil atualizado com sucesso!
+            </div>
+          )}
+
+          {/* Nome */}
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Nome</label>
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-gray-800">{userName}</p>
+            <div className="relative">
+              {isEditingName ? (
+                <input
+                  type="text"
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  className="w-full p-3 bg-gray-50 rounded-lg border-2 border-green-500 focus:outline-none"
+                  autoFocus
+                />
+              ) : (
+                <div className="p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+                  <p className="text-gray-800">{userName}</p>
+                  <button
+                    onClick={() => setIsEditingName(true)}
+                    className="text-gray-400 hover:text-green-500 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
+          {/* E-mail */}
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">E-mail</label>
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-gray-800">{userEmail}</p>
+            <div className="relative">
+              {isEditingEmail ? (
+                <input
+                  type="email"
+                  value={editedEmail}
+                  onChange={(e) => setEditedEmail(e.target.value)}
+                  className="w-full p-3 bg-gray-50 rounded-lg border-2 border-green-500 focus:outline-none"
+                />
+              ) : (
+                <div className="p-3 bg-gray-50 rounded-lg flex items-center justify-between">
+                  <p className="text-gray-800">{userEmail}</p>
+                  <button
+                    onClick={() => setIsEditingEmail(true)}
+                    className="text-gray-400 hover:text-green-500 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Save/Cancel Buttons */}
+          {(isEditingName || isEditingEmail) && (
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleSaveChanges}
+                disabled={isUpdating}
+                className="flex-1 bg-green-500 text-white py-3 rounded-lg font-medium hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <Check className="w-5 h-5" />
+                {isUpdating ? 'Salvando...' : 'Salvar'}
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                disabled={isUpdating}
+                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <X className="w-5 h-5" />
+                Cancelar
+              </button>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Telefone</label>
@@ -127,6 +246,36 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <div className="p-3 bg-gray-50 rounded-lg">
               <p className="text-gray-800">{userAddress || 'Não informado'}</p>
             </div>
+          </div>
+        </div>
+
+        {/* Other Configurations */}
+        <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Outras Configurações</h3>
+          
+          {/* Notificações */}
+          <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                <Bell className="w-4 h-4 text-purple-600" />
+              </div>
+              <div>
+                <span className="font-medium text-gray-800 block">Notificações</span>
+                <span className="text-xs text-gray-500">Receber alertas e avisos</span>
+              </div>
+            </div>
+            <button
+              onClick={() => onToggleNotifications(!notificationsEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                notificationsEnabled ? 'bg-green-500' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  notificationsEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
         </div>
 
