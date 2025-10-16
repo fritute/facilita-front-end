@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react'
-import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, User as UserIconLucide, ShoppingCart, Truck, Package, Users, Sun, Moon } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, User as UserIconLucide, ShoppingCart, Truck, Package, Users, Sun, Moon, Bell, Menu } from 'lucide-react'
 import QRCode from 'qrcode'
 import LocationMap from './LocationMap'
 import ServiceTracking from './components/ServiceTracking'
 import ServiceRating from './components/ServiceRating'
 import CompleteProfileModal from './components/CompleteProfileModal'
 import LoadingSpinner from './components/LoadingSpinner'
+import NotificationSidebar from './components/NotificationSidebar'
+import ServiceCreateScreen from './components/ServiceCreateScreen'
+import HomeScreen from './screens/HomeScreen'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 //TELAS PARA TESTES E PARA MOVER
 type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password"
@@ -94,6 +97,9 @@ function App() {
     endereco: '', // Para capturar endereço e gerar id_localizacao
     foto: null as File | null
   })
+  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([])
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false)
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false)
   const [selectedLocation, setSelectedLocation] = useState<string>('')
   const [selectedOriginLocation, setSelectedOriginLocation] = useState<string>('')
   const [serviceDescription, setServiceDescription] = useState('')
@@ -121,6 +127,11 @@ function App() {
     const saved = localStorage.getItem('darkMode')
     return saved ? JSON.parse(saved) : false
   })
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false)
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('notificationsEnabled')
+    return saved ? JSON.parse(saved) : true
+  })
   
   // Estados para alteração de senha
   const [changePasswordData, setChangePasswordData] = useState({
@@ -136,6 +147,32 @@ function App() {
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null)
   const [serviceStartTime, setServiceStartTime] = useState<Date | null>(null)
   const [orderFilter, setOrderFilter] = useState<'TODOS' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO'>('TODOS')
+  
+  // Estados para categorias de serviço
+  const [serviceCategories, setServiceCategories] = useState<any[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(false)
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
+  
+  // Estados para notificações
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false)
+  const [notifications, setNotifications] = useState([
+    {
+      id: '1',
+      type: 'success' as const,
+      title: 'Serviço concluído',
+      message: 'Seu pedido foi entregue com sucesso!',
+      time: 'Há 2 horas',
+      read: false
+    },
+    {
+      id: '2',
+      type: 'info' as const,
+      title: 'Novo prestador disponível',
+      message: 'Um prestador aceitou seu pedido',
+      time: 'Há 5 horas',
+      read: false
+    }
+  ])
 
   // Função para buscar estabelecimentos por tipo com integração OpenStreetMap
   const getEstablishmentsByType = (type: string) => {
@@ -835,6 +872,93 @@ function App() {
     return parseFloat(total.toFixed(2))
   }
 
+  // Função para buscar categorias de serviço da API
+  const fetchServiceCategories = async () => {
+    setLoadingCategories(true)
+    try {
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/categoria')
+      
+      if (response.ok) {
+        const data = await response.json()
+        setServiceCategories(data)
+      } else {
+        console.error('Erro ao buscar categorias:', response.status)
+      }
+    } catch (error) {
+      console.error('Erro na requisição de categorias:', error)
+    } finally {
+      setLoadingCategories(false)
+    }
+  }
+
+  // Função para criar serviço a partir de uma categoria
+  const createServiceFromCategory = async (categoryId: number) => {
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('Você precisa estar logado para criar um serviço')
+        handleScreenTransition('login')
+        return
+      }
+
+      // Buscar id_localizacao do contratante
+      const contratanteId = loggedUser?.id_contratante || loggedUser?.id
+      if (!contratanteId) {
+        alert('Erro ao identificar o contratante')
+        return
+      }
+
+      // Buscar dados do contratante para pegar id_localizacao
+      const contratanteResponse = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/contratante/${contratanteId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (!contratanteResponse.ok) {
+        alert('Erro ao buscar dados do contratante')
+        return
+      }
+
+      const contratanteData = await contratanteResponse.json()
+      const idLocalizacao = contratanteData.id_localizacao
+
+      if (!idLocalizacao) {
+        alert('Você precisa ter um endereço cadastrado para criar um serviço')
+        return
+      }
+
+      // Criar o serviço a partir da categoria
+      const serviceData = {
+        descricao_personalizada: serviceDescription || 'Serviço solicitado',
+        id_localizacao: idLocalizacao,
+        valor_personalizado: servicePrice || 25.00
+      }
+
+      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/servico/from-categoria/${categoryId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(serviceData)
+      })
+
+      if (response.ok) {
+        const createdService = await response.json()
+        setCreatedServiceId(createdService.id || createdService.id_servico)
+        alert('Serviço criado com sucesso!')
+        handleScreenTransition('service-confirmed')
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        alert(`Erro ao criar serviço: ${errorData.message || 'Erro desconhecido'}`)
+      }
+    } catch (error) {
+      console.error('Erro ao criar serviço:', error)
+      alert('Erro ao criar serviço. Tente novamente.')
+    }
+  }
+
   const generateQRCode = async (pixKey: string, amount: number) => {
     try {
       const pixString = `00020126580014BR.GOV.BCB.PIX0136${pixKey}520400005303986540${amount.toFixed(2)}5802BR5925FACILITA SERVICOS LTDA6009SAO PAULO62070503***6304`
@@ -948,6 +1072,13 @@ function App() {
       searchNearbyPlaces(userLocation.lat, userLocation.lng, selectedEstablishmentType)
     }
   }, [currentScreen, userLocation, selectedEstablishmentType])
+
+  // useEffect para buscar categorias quando entrar na tela de criação de serviço
+  useEffect(() => {
+    if (currentScreen === 'service-create' && serviceCategories.length === 0) {
+      fetchServiceCategories()
+    }
+  }, [currentScreen])
 
 
   // Função helper para fazer requisições autenticadas
@@ -2084,10 +2215,32 @@ function App() {
     }
   }, [currentScreen, loggedUser, ordersInitialized])
 
+  // useEffect para preencher automaticamente o endereço de entrega com o endereço do perfil
+  React.useEffect(() => {
+    if (currentScreen === 'service-create' && profileData.endereco) {
+      console.log('📍 Preenchendo endereço de entrega automaticamente com endereço do perfil')
+      console.log('🏠 Endereço do perfil:', profileData.endereco)
+      
+      // Usar o endereço do perfil como endereço de entrega padrão
+      setSelectedLocation(profileData.endereco)
+      
+      // Definir também o deliveryLocation com coordenadas padrão de São Paulo
+      // Essas coordenadas serão atualizadas quando o usuário confirmar ou alterar o endereço
+      if (!deliveryLocation || deliveryLocation.address !== profileData.endereco) {
+        setDeliveryLocation({
+          address: profileData.endereco,
+          lat: -23.5505, // Coordenadas padrão de São Paulo
+          lng: -46.6333
+        })
+      }
+    }
+  }, [currentScreen, profileData.endereco])
+
   // Tela de loading durante o login
   if (isLoginLoading) {
     return (
-      <div className="min-h-screen bg-gray-800 flex items-center justify-center">
+      <>
+        <div className="min-h-screen bg-gray-800 flex items-center justify-center">
         <div className="text-center">
           <div className="mb-8">
             <div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -2104,13 +2257,23 @@ function App() {
           </div>
         </div>
       </div>
+      
+      <NotificationSidebar
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        notifications={notifications}
+        onMarkAsRead={handleMarkAsRead}
+        onClearAll={handleClearAllNotifications}
+      />
+      </>
     )
   }
 
   // Tela de loading durante criação de serviço
   if (isLoading && currentScreen === 'service-create') {
     return (
-      <div className="min-h-screen bg-gray-800 flex items-center justify-center">
+      <>
+        <div className="min-h-screen bg-gray-800 flex items-center justify-center">
         <div className="text-center">
           <div className="mb-8">
             <div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -2127,8 +2290,34 @@ function App() {
           </div>
         </div>
       </div>
+      
+      <NotificationSidebar
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        notifications={notifications}
+        onMarkAsRead={handleMarkAsRead}
+        onClearAll={handleClearAllNotifications}
+      />
+      </>
     )
   }
+
+// Funções para manipular notificações
+const handleMarkAsRead = (id: string) => {
+  setNotifications(prev =>
+    prev.map(notif =>
+      notif.id === id ? { ...notif, read: true } : notif
+    )
+  )
+}
+
+const handleClearAllNotifications = () => {
+  setNotifications([])
+}
+
+const handleToggleNotifications = () => {
+  setIsNotificationOpen(prev => !prev)
+}
 
 const handleLocationSelect = (address: string, lat: number, lng: number) => {
   if (isSelectingOrigin) {
@@ -2615,11 +2804,8 @@ const handleServiceCreate = async () => {
           if (response.status === 403) {
             alert('Acesso negado ao buscar pedidos. Verifique suas permissões.')
           } else if (response.status === 404) {
-            console.log('ℹ️ Erro 404 - Possíveis causas:')
-            console.log('   • ID do contratante não existe no banco:', contratanteId)
-            console.log('   • Rota da API incorreta')
-            console.log('   • Contratante não tem pedidos')
-            console.log('   • Problema na autenticação')
+            console.log('ℹ️ Erro 404 - Nenhum pedido encontrado para este contratante')
+            // Definir array vazio em vez de mostrar erro
             setUserOrders([])
           } else {
             console.error('❌ Erro ao buscar pedidos:', response.status, errorData)
@@ -2630,20 +2816,9 @@ const handleServiceCreate = async () => {
           alert('Erro ao buscar pedidos. Tente novamente.')
         }
         
-        // Se não conseguiu buscar da API, tentar fallback local
-        if (response.status !== 404) {
-          const savedService = localStorage.getItem('currentService')
-          if (savedService) {
-            try {
-              const service = JSON.parse(savedService)
-              setUserOrders([service])
-            } catch (e) {
-              setUserOrders([])
-            }
-          } else {
-            setUserOrders([])
-          }
-        }
+        // Não usar fallback de localStorage quando usuário está logado
+        // Manter array vazio para mostrar mensagem "Nenhum pedido encontrado"
+        setUserOrders([])
       }
     } catch (error: any) {
       console.error('❌ Erro ao buscar pedidos:', error)
@@ -2656,22 +2831,10 @@ const handleServiceCreate = async () => {
         return
       }
       
-      // Fallback: buscar do localStorage apenas se não for erro de auth
-      const savedService = localStorage.getItem('currentService')
-      if (savedService) {
-        try {
-          const service = JSON.parse(savedService)
-          setUserOrders([service])
-          console.log('💾 Usando pedido salvo localmente (fallback):', service)
-        } catch (e) {
-          console.error('Erro ao parsear serviço salvo:', e)
-          setUserOrders([])
-        }
-      } else {
-        setUserOrders([])
-      }
-      
-      alert('Erro ao buscar pedidos. Verifique sua conexão e tente novamente.')
+      // Não usar fallback de localStorage quando usuário está logado
+      // Manter array vazio para mostrar mensagem "Nenhum pedido encontrado"
+      console.log('⚠️ Erro ao buscar pedidos - mantendo lista vazia')
+      setUserOrders([])
     } finally {
       setOrdersLoading(false)
     }
@@ -3415,135 +3578,30 @@ const handleServiceCreate = async () => {
   // Service Create Screen
   if (currentScreen === 'service-create') {
     return (
-      <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
-        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
-      }`}>
-        <div className="bg-green-500 text-white p-4 relative">
-          <button
-            onClick={() => handleScreenTransition('location-select')}
-            className="absolute left-4 top-4 text-white hover:text-gray-200"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <h1 className="text-center text-lg font-bold">Monte o seu serviço</h1>
-        </div>
-
-        <div className="max-w-4xl mx-auto p-6">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              Descreva o que você precisa e<br />
-              escolha como deseja receber
-            </h2>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center flex-1">
-                  <MapPin className="w-5 h-5 text-blue-500 mr-2" />
-                  <div className="flex-1">
-                    <p className="font-semibold">Buscar em (Origem)</p>
-                    <p className="text-gray-600 text-sm">{selectedOriginLocation || 'Clique para selecionar'}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setIsSelectingOrigin(true)
-                    handleScreenTransition('location-select')
-                  }}
-                  className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600 transition-colors"
-                >
-                  {selectedOriginLocation ? 'Alterar' : 'Selecionar'}
-                </button>
-              </div>
-              <div className="border-t pt-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center flex-1">
-                    <MapPin className="w-5 h-5 text-green-500 mr-2" />
-                    <div className="flex-1">
-                      <p className="font-semibold">Entregar em (Destino)</p>
-                      <p className="text-gray-600 text-sm">{selectedLocation || 'Clique para selecionar'}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setIsSelectingOrigin(false)
-                      handleScreenTransition('location-select')
-                    }}
-                    className="bg-green-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-600 transition-colors"
-                  >
-                    {selectedLocation ? 'Alterar' : 'Selecionar'}
-                  </button>
-                </div>
-              </div>
-            </div>
-            {pickupLocation && deliveryLocation && (
-              <div className="bg-blue-50 p-3 rounded-lg mt-4">
-                <p className="text-sm font-semibold text-blue-800 mb-1">Estimativa de Preço</p>
-                <p className="text-xs text-blue-600">Distância: {calculateDistance(pickupLocation.lat, pickupLocation.lng, deliveryLocation.lat, deliveryLocation.lng).toFixed(2)} km</p>
-                <p className="text-lg font-bold text-blue-800">R$ {calculatePrice(calculateDistance(pickupLocation.lat, pickupLocation.lng, deliveryLocation.lat, deliveryLocation.lng)).toFixed(2)}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h3 className="font-semibold mb-4">Pedido</h3>
-            
-            <div className="mb-6">
-              <div className="flex items-start mb-4">
-                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mr-3 mt-1">
-                  <span className="text-white text-sm">✏️</span>
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium mb-2">Preciso que alguém me acompanhe até o hospital</p>
-                  <textarea
-                    value={serviceDescription}
-                    onChange={(e) => setServiceDescription(e.target.value)}
-                    placeholder="Descreva detalhadamente o que você precisa..."
-                    className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              {predefinedServices.map((service) => (
-                <button
-                  key={service.id}
-                  onClick={() => setSelectedServiceType(service.id)}
-                  className={`p-4 border rounded-lg text-left transition-all ${
-                    selectedServiceType === service.id
-                      ? 'border-green-500 bg-green-50'
-                      : 'border-gray-300 hover:border-green-300'
-                  }`}
-                >
-                  <p className="font-medium text-sm">{service.text}</p>
-                  <p className="text-xs text-gray-500 mt-1">{service.category}</p>
-                </button>
-              ))}
-            </div>
-
-            <div className="border-t pt-4">
-              <h4 className="font-medium mb-3">Transporte</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 border border-gray-300 rounded-lg text-center">
-                  <p className="text-sm font-medium">Buscar remédios na farmácia</p>
-                </div>
-                <div className="p-3 border border-green-500 bg-green-50 rounded-lg text-center">
-                  <p className="text-sm font-medium">Acompanhar em consultas médicas</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <button
-          //AQUI
-          onClick={handleServiceCreate} 
-           className="w-full bg-green-500 text-white py-4 rounded-lg text-lg font-semibold hover:bg-green-600 transition-colors"
-          >
-            Confirmar Serviço
-          </button>
-        </div>
-      </div>
+      <ServiceCreateScreen
+        userAddress={profileData.endereco}
+        selectedOriginLocation={selectedOriginLocation}
+        selectedLocation={selectedLocation}
+        serviceDescription={serviceDescription}
+        selectedServiceType={selectedServiceType}
+        pickupLocation={pickupLocation}
+        deliveryLocation={deliveryLocation}
+        predefinedServices={predefinedServices}
+        onBack={() => handleScreenTransition('home')}
+        onSelectOrigin={() => {
+          setIsSelectingOrigin(true)
+          handleScreenTransition('location-select')
+        }}
+        onSelectDestination={() => {
+          setIsSelectingOrigin(false)
+          handleScreenTransition('location-select')
+        }}
+        onDescriptionChange={setServiceDescription}
+        onServiceTypeChange={setSelectedServiceType}
+        onConfirmService={handleServiceCreate}
+        calculateDistance={calculateDistance}
+        calculatePrice={calculatePrice}
+      />
     )
   }
 
@@ -3568,45 +3626,8 @@ const handleServiceCreate = async () => {
 
   // Orders Screen
   if (currentScreen === 'orders') {
-    // Usar pedidos reais ou dados de exemplo apenas se não houver pedidos reais
-    const rawOrders = userOrders.length > 0 ? userOrders : [
-      {
-        id: 'exemplo-1',
-        descricao: 'Entrega de medicamentos - Drogasil',
-        status: 'ENTREGUE',
-        preco: 25.90,
-        createdAt: new Date(Date.now() - 86400000).toISOString(),
-        origem: 'Drogasil - Rua Augusta, 1234',
-        destino: 'Rua das Flores, 123 - Apto 45'
-      },
-      {
-        id: 'exemplo-2',
-        descricao: 'Compras no Carrefour',
-        status: 'EM_ANDAMENTO',
-        preco: 89.50,
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-        origem: 'Carrefour - Washington Luís, 1415',
-        destino: 'Av. Paulista, 567 - Sala 12'
-      },
-      {
-        id: 'exemplo-3',
-        descricao: 'Serviço de limpeza',
-        status: 'CANCELADO',
-        preco: 120.00,
-        createdAt: new Date(Date.now() - 172800000).toISOString(), // 2 dias atrás
-        origem: 'Salão Bella Vista',
-        destino: 'Rua da Consolação, 890'
-      },
-      {
-        id: 'exemplo-4',
-        descricao: 'Entrega de documentos',
-        status: 'PENDENTE',
-        preco: 35.00,
-        createdAt: new Date().toISOString(),
-        origem: 'Escritório Central',
-        destino: 'Banco do Brasil - Agência 1234'
-      }
-    ];
+    // Usar apenas pedidos reais do usuário logado
+    const rawOrders = userOrders;
 
     // Aplicar filtros e ordenação
     const displayOrders = getFilteredAndSortedOrders(rawOrders);
@@ -3616,7 +3637,6 @@ const handleServiceCreate = async () => {
       userOrdersCount: userOrders.length,
       rawOrdersCount: rawOrders.length,
       displayOrdersCount: displayOrders.length,
-      isShowingExamples: userOrders.length === 0,
       currentFilter: orderFilter,
       counts: orderCounts
     });
@@ -3727,11 +3747,6 @@ const handleServiceCreate = async () => {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className={`text-2xl font-bold ${themeClasses.text}`}>Histórico de Pedidos</h2>
-                  {userOrders.length === 0 && (
-                    <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>
-                      📋 Exibindo dados de exemplo - Nenhum pedido real encontrado
-                    </p>
-                  )}
                 </div>
                 <span className={`text-sm ${themeClasses.textSecondary}`}>{displayOrders.length} pedido(s)</span>
               </div>
@@ -4009,6 +4024,7 @@ const handleServiceCreate = async () => {
   // Profile Screen
   if (currentScreen === 'profile') {
     return (
+      <>
       <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
@@ -4137,6 +4153,35 @@ const handleServiceCreate = async () => {
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Outras Configurações</h3>
             
             <div className="space-y-4">
+              {/* Notificações */}
+              <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center">
+                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                    <Bell className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-800 block">Notificações</span>
+                    <span className="text-xs text-gray-500">Receber alertas e avisos</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const newValue = !notificationsEnabled
+                    setNotificationsEnabled(newValue)
+                    localStorage.setItem('notificationsEnabled', JSON.stringify(newValue))
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    notificationsEnabled ? 'bg-green-500' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      notificationsEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
               <button 
                 onClick={() => handleScreenTransition('change-password')}
                 className="w-full flex items-center justify-between py-3 px-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
@@ -4171,17 +4216,27 @@ const handleServiceCreate = async () => {
           </div>
         </div>
       </div>
+      
+      <NotificationSidebar
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        notifications={notifications}
+        onMarkAsRead={handleMarkAsRead}
+        onClearAll={handleClearAllNotifications}
+      />
+      </>
     )
   }
 
   // Home Screen
   if (currentScreen === 'home') {
     return (
-      <div className={`min-h-screen ${themeClasses.bg} flex transition-all duration-300 ${
+      <>
+      <div className={`min-h-screen ${themeClasses.bg} flex transition-all duration-300 overflow-x-hidden ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        {/* Sidebar */}
-        <div className="w-64 bg-gradient-to-b from-green-500 via-green-600 to-green-700 text-white p-4 animate-slideInLeft shadow-2xl backdrop-blur-sm">
+        {/* Sidebar - escondida em mobile */}
+        <div className="hidden md:block w-64 bg-gradient-to-b from-green-500 via-green-600 to-green-700 text-white p-4 animate-slideInLeft shadow-2xl backdrop-blur-sm flex-shrink-0">
           <div className="flex items-center mb-8">
             <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
               {profilePhoto ? (
@@ -4226,10 +4281,20 @@ const handleServiceCreate = async () => {
         </div>
 
         {/* Main content */}
-        <div className="flex-1 p-6 animate-slideInRight backdrop-blur-sm">
-          <div className="flex justify-between items-center mb-8">
-            <div></div>
-            <div className="flex items-center space-x-4">
+        <div className="flex-1 p-4 md:p-6 animate-slideInRight backdrop-blur-sm overflow-x-hidden">
+          <div className="flex justify-between items-center mb-6 md:mb-8">
+            {/* Menu mobile - visível apenas em mobile */}
+            <div className="md:hidden">
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className={`p-2 rounded-lg ${themeClasses.bgCard} shadow-md`}
+              >
+                <Menu className={`w-6 h-6 ${themeClasses.text}`} />
+              </button>
+            </div>
+            <div className="hidden md:block"></div>
+            
+            <div className="flex items-center space-x-2 md:space-x-4">
               {/* Toggle de tema */}
               <button
                 onClick={toggleTheme}
@@ -4243,14 +4308,61 @@ const handleServiceCreate = async () => {
               
               <ShoppingCart className={`w-6 h-6 ${themeClasses.textSecondary}`} />
               <Mail className={`w-6 h-6 ${themeClasses.textSecondary}`} />
-              <div className="relative">
-                <svg className={`w-6 h-6 ${themeClasses.textSecondary}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4 19h10a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-              </div>
+              <button
+                onClick={handleToggleNotifications}
+                className="relative hover:scale-110 transition-transform"
+              >
+                <Bell className={`w-6 h-6 ${themeClasses.textSecondary}`} />
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                )}
+              </button>
             </div>
           </div>
+
+          {/* Menu mobile dropdown */}
+          {isMobileMenuOpen && (
+            <div className="md:hidden mb-4 bg-white rounded-lg shadow-lg p-4 animate-slideDown">
+              <nav className="space-y-2">
+                <button 
+                  onClick={() => {
+                    setIsMobileMenuOpen(false)
+                  }}
+                  className="w-full flex items-center p-3 bg-green-100 text-green-700 rounded-lg font-medium"
+                >
+                  <Home className="w-5 h-5 mr-3" />
+                  <span>Home</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    handleScreenTransition('orders')
+                    setIsMobileMenuOpen(false)
+                  }}
+                  className="w-full flex items-center p-3 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <FileText className="w-5 h-5 mr-3" />
+                  <span>Pedidos</span>
+                </button>
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="w-full flex items-center p-3 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <MessageSquare className="w-5 h-5 mr-3" />
+                  <span>Carteira</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    handleScreenTransition('profile')
+                    setIsMobileMenuOpen(false)
+                  }}
+                  className="w-full flex items-center p-3 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <UserIconLucide className="w-5 h-5 mr-3" />
+                  <span>Perfil</span>
+                </button>
+              </nav>
+            </div>
+          )}
 
           {/* Aba de serviço ativo */}
           {activeServiceId && (
@@ -4296,46 +4408,31 @@ const handleServiceCreate = async () => {
             </div>
           )}
 
-          {/* Botão para testar tracking (apenas em desenvolvimento) */}
+          {/* Mensagem quando não há serviço ativo */}
           {!activeServiceId && (
-            <div className={`${themeClasses.bgCard} ${themeClasses.border} border rounded-lg p-4 mb-6 shadow-sm`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className={`font-semibold ${themeClasses.text}`}>Teste de Tracking</h3>
-                  <p className={`text-sm ${themeClasses.textSecondary}`}>
-                    Simular um serviço para testar o rastreamento
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    const testDestination = {
-                      address: 'Rua de Teste, 123 - São Paulo - SP',
-                      lat: -23.5505 + (Math.random() - 0.5) * 0.01,
-                      lng: -46.6333 + (Math.random() - 0.5) * 0.01
-                    }
-                    handleStartTracking(testDestination)
-                  }}
-                  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
-                >
-                  🚀 Testar
-                </button>
-              </div>
+            <div className={`${themeClasses.bgCard} ${themeClasses.border} border rounded-lg p-4 mb-6 shadow-sm text-center`}>
+              <p className={`${themeClasses.textSecondary}`}>
+                Nenhum serviço solicitado no momento
+              </p>
             </div>
           )}
 
           {/* Hero section */}
-          <div className="bg-green-500 text-white rounded-lg p-6 mb-6 flex items-center">
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold mb-2">
+          <div className="bg-green-500 text-white rounded-lg p-4 md:p-6 mb-4 md:mb-6 flex items-center">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl md:text-2xl font-bold mb-2">
                 Agende já o seu<br />
                 serviço sem sair<br />
                 de casa
               </h2>
-              <button className="bg-white text-green-500 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+              <button 
+                onClick={() => handleScreenTransition('service-create')}
+                className="bg-white text-green-500 px-4 md:px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition-colors text-sm md:text-base"
+              >
                 Serviços
               </button>
             </div>
-            <div className="w-32 h-32 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+            <div className="w-20 h-20 md:w-32 md:h-32 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0 ml-4">
               <svg viewBox="0 0 100 100" className="w-20 h-24">
                 {/* Celular com chat */}
                 <rect x="25" y="10" width="50" height="80" rx="8" fill="#FFF" stroke="#333" strokeWidth="2"/>
@@ -4372,7 +4469,7 @@ const handleServiceCreate = async () => {
           </div>
 
           {/* Service cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
             {serviceCards.map((service) => (
               <button
                 key={service.id}
@@ -4380,7 +4477,7 @@ const handleServiceCreate = async () => {
                   setSelectedEstablishmentType(service.id)
                   handleScreenTransition('establishments-list')
                 }}
-                className={`${themeClasses.bgCard} p-6 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 text-center group ${themeClasses.border} border backdrop-blur-sm`}
+                className={`${themeClasses.bgCard} p-4 md:p-6 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 text-center group ${themeClasses.border} border backdrop-blur-sm`}
               >
                 <div className="group-hover:animate-pulse transition-all duration-300">
                   {service.image}
@@ -4392,6 +4489,15 @@ const handleServiceCreate = async () => {
 
         </div>
       </div>
+      
+      <NotificationSidebar
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        notifications={notifications}
+        onMarkAsRead={handleMarkAsRead}
+        onClearAll={handleClearAllNotifications}
+      />
+      </>
     )
   }
 
@@ -4478,26 +4584,86 @@ const handleServiceCreate = async () => {
                 </select>
               </div>
 
-              <div>
+              <div className="relative">
                 <label className="block text-gray-700 text-sm mb-2">Endereço (opcional)</label>
                 <input
                   type="text"
                   value={profileData.endereco}
-                  onChange={(e) => setProfileData({...profileData, endereco: e.target.value})}
-                  placeholder="Seu endereço completo"
+                  onChange={async (e) => {
+                    const value = e.target.value
+                    setProfileData({...profileData, endereco: value})
+                    
+                    // Buscar sugestões de endereço quando digitar mais de 3 caracteres
+                    if (value.length > 3) {
+                      setIsSearchingAddress(true)
+                      setShowAddressSuggestions(true)
+                      
+                      try {
+                        // Usar API do Nominatim para buscar endereços no Brasil
+                        const response = await fetch(
+                          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}&countrycodes=br&limit=5&addressdetails=1`,
+                          {
+                            headers: {
+                              'User-Agent': 'FacilitaApp/1.0'
+                            }
+                          }
+                        )
+                        
+                        if (response.ok) {
+                          const data = await response.json()
+                          setAddressSuggestions(data)
+                        }
+                      } catch (error) {
+                        console.error('Erro ao buscar endereços:', error)
+                      } finally {
+                        setIsSearchingAddress(false)
+                      }
+                    } else {
+                      setShowAddressSuggestions(false)
+                      setAddressSuggestions([])
+                    }
+                  }}
+                  onBlur={() => {
+                    // Delay para permitir clique na sugestão
+                    setTimeout(() => setShowAddressSuggestions(false), 200)
+                  }}
+                  onFocus={() => {
+                    if (addressSuggestions.length > 0) {
+                      setShowAddressSuggestions(true)
+                    }
+                  }}
+                  placeholder="Digite seu endereço"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
-                <p className="text-xs text-gray-500 mt-1">Usado para encontrar prestadores próximos</p>
+                
+                {/* Sugestões de endereço */}
+                {showAddressSuggestions && addressSuggestions.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {addressSuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => {
+                          setProfileData({...profileData, endereco: suggestion.display_name})
+                          setShowAddressSuggestions(false)
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-100 border-b border-gray-200 last:border-b-0 transition-colors"
+                      >
+                        <div className="text-sm text-gray-800">{suggestion.display_name}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                {isSearchingAddress && (
+                  <div className="absolute right-3 top-10 text-gray-400">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-500"></div>
+                  </div>
+                )}
+                
+                <p className="text-xs text-gray-500 mt-1">Digite para ver sugestões de endereços</p>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-blue-800 mb-2">Dados que serão enviados:</h3>
-                <ul className="text-xs text-blue-700 space-y-1">
-                  <li>• <strong>CPF:</strong> {profileData.cpf || 'Não informado'}</li>
-                  <li>• <strong>Necessidade:</strong> {profileData.necessidade || 'Não selecionada'}</li>
-                  <li>• <strong>ID Localização:</strong> 1 (padrão)</li>
-                </ul>
-              </div>
 
               <button
                 onClick={handleProfileSetup}
@@ -5558,6 +5724,15 @@ const handleServiceCreate = async () => {
           }
         }}
         userName={loggedUser?.nome || 'Usuário'}
+      />
+
+      {/* Sidebar de Notificações */}
+      <NotificationSidebar
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        notifications={notifications}
+        onMarkAsRead={handleMarkAsRead}
+        onClearAll={handleClearAllNotifications}
       />
     </div>
   )
