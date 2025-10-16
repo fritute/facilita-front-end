@@ -12,6 +12,7 @@ import HomeScreen from './screens/HomeScreen'
 import WalletScreen from './screens/WalletScreen'
 import ProfileScreen from './screens/ProfileScreen'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
+import { API_ENDPOINTS } from './config/constants'
 //TELAS PARA TESTES E PARA MOVER
 type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet"
 
@@ -69,6 +70,7 @@ interface RegisterData {
 interface LoggedUser {
   id?: number // ID do usuário na tabela usuario
   id_contratante?: number // ID na tabela contratante (se for CONTRATANTE)
+  id_localizacao?: number // ID da localização do usuário
   nome: string
   email: string
   telefone: string
@@ -880,17 +882,30 @@ function App() {
   // Função para buscar categorias de serviço da API
   const fetchServiceCategories = async () => {
     setLoadingCategories(true)
+    console.log('🔍 Buscando categorias de serviço...')
+    console.log('🌐 URL:', API_ENDPOINTS.CATEGORIES)
+    
     try {
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/categoria')
+      const response = await fetch(API_ENDPOINTS.CATEGORIES)
+      console.log('📥 Resposta recebida - Status:', response.status)
       
       if (response.ok) {
         const data = await response.json()
-        setServiceCategories(data)
+        console.log('✅ Categorias recebidas:', data)
+        console.log('📊 Quantidade de categorias:', Array.isArray(data) ? data.length : 'Não é array')
+        
+        // A API pode retornar { data: [...] } ou diretamente [...]
+        const categories = Array.isArray(data) ? data : (data.data || [])
+        console.log('📋 Categorias processadas:', categories)
+        
+        setServiceCategories(categories)
       } else {
-        console.error('Erro ao buscar categorias:', response.status)
+        console.error('❌ Erro ao buscar categorias:', response.status)
+        const errorText = await response.text()
+        console.error('❌ Detalhes do erro:', errorText)
       }
     } catch (error) {
-      console.error('Erro na requisição de categorias:', error)
+      console.error('❌ Erro na requisição de categorias:', error)
     } finally {
       setLoadingCategories(false)
     }
@@ -914,7 +929,7 @@ function App() {
       }
 
       // Buscar dados do contratante para pegar id_localizacao
-      const contratanteResponse = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/contratante/${contratanteId}`, {
+      const contratanteResponse = await fetch(API_ENDPOINTS.CONTRATANTE_BY_ID(contratanteId.toString()), {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -940,7 +955,7 @@ function App() {
         valor_personalizado: servicePrice || 25.00
       }
 
-      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/servico/from-categoria/${categoryId}`, {
+      const response = await fetch(API_ENDPOINTS.SERVICE_FROM_CATEGORY(categoryId), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -953,7 +968,7 @@ function App() {
         const createdService = await response.json()
         setCreatedServiceId(createdService.id || createdService.id_servico)
         alert('Serviço criado com sucesso!')
-        handleScreenTransition('service-confirmed')
+        handleScreenTransition('payment')
       } else {
         const errorData = await response.json().catch(() => ({}))
         alert(`Erro ao criar serviço: ${errorData.message || 'Erro desconhecido'}`)
@@ -979,7 +994,7 @@ function App() {
   const generatePagBankPayment = async (amount: number) => {
     try {
       const token = localStorage.getItem('authToken')
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/pagamento/pagbank', {
+      const response = await fetch(API_ENDPOINTS.PAGBANK_PAYMENT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1222,7 +1237,16 @@ function App() {
         throw new Error('Sessão expirada')
       }
 
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/perfil', {
+      // Buscar ID do usuário logado
+      const userId = loggedUser?.id
+      if (!userId) {
+        throw new Error('ID do usuário não encontrado')
+      }
+
+      console.log('📤 Atualizando perfil do usuário ID:', userId)
+
+      // Usar endpoint UPDATE_PROFILE com PUT
+      const response = await fetch(API_ENDPOINTS.UPDATE_PROFILE, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1239,8 +1263,12 @@ function App() {
           throw new Error('Sessão expirada. Faça login novamente.')
         }
         const errorData = await response.json().catch(() => ({}))
+        console.error('Erro na resposta:', errorData)
         throw new Error(errorData.message || 'Erro ao atualizar perfil')
       }
+
+      const responseData = await response.json()
+      console.log('✅ Perfil atualizado com sucesso:', responseData)
 
       // Atualizar dados do usuário logado no estado
       const updatedUser = {
@@ -1414,7 +1442,7 @@ function App() {
       
       console.log('📤 Enviando login:', { login: loginPayload.login, senha: '***' })
       
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/login', {
+      const response = await fetch(API_ENDPOINTS.LOGIN, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1597,7 +1625,7 @@ function App() {
     console.log('📤 Enviando cadastro:', { ...registerData, senha_hash: '***', tipo_conta: selectedAccountType })
 
     try {
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/register', {
+      const response = await fetch(API_ENDPOINTS.REGISTER, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1642,7 +1670,7 @@ function App() {
           console.log('🔄 Token não retornado no cadastro, fazendo login automático...')
           
           try {
-            const loginResponse = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/login', {
+            const loginResponse = await fetch(API_ENDPOINTS.LOGIN, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -1745,7 +1773,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/register', {
+      const response = await fetch(API_ENDPOINTS.REGISTER, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1836,7 +1864,7 @@ function App() {
       console.log('Enviando requisição de recuperação:', payload)
       console.log('Telefone normalizado:', isEmail ? 'N/A' : normalizePhoneNumber(recoveryContact))
       
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/recuperar-senha', {
+      const response = await fetch(API_ENDPOINTS.RECOVER_PASSWORD, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1947,7 +1975,7 @@ function App() {
         )
       }
 
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/redefinir-senha', {
+      const response = await fetch(API_ENDPOINTS.RESET_PASSWORD, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2012,7 +2040,7 @@ function App() {
       console.log('📦 Payload SEM id_usuario (alternativo):', JSON.stringify(payloadSemId, null, 2))
       
       // Tentar primeiro com id_usuario
-      let response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/register', {
+      let response = await fetchWithAuth(API_ENDPOINTS.CONTRATANTE_REGISTER, {
         method: 'POST',
         body: JSON.stringify(payload)
       })
@@ -2027,7 +2055,7 @@ function App() {
         console.log('📋 Erro da primeira tentativa:', errorData)
         
         // Tentar novamente sem id_usuario
-        response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/contratante/register', {
+        response = await fetchWithAuth(API_ENDPOINTS.CONTRATANTE_REGISTER, {
           method: 'POST',
           body: JSON.stringify(payloadSemId)
         })
@@ -2489,9 +2517,8 @@ const handleServiceCreate = async () => {
       // Definir serviço como ativo
       setActiveServiceId(createdServiceId)
       setServiceStartTime(new Date())
-      // TEMPORÁRIO: Pular pagamento e ir direto para confirmação
-      // para verificar se o pedido está sendo enviado ao banco
-      handleScreenTransition('service-confirmed')
+      // Ir para tela de pagamento após criar o serviço
+      handleScreenTransition('payment')
     } else {
       console.error('❌ Falha ao criar serviço')
       alert('Não foi possível criar o serviço. Verifique os dados e tente novamente.')
@@ -2508,39 +2535,48 @@ const handleServiceCreate = async () => {
     alert('Código PIX copiado!')
   }
 
-  // Função para obter localização atual ou usar localização padrão
+  // Função para obter localização atual do usuário
   const getCurrentLocationId = async () => {
     try {
-      // Tentar obter localização via geolocalização do navegador
-      if (navigator.geolocation) {
-        return new Promise<number>((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              const { latitude, longitude } = position.coords
-              console.log('📍 Localização obtida:', { latitude, longitude })
-              
-              // Aqui você pode implementar lógica para determinar o ID da localização
-              // baseado nas coordenadas (ex: consultar API de regiões)
-              // Por enquanto, usar ID baseado na região de São Paulo
-              if (latitude >= -24 && latitude <= -23 && longitude >= -47 && longitude <= -46) {
-                resolve(1) // Região da Grande São Paulo
-              } else {
-                resolve(2) // Outras regiões
-              }
-            },
-            (error) => {
-              console.warn('⚠️ Erro ao obter geolocalização:', error.message)
-              resolve(1) // ID padrão em caso de erro
-            },
-            { timeout: 5000, enableHighAccuracy: false }
-          )
-        })
-      } else {
-        console.warn('⚠️ Geolocalização não suportada pelo navegador')
-        return 1
+      // Priorizar id_localizacao do perfil do usuário
+      if (loggedUser?.id_localizacao) {
+        console.log('✅ Usando id_localizacao do perfil:', loggedUser.id_localizacao)
+        return loggedUser.id_localizacao
       }
+      
+      // Se não tiver no perfil, buscar dos dados do contratante
+      console.log('⚠️ id_localizacao não disponível no perfil, buscando...')
+      
+      // Tentar buscar dados do contratante que incluem id_localizacao
+      if (loggedUser?.id) {
+        const response = await fetchWithAuth(`https://servidor-facilita.onrender.com/v1/facilita/contratante?id_usuario=${loggedUser.id}`)
+        
+        if (response.ok) {
+          const data = await response.json()
+          const contratanteData = Array.isArray(data) ? data[0] : data
+          const idLocalizacao = contratanteData?.id_localizacao
+          
+          if (idLocalizacao) {
+            console.log('✅ id_localizacao obtido da API:', idLocalizacao)
+            
+            // Salvar no loggedUser para próximas vezes
+            const updatedUser = {
+              ...loggedUser,
+              id_localizacao: idLocalizacao
+            }
+            setLoggedUser(updatedUser)
+            localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
+            
+            return idLocalizacao
+          }
+        }
+      }
+      
+      // Fallback: usar ID padrão
+      console.warn('⚠️ Não foi possível obter id_localizacao, usando padrão: 1')
+      return 1
     } catch (error) {
-      console.warn('⚠️ Erro na geolocalização:', error)
+      console.warn('⚠️ Erro ao obter id_localizacao:', error)
       return 1 // ID fixo como fallback
     }
   }
@@ -2575,16 +2611,19 @@ const handleServiceCreate = async () => {
           console.log('📋 Dados do contratante:', contratanteData)
           
           // Quando busca por id_usuario, retorna dados do CONTRATANTE diretamente
-          // { id: 10, id_usuario: 32, necessidade: "...", usuario: {...} }
+          // { id: 10, id_usuario: 32, necessidade: "...", id_localizacao: 1, usuario: {...} }
           // O campo "id" aqui JÁ É o id_contratante!
           const idContratante = contratanteData?.id
           const idUsuario = contratanteData?.id_usuario || contratanteData?.usuario?.id
+          const idLocalizacao = contratanteData?.id_localizacao
           
           console.log('🔍 Extraindo IDs da resposta:')
           console.log('  - contratanteData.id (id_contratante):', contratanteData?.id)
           console.log('  - contratanteData.id_usuario:', contratanteData?.id_usuario)
+          console.log('  - contratanteData.id_localizacao:', contratanteData?.id_localizacao)
           console.log('  - contratanteData.usuario.id:', contratanteData?.usuario?.id)
           console.log('  - ID do contratante extraído:', idContratante)
+          console.log('  - ID da localização extraído:', idLocalizacao)
           
           if (!idContratante) {
             console.error('❌ ERRO: ID do contratante não encontrado na resposta!')
@@ -2598,14 +2637,16 @@ const handleServiceCreate = async () => {
             console.warn('Verifique se a API está retornando os dados corretos.')
           }
           
-          // Salvar o id_contratante para uso futuro
+          // Salvar o id_contratante e id_localizacao para uso futuro
           const updatedUser = {
             ...loggedUser,
-            id_contratante: idContratante
+            id_contratante: idContratante,
+            id_localizacao: idLocalizacao
           }
           setLoggedUser(updatedUser)
           localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
           console.log('✅ ID do contratante salvo:', idContratante)
+          console.log('✅ ID da localização salvo:', idLocalizacao)
           console.log('⚠️ IMPORTANTE: Retornando', idContratante, '(id da tabela contratante), NÃO', loggedUser.id, '(id_usuario)')
           
           return idContratante
@@ -2627,37 +2668,46 @@ const handleServiceCreate = async () => {
     }
   }
 
-  // Função para mapear tipo de serviço para categoria
-  const getServiceCategoryId = (description: string) => {
-    const desc = description.toLowerCase()
-    
-    // Mapeamento de palavras-chave para IDs de categoria
-    if (desc.includes('farmácia') || desc.includes('remédio') || desc.includes('medicamento')) {
-      return 2 // Categoria Farmácia
-    } else if (desc.includes('mercado') || desc.includes('compra') || desc.includes('supermercado')) {
-      return 3 // Categoria Mercado
-    } else if (desc.includes('correio') || desc.includes('encomenda') || desc.includes('pacote')) {
-      return 4 // Categoria Correios
-    } else if (desc.includes('shopping') || desc.includes('loja') || desc.includes('compra')) {
-      return 5 // Categoria Shopping
-    } else if (desc.includes('uber') || desc.includes('transporte') || desc.includes('viagem')) {
-      return 6 // Categoria Transporte
+  // Função para obter um prestador válido
+  const getValidPrestadorId = async (): Promise<number> => {
+    try {
+      console.log('🔍 Buscando prestadores disponíveis...')
+      const response = await fetchWithAuth(API_ENDPOINTS.PRESTADORES)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('📋 Prestadores disponíveis:', data)
+        
+        // A API pode retornar um array ou um objeto com data
+        const prestadores = Array.isArray(data) ? data : (data.data || [])
+        
+        if (prestadores.length > 0) {
+          // Pegar o primeiro prestador disponível
+          const prestadorId = prestadores[0].id
+          console.log('✅ Prestador selecionado:', prestadorId)
+          return prestadorId
+        } else {
+          console.warn('⚠️ Nenhum prestador encontrado, usando ID padrão 1')
+          return 1
+        }
+      } else {
+        console.warn('⚠️ Erro ao buscar prestadores, usando ID padrão 1')
+        return 1
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar prestadores:', error)
+      console.warn('⚠️ Usando ID padrão 1')
+      return 1
     }
-    
-    return 1 // Categoria padrão (Geral)
   }
 
-  // Função para obter nome da categoria pelo ID
-  const getCategoryName = (id: number) => {
-    const categories: { [key: number]: string } = {
-      1: 'Geral',
-      2: 'Farmácia',
-      3: 'Mercado',
-      4: 'Correios',
-      5: 'Shopping',
-      6: 'Transporte'
-    }
-    return categories[id] || 'Desconhecida'
+  // Função para obter nome da categoria pelo ID (da API)
+  const getCategoryName = (id: number | null) => {
+    if (!id) return 'Sem categoria'
+    
+    // Buscar nome da categoria nas categorias carregadas da API
+    const category = serviceCategories.find(cat => cat.id === id)
+    return category?.nome || `Categoria ${id}`
   }
 
   // Função para filtrar e ordenar pedidos
@@ -3070,9 +3120,18 @@ const handleServiceCreate = async () => {
       console.log('✅ ID do contratante obtido:', id_contratante)
       
       const id_localizacao = await getCurrentLocationId()
+      console.log('📍 ID da localização obtido:', id_localizacao)
+      console.log('🔍 Fonte do id_localizacao:', loggedUser?.id_localizacao ? 'Perfil do usuário' : 'Fallback (pode ser mockado)')
+      console.log('⚠️ ATENÇÃO: Verifique se id_localizacao=' + id_localizacao + ' existe na tabela LOCALIZACAO do banco!')
+      
+      if (id_localizacao === 1 && !loggedUser?.id_localizacao) {
+        console.warn('🚨 POSSÍVEL PROBLEMA: id_localizacao=1 é fallback, pode não existir no banco!')
+      }
       
       const descricaoServico = serviceDescription || selectedServiceType || 'Serviço de entrega personalizado'
-      const id_categoria = getServiceCategoryId(descricaoServico)
+      
+      // Usar APENAS categoria selecionada pelo usuário (não detectar automaticamente)
+      const id_categoria = selectedCategoryId
       
       // Validar dados antes de enviar
       if (!id_contratante || id_contratante <= 0) {
@@ -3081,10 +3140,9 @@ const handleServiceCreate = async () => {
         return false
       }
       
-      if (!id_categoria || id_categoria <= 0) {
-        console.error('❌ ID da categoria inválido:', id_categoria)
-        alert('Erro: Categoria do serviço não foi identificada.')
-        return false
+      // Categoria é opcional - se não tiver, usa endpoint sem categoria
+      if (id_categoria && id_categoria <= 0) {
+        console.warn('⚠️ ID da categoria inválido, criando serviço sem categoria')
       }
       
       if (!id_localizacao || id_localizacao <= 0) {
@@ -3099,47 +3157,136 @@ const handleServiceCreate = async () => {
         return false
       }
 
-      const serviceData = {
-        id_contratante: Number(id_contratante),
-        id_prestador: 2, // ID fixo por enquanto (ainda não tem sistema de seleção de prestador)
-        id_categoria: Number(id_categoria),
-        id_localizacao: Number(id_localizacao),
-        descricao: descricaoServico.trim(),
-        status: 'PENDENTE'
+      // Usar valor definido pelo usuário ou calcular baseado na distância
+      let valorServico = servicePrice
+      if (!valorServico || valorServico <= 0) {
+        // Se usuário não definiu valor, calcular automaticamente
+        valorServico = 20.00 // Valor padrão
+        if (pickupLocation && deliveryLocation) {
+          const distance = calculateDistance(
+            pickupLocation.lat,
+            pickupLocation.lng,
+            deliveryLocation.lat,
+            deliveryLocation.lng
+          )
+          valorServico = calculatePrice(distance)
+        }
       }
+      
+      // TESTE: Payload mínimo para identificar campo problemático
+      const serviceData: any = {}
+      
+      // Começar apenas com descrição
+      serviceData.descricao = descricaoServico.trim()
+      
+      console.log('🧪 TESTE MÍNIMO: Enviando apenas { descricao }')
+      console.log('🔍 Se funcionar, vamos adicionando campos um por um')
+      console.log('🔍 Se falhar, o problema é no endpoint ou autenticação')
+      
+      // Comentado temporariamente para teste:
+      // serviceData.id_localizacao = Number(id_localizacao)
+      // serviceData.valor = Number(valorServico.toFixed(2))  
+      // serviceData.id_prestador = 1
+      
+      // Remover qualquer campo undefined, null ou vazio
+      Object.keys(serviceData).forEach(key => {
+        if (serviceData[key] === undefined || serviceData[key] === null || serviceData[key] === '') {
+          delete serviceData[key]
+        }
+      })
 
       console.log('=== CRIAÇÃO DE SERVIÇO ===')
-      console.log('📤 Payload para API:', serviceData)
-      console.log('⚠️ IMPORTANTE: id_contratante deve ser o ID da tabela CONTRATANTE, não da tabela USUARIO')
-      console.log('📊 Comparação:', {
+      console.log('📤 Payload para API (NOVO FORMATO):', serviceData)
+      console.log('📊 Informações do usuário:', {
         id_usuario: loggedUser?.id,
-        id_contratante_enviado: id_contratante,
-        id_contratante_salvo: loggedUser?.id_contratante
+        id_contratante: id_contratante,
+        email: loggedUser?.email
       })
       console.log('🗺 Localizações:', {
         origem: pickupLocation,
         destino: deliveryLocation,
         id_localizacao: id_localizacao
       })
-      console.log('🏷️ Categoria detectada:', {
+      console.log('🏷️ Categoria selecionada:', {
         descricao: descricaoServico,
-        id_categoria: id_categoria,
+        id_categoria: id_categoria || 'Nenhuma (opcional)',
         categoria_nome: getCategoryName(id_categoria)
       })
+      console.log('💰 Valor calculado:', valorServico.toFixed(2))
       console.log('✅ Validação dos dados:')
-      console.log('  - id_contratante válido:', typeof id_contratante === 'number' && id_contratante > 0)
       console.log('  - id_categoria válido:', typeof id_categoria === 'number' && id_categoria > 0)
       console.log('  - id_localizacao válido:', typeof id_localizacao === 'number' && id_localizacao > 0)
       console.log('  - descricao válida:', typeof descricaoServico === 'string' && descricaoServico.length >= 3)
+      console.log('  - valor válido:', typeof valorServico === 'number' && valorServico > 0)
       console.log('==========================')
 
-      console.log('📤 Enviando requisição para API...')
-      console.log('🌐 URL:', 'https://servidor-facilita.onrender.com/v1/facilita/servico')
-      console.log('📋 Payload:', JSON.stringify(serviceData, null, 2))
+      // TESTE: Forçar endpoint /servico para teste mínimo
+      let endpoint: string = API_ENDPOINTS.SERVICES
+      let finalPayload = { ...serviceData }
       
-      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/servico', {
+      console.log('🧪 TESTE: Forçando endpoint /servico para teste mínimo')
+      console.log('🎯 Endpoint usado:', endpoint)
+      
+      console.log('📤 Enviando requisição para API...')
+      console.log('🌐 URL:', endpoint)
+      console.log('📋 Payload final:', JSON.stringify(finalPayload, null, 2))
+      
+      // Logs detalhados de cada campo para debug
+      console.log('🔍 ANÁLISE DETALHADA DOS CAMPOS:')
+      if (finalPayload.descricao_personalizada) {
+        console.log('  📝 descricao_personalizada:', finalPayload.descricao_personalizada, '(tipo:', typeof finalPayload.descricao_personalizada, ', length:', finalPayload.descricao_personalizada?.length, ')')
+        console.log('  💰 valor_personalizado:', finalPayload.valor_personalizado, '(tipo:', typeof finalPayload.valor_personalizado, ')')
+      } else {
+        console.log('  📝 descricao:', finalPayload.descricao, '(tipo:', typeof finalPayload.descricao, ', length:', finalPayload.descricao?.length, ')')
+        console.log('  💰 valor:', finalPayload.valor, '(tipo:', typeof finalPayload.valor, ')')
+        console.log('  🏷️ id_categoria:', finalPayload.id_categoria, '(tipo:', typeof finalPayload.id_categoria, ')')
+      }
+      console.log('  📍 id_localizacao:', finalPayload.id_localizacao, '(tipo:', typeof finalPayload.id_localizacao, ')')
+      console.log('🔍 POSSÍVEIS PROBLEMAS:')
+      console.log('  - id_localizacao=1 existe no banco?')
+      console.log('  - Endpoint', endpoint, 'está correto?')
+      console.log('  - Payload tem campos extras/inválidos?')
+      console.log('  - Backend espera campos diferentes?')
+      console.log('🧪 SE AINDA DER ERRO 500:')
+      console.log('  - Tente apenas: { "descricao": "teste" }')
+      console.log('  - Verifique documentação da API')
+      console.log('  - Confirme se endpoint /servico está funcionando')
+      
+      // TESTE 1: Verificar se endpoint existe com GET
+      console.log('🧪 TESTE 1: Verificando se endpoint existe com GET...')
+      try {
+        const testGet = await fetch(endpoint)
+        console.log('📥 GET Response Status:', testGet.status)
+        console.log('📥 GET Response OK:', testGet.ok)
+      } catch (error) {
+        console.error('❌ Erro no GET:', error)
+      }
+      
+      // TESTE 2: Tentar POST sem autenticação
+      console.log('🧪 TESTE 2: Tentando POST sem autenticação...')
+      try {
+        const testPost = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(finalPayload)
+        })
+        console.log('📥 POST sem auth - Status:', testPost.status)
+        console.log('📥 POST sem auth - OK:', testPost.ok)
+        if (!testPost.ok) {
+          const errorText = await testPost.text()
+          console.log('📥 POST sem auth - Erro:', errorText)
+        }
+      } catch (error) {
+        console.error('❌ Erro no POST sem auth:', error)
+      }
+      
+      // TESTE 3: POST com autenticação (original)
+      console.log('🧪 TESTE 3: POST com autenticação (original)...')
+      const response = await fetchWithAuth(endpoint, {
         method: 'POST',
-        body: JSON.stringify(serviceData)
+        body: JSON.stringify(finalPayload)
       })
 
       console.log('📥 Resposta recebida:')
@@ -3189,13 +3336,11 @@ const handleServiceCreate = async () => {
         // Salvar dados do serviço no localStorage para referência
         const serviceInfo = {
           id: serviceId,
-          id_contratante: serviceData.id_contratante,
-          id_prestador: serviceData.id_prestador,
           id_categoria: serviceData.id_categoria,
           id_localizacao: serviceData.id_localizacao,
           descricao: serviceData.descricao,
+          valor: serviceData.valor,
           status: 'PENDENTE',
-          preco: servicePrice > 0 ? servicePrice : 119.99,
           origem: pickupLocation,
           destino: deliveryLocation,
           createdAt: new Date().toISOString(),
@@ -3224,12 +3369,25 @@ const handleServiceCreate = async () => {
           } else if (response.status === 404) {
             errorMessage = 'Serviço não encontrado na API.'
           } else if (response.status === 500) {
-            errorMessage = 'Erro interno do servidor. Tente novamente mais tarde.'
+            // Erro 500 pode ser causado por:
+            // 1. id_prestador inexistente no banco
+            // 2. id_localizacao inválido
+            // 3. Constraint de foreign key
+            console.error('⚠️ POSSÍVEIS CAUSAS DO ERRO 500:')
+            console.error('  1. id_prestador não existe na tabela PRESTADOR')
+            console.error('  2. id_localizacao não existe na tabela LOCALIZACAO')
+            console.error('  3. id_categoria não existe na tabela CATEGORIA')
+            console.error('  4. id_contratante não existe na tabela CONTRATANTE')
+            console.error('  5. Violação de constraint no banco de dados')
+            console.error('📋 Dados enviados:', serviceData)
+            
+            errorMessage = `Erro interno do servidor (500).\n\nPossíveis causas:\n- ID do prestador inválido\n- ID da localização inválido\n- Dados inconsistentes no banco\n\nDetalhes: ${errorData.message || 'Sem detalhes adicionais'}`
           } else {
             errorMessage = errorData.message || `Erro ${response.status}: ${response.statusText}`
           }
           
           alert(`Erro ao criar serviço: ${errorMessage}`)
+          console.error('💡 SUGESTÃO: Verifique se todos os IDs de referência existem no banco de dados')
         } catch (parseError) {
           console.error('❌ Erro ao parsear resposta de erro:', parseError)
           
@@ -3288,7 +3446,7 @@ const handleServiceCreate = async () => {
       
       console.log('📤 Enviando confirmação de pagamento:', paymentData)
       
-      const response = await fetchWithAuth('https://servidor-facilita.onrender.com/v1/facilita/pagamento', {
+      const response = await fetchWithAuth(API_ENDPOINTS.PAYMENTS, {
         method: 'POST',
         body: JSON.stringify(paymentData)
       })
@@ -3672,6 +3830,7 @@ const handleServiceCreate = async () => {
         serviceCategories={serviceCategories}
         loadingCategories={loadingCategories}
         selectedCategoryId={selectedCategoryId}
+        servicePrice={servicePrice}
         onBack={() => handleScreenTransition('home')}
         onSelectOrigin={() => {
           setIsSelectingOrigin(true)
@@ -3685,8 +3844,20 @@ const handleServiceCreate = async () => {
         onServiceTypeChange={setSelectedServiceType}
         onCategorySelect={(categoryId: number) => {
           setSelectedCategoryId(categoryId)
-          createServiceFromCategory(categoryId)
+          console.log('✅ Categoria selecionada pelo usuário:')
+          console.log('  - ID:', categoryId)
+          console.log('  - Tipo:', typeof categoryId)
+          
+          // Buscar dados completos da categoria
+          const selectedCategory = serviceCategories.find(cat => cat.id === categoryId)
+          if (selectedCategory) {
+            console.log('  - Nome:', selectedCategory.nome)
+            console.log('  - Descrição:', selectedCategory.descricao)
+            console.log('  - Preço base:', selectedCategory.preco_base)
+            console.log('  - Tempo médio:', selectedCategory.tempo_medio, 'min')
+          }
         }}
+        onPriceChange={setServicePrice}
         onConfirmService={handleServiceCreate}
         calculateDistance={calculateDistance}
         calculatePrice={calculatePrice}

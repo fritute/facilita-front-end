@@ -3,6 +3,15 @@ import { ArrowLeft, MapPin, Home, Package } from 'lucide-react'
 import AddressSearch from '../components/AddressSearch'
 import { LocationCoordinates } from '../services/geocoding.service'
 
+interface ServiceCategory {
+  id: number
+  nome: string
+  descricao?: string
+  icone?: string
+  preco_base?: string
+  tempo_medio?: number
+}
+
 interface ServiceCreateScreenProps {
   userAddress: string
   serviceDescription: string
@@ -10,11 +19,17 @@ interface ServiceCreateScreenProps {
   pickupLocation: LocationCoordinates | null
   deliveryLocation: LocationCoordinates | null
   predefinedServices: Array<{ id: string; name: string; icon: string }>
+  serviceCategories: ServiceCategory[]
+  loadingCategories: boolean
+  selectedCategoryId: number | null
+  servicePrice: number
   onBack: () => void
   onPickupLocationChange: (location: LocationCoordinates) => void
   onDeliveryLocationChange: (location: LocationCoordinates) => void
   onDescriptionChange: (value: string) => void
   onServiceTypeChange: (value: string) => void
+  onCategorySelect: (categoryId: number) => void
+  onPriceChange: (value: number) => void
   onConfirmService: () => void
 }
 
@@ -25,11 +40,17 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
   pickupLocation,
   deliveryLocation,
   predefinedServices,
+  serviceCategories,
+  loadingCategories,
+  selectedCategoryId,
+  servicePrice,
   onBack,
   onPickupLocationChange,
   onDeliveryLocationChange,
   onDescriptionChange,
   onServiceTypeChange,
+  onCategorySelect,
+  onPriceChange,
   onConfirmService
 }) => {
   const [showPickupSearch, setShowPickupSearch] = useState(false)
@@ -201,25 +222,59 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
           />
         </div>
 
-        {/* Tipo de serviço */}
+        {/* Valor do serviço */}
         <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
-          <h3 className="font-semibold mb-4 text-gray-800">Tipo de Serviço</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {predefinedServices.map((service) => (
-              <button
-                key={service.id}
-                onClick={() => onServiceTypeChange(service.id)}
-                className={`p-4 rounded-lg border-2 transition-all ${
-                  selectedServiceType === service.id
-                    ? 'border-green-500 bg-green-50'
-                    : 'border-gray-200 hover:border-green-300'
-                }`}
-              >
-                <div className="text-3xl mb-2">{service.icon}</div>
-                <p className="text-sm font-medium text-gray-800">{service.name}</p>
-              </button>
-            ))}
+          <h3 className="font-semibold mb-4 text-gray-800">Valor do Serviço</h3>
+          <div className="flex items-center">
+            <span className="text-2xl font-bold text-gray-700 mr-2">R$</span>
+            <input
+              type="number"
+              value={servicePrice}
+              onChange={(e) => onPriceChange(parseFloat(e.target.value) || 0)}
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-lg font-semibold"
+            />
           </div>
+          {pickupLocation && deliveryLocation && (
+            <p className="text-sm text-gray-500 mt-2">
+              📍 Distância: {distance.toFixed(2)} km | Sugestão: R$ {price.toFixed(2)}
+            </p>
+          )}
+        </div>
+
+        {/* Categorias de serviço da API */}
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+          <h3 className="font-semibold mb-4 text-gray-800">Categoria do Serviço</h3>
+          
+          {loadingCategories ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+              <p className="ml-3 text-gray-600">Carregando categorias...</p>
+            </div>
+          ) : serviceCategories.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {serviceCategories.map((category) => (
+                <button
+                  key={category.id}
+                  onClick={() => onCategorySelect(category.id)}
+                  className={`p-3 rounded-lg border-2 transition-all ${
+                    selectedCategoryId === category.id
+                      ? 'border-green-500 bg-green-50'
+                      : 'border-gray-200 hover:border-green-300'
+                  }`}
+                >
+                  <p className="text-sm font-medium text-gray-800 text-center">{category.nome}</p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>Nenhuma categoria disponível</p>
+            </div>
+          )}
         </div>
 
         {/* Botão confirmar */}
@@ -230,6 +285,21 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
         >
           Confirmar Serviço
         </button>
+        
+        {/* Mensagem de validação */}
+        {(!pickupLocation || !deliveryLocation || !serviceDescription) && (
+          <p className="text-center text-sm text-gray-500 mt-3">
+            {!pickupLocation || !deliveryLocation ? 'Selecione origem e destino' : 
+             !serviceDescription ? 'Adicione uma descrição' : ''}
+          </p>
+        )}
+        
+        {/* Nota sobre categoria */}
+        {!selectedCategoryId && (
+          <p className="text-center text-xs text-gray-400 mt-2">
+            💡 Categoria é opcional. Você pode criar o serviço sem selecionar uma categoria.
+          </p>
+        )}
       </div>
     </div>
   )

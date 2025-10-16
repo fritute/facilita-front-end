@@ -8,18 +8,38 @@ export const API_ENDPOINTS = {
   // Autenticação
   LOGIN: `${API_BASE_URL}/usuario/login`,
   SIGNUP: `${API_BASE_URL}/usuario`,
+  REGISTER: `${API_BASE_URL}/usuario/register`,
   PROFILE: `${API_BASE_URL}/usuario/perfil`,
+  UPDATE_USER: (id: string) => `${API_BASE_URL}/usuario/${id}`,
+  UPDATE_PROFILE: `${API_BASE_URL}/usuario/perfil`, // Endpoint para atualizar perfil do usuário logado
   CHANGE_PASSWORD: `${API_BASE_URL}/usuario/alterar-senha`,
+  RECOVER_PASSWORD: `${API_BASE_URL}/usuario/recuperar-senha`,
+  RESET_PASSWORD: `${API_BASE_URL}/usuario/redefinir-senha`,
+  
+  // Contratante
+  CONTRATANTE_REGISTER: `${API_BASE_URL}/contratante/register`,
+  CONTRATANTE_BY_ID: (id: string) => `${API_BASE_URL}/contratante/${id}`,
+  CONTRATANTE_BY_USER_ID: (userId: string) => `${API_BASE_URL}/contratante?id_usuario=${userId}`,
+  
+  // Prestador
+  PRESTADORES: `${API_BASE_URL}/prestador`,
+  PRESTADOR_BY_ID: (id: string) => `${API_BASE_URL}/prestador/${id}`,
   
   // Serviços
   SERVICES: `${API_BASE_URL}/servico`,
   SERVICE_BY_ID: (id: string) => `${API_BASE_URL}/servico/${id}`,
+  SERVICE_FROM_CATEGORY: (categoryId: number) => `${API_BASE_URL}/servico/from-categoria/${categoryId}`,
+  SERVICES_BY_CONTRATANTE: (contratanteId: string) => `${API_BASE_URL}/servico?id_contratante=${contratanteId}`,
+  
+  // Categorias
+  CATEGORIES: `${API_BASE_URL}/categoria`,
   
   // Avaliações
   RATINGS: `${API_BASE_URL}/avaliacao`,
   
   // Pagamentos
   PAYMENTS: `${API_BASE_URL}/pagamento`,
+  PAGBANK_PAYMENT: `${API_BASE_URL}/pagamento/pagbank`,
 }
 
 // OpenStreetMap
