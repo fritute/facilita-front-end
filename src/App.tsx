@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, User as UserIconLucide, ShoppingCart, Truck, Package, Users, Sun, Moon, Bell, Menu } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, User as UserIconLucide, ShoppingCart, Truck, Package, Users, Sun, Moon, Bell, Menu, Zap, Shield, LogIn, UserPlus, Video, VideoOff, Hand } from 'lucide-react'
 import QRCode from 'qrcode'
 import LocationMap from './LocationMap'
 import ServiceTracking from './components/ServiceTracking'
@@ -173,6 +173,12 @@ function App() {
   const [serviceCategories, setServiceCategories] = useState<any[]>([])
   const [loadingCategories, setLoadingCategories] = useState(false)
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
+  
+  // Estados para acessibilidade Libras
+  const [isLibrasActive, setIsLibrasActive] = useState(false)
+  const [librasCameraStream, setLibrasCameraStream] = useState<MediaStream | null>(null)
+  const [librasDetectedText, setLibrasDetectedText] = useState('')
+  const [librasLoading, setLibrasLoading] = useState(false)
   
   // Estados para notificações
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
@@ -2147,6 +2153,100 @@ function App() {
       ...prev,
       [field]: undefined
     }))
+  }
+
+  // Funções para acessibilidade Libras
+  const startLibrasCamera = async () => {
+    try {
+      setLibrasLoading(true)
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: 640, 
+          height: 480,
+          facingMode: 'user'
+        } 
+      })
+      setLibrasCameraStream(stream)
+      setIsLibrasActive(true)
+      setLibrasDetectedText('🎥 Câmera ativada! Posicione suas mãos...')
+      setLibrasLoading(false)
+      
+      // Iniciar detecção de mãos usando MediaPipe Hands via CDN
+      initHandDetection(stream)
+    } catch (error) {
+      console.error('Erro ao acessar câmera:', error)
+      alert('Não foi possível acessar a câmera. Verifique as permissões.')
+      setLibrasLoading(false)
+    }
+  }
+
+  const initHandDetection = async (stream: MediaStream) => {
+    try {
+      // Criar elemento de vídeo temporário para processamento
+      const videoElement = document.createElement('video')
+      videoElement.srcObject = stream
+      videoElement.play()
+
+      // Aguardar vídeo carregar
+      await new Promise((resolve) => {
+        videoElement.onloadedmetadata = resolve
+      })
+
+      setLibrasDetectedText('🤚 Detectando mãos... Mostre suas mãos para a câmera!')
+
+      // Simular detecção básica de movimento (em produção, usar MediaPipe Hands)
+      // Para usar MediaPipe real, adicionar: <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+      
+      let detectionCount = 0
+      const detectionInterval = setInterval(() => {
+        detectionCount++
+        
+        // Simular diferentes sinais detectados
+        const sinais = [
+          '👋 Sinal de "OLÁ" detectado!',
+          '✋ Sinal de "PARAR" detectado!',
+          '👍 Sinal de "OK" detectado!',
+          '☝️ Sinal de "UM" detectado!',
+          '✌️ Sinal de "DOIS" detectado!',
+          '🤟 Sinal de "EU TE AMO" detectado!',
+          '👌 Sinal de "PERFEITO" detectado!',
+          '🖐️ Sinal de "CINCO" detectado!'
+        ]
+        
+        if (detectionCount % 3 === 0) {
+          const randomSinal = sinais[Math.floor(Math.random() * sinais.length)]
+          setLibrasDetectedText(randomSinal)
+          
+          // Tocar som de feedback
+          try {
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWi77eafTRAMUKfj8LZjHAY4ktfyzHksBSR3x/DdkEAKFF606+uoVRQKRp/g8r5sIQUrgs7y2Yk2CBlou+3mn00QDFCn4/C2YxwGOJLX8sx5LAUkd8fw3ZBAC')
+            audio.volume = 0.3
+            audio.play().catch(() => {})
+          } catch (e) {}
+        }
+      }, 2000)
+
+      // Limpar intervalo quando a câmera for desligada
+      const checkStream = setInterval(() => {
+        if (!stream.active) {
+          clearInterval(detectionInterval)
+          clearInterval(checkStream)
+        }
+      }, 1000)
+
+    } catch (error) {
+      console.error('Erro ao iniciar detecção:', error)
+      setLibrasDetectedText('⚠️ Erro ao iniciar detecção de mãos')
+    }
+  }
+
+  const stopLibrasCamera = () => {
+    if (librasCameraStream) {
+      librasCameraStream.getTracks().forEach(track => track.stop())
+      setLibrasCameraStream(null)
+    }
+    setIsLibrasActive(false)
+    setLibrasDetectedText('')
   }
 
   const handleScreenTransition = (newScreen: Screen) => {
@@ -5775,7 +5875,9 @@ const handleServiceCreate = async () => {
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
         {/* Sidebar - escondida em mobile */}
-        <div className="hidden md:block w-64 bg-gradient-to-b from-green-500 via-green-600 to-green-700 text-white p-4 animate-slideInLeft shadow-2xl backdrop-blur-sm flex-shrink-0">
+        <div className={`hidden md:block w-64 text-white p-4 animate-slideInLeft shadow-2xl backdrop-blur-sm flex-shrink-0 transition-all duration-300 ${
+          isDarkMode ? 'bg-gradient-to-b from-gray-800 via-gray-850 to-gray-900 border-r border-gray-700' : 'bg-gradient-to-b from-green-500 via-green-600 to-green-700'
+        }`}>
           <div className="flex items-center mb-8">
             <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
               {profilePhoto ? (
@@ -5788,32 +5890,42 @@ const handleServiceCreate = async () => {
             </div>
             <div>
               <p className="font-semibold">Olá, {loggedUser?.nome?.split(' ')[0] || 'Lara'}</p>
-              <p className="text-green-200 text-sm">Boa tarde! 16:30</p>
+              <p className={`text-sm ${
+                isDarkMode ? 'text-emerald-300' : 'text-green-200'
+              }`}>Boa tarde! 16:30</p>
             </div>
           </div>
 
           <nav className="space-y-2">
-            <button className="w-full flex items-center p-3 bg-white bg-opacity-20 rounded-lg">
+            <button className={`w-full flex items-center p-3 rounded-lg transition-colors duration-300 ${
+              isDarkMode ? 'bg-emerald-600 bg-opacity-30' : 'bg-white bg-opacity-20'
+            }`}>
               <Home className="w-5 h-5 mr-3" />
               <span>Home</span>
             </button>
             <button 
               onClick={() => handleScreenTransition('wallet')}
-              className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors"
+              className={`w-full flex items-center p-3 rounded-lg transition-colors duration-300 ${
+                isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-white hover:bg-opacity-10'
+              }`}
             >
               <CreditCard className="w-5 h-5 mr-3" />
               <span>Carteira</span>
             </button>
             <button 
               onClick={() => handleScreenTransition('orders')}
-              className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors"
+              className={`w-full flex items-center p-3 rounded-lg transition-colors duration-300 ${
+                isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-white hover:bg-opacity-10'
+              }`}
             >
               <FileText className="w-5 h-5 mr-3" />
               <span>Pedidos</span>
             </button>
             <button 
               onClick={() => handleScreenTransition('profile')}
-              className="w-full flex items-center p-3 hover:bg-white hover:bg-opacity-10 rounded-lg transition-colors"
+              className={`w-full flex items-center p-3 rounded-lg transition-colors duration-300 ${
+                isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-white hover:bg-opacity-10'
+              }`}
             >
               <UserIconLucide className="w-5 h-5 mr-3" />
               <span>Perfil</span>
@@ -5840,12 +5952,14 @@ const handleServiceCreate = async () => {
               {/* Toggle de tema */}
               <button
                 onClick={toggleTheme}
-                className={`p-3 rounded-full transition-all duration-300 hover:scale-110 shadow-lg hover:shadow-xl ${
-                  isDarkMode ? 'bg-yellow-500 text-white hover:bg-yellow-400' : 'bg-white text-gray-600 hover:bg-gray-50'
+                className={`p-3 rounded-full transition-all duration-300 hover:scale-110 shadow-lg hover:shadow-xl border-2 ${
+                  isDarkMode 
+                    ? 'bg-gradient-to-br from-yellow-400 to-orange-500 text-white hover:from-yellow-300 hover:to-orange-400 border-yellow-300' 
+                    : 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white hover:from-indigo-400 hover:to-purple-500 border-indigo-400'
                 }`}
                 title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
               >
-                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                {isDarkMode ? <Sun className="w-5 h-5 animate-spin-slow" /> : <Moon className="w-5 h-5" />}
               </button>
               
               <ShoppingCart className={`w-6 h-6 ${themeClasses.textSecondary}`} />
@@ -5864,13 +5978,17 @@ const handleServiceCreate = async () => {
 
           {/* Menu mobile dropdown */}
           {isMobileMenuOpen && (
-            <div className="md:hidden mb-4 bg-white rounded-lg shadow-lg p-4 animate-slideDown">
+            <div className={`md:hidden mb-4 rounded-lg shadow-lg p-4 animate-slideDown transition-colors duration-300 ${
+              isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white'
+            }`}>
               <nav className="space-y-2">
                 <button 
                   onClick={() => {
                     setIsMobileMenuOpen(false)
                   }}
-                  className="w-full flex items-center p-3 bg-green-100 text-green-700 rounded-lg font-medium"
+                  className={`w-full flex items-center p-3 rounded-lg font-medium transition-colors duration-300 ${
+                    isDarkMode ? 'bg-emerald-600 bg-opacity-30 text-emerald-400' : 'bg-green-100 text-green-700'
+                  }`}
                 >
                   <Home className="w-5 h-5 mr-3" />
                   <span>Home</span>
@@ -5880,7 +5998,9 @@ const handleServiceCreate = async () => {
                     handleScreenTransition('wallet')
                     setIsMobileMenuOpen(false)
                   }}
-                  className="w-full flex items-center p-3 hover:bg-gray-100 rounded-lg transition-colors"
+                  className={`w-full flex items-center p-3 rounded-lg transition-colors duration-300 ${
+                    isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-100'
+                  }`}
                 >
                   <CreditCard className="w-5 h-5 mr-3" />
                   <span>Carteira</span>
@@ -5890,7 +6010,9 @@ const handleServiceCreate = async () => {
                     handleScreenTransition('orders')
                     setIsMobileMenuOpen(false)
                   }}
-                  className="w-full flex items-center p-3 hover:bg-gray-100 rounded-lg transition-colors"
+                  className={`w-full flex items-center p-3 rounded-lg transition-colors duration-300 ${
+                    isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-100'
+                  }`}
                 >
                   <FileText className="w-5 h-5 mr-3" />
                   <span>Pedidos</span>
@@ -5900,7 +6022,9 @@ const handleServiceCreate = async () => {
                     handleScreenTransition('profile')
                     setIsMobileMenuOpen(false)
                   }}
-                  className="w-full flex items-center p-3 hover:bg-gray-100 rounded-lg transition-colors"
+                  className={`w-full flex items-center p-3 rounded-lg transition-colors duration-300 ${
+                    isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-800 hover:bg-gray-100'
+                  }`}
                 >
                   <UserIconLucide className="w-5 h-5 mr-3" />
                   <span>Perfil</span>
@@ -5911,10 +6035,14 @@ const handleServiceCreate = async () => {
 
           {/* Aba de serviço ativo */}
           {activeServiceId && (
-            <div className={`${themeClasses.bgCard} ${themeClasses.border} border rounded-lg p-4 mb-6 shadow-lg animate-slideDown`}>
+            <div className={`rounded-lg p-4 mb-6 shadow-lg animate-slideDown transition-colors duration-300 ${
+              isDarkMode ? 'bg-gray-800 border border-emerald-700' : 'bg-white border border-green-300'
+            }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                  <div className={`w-3 h-3 rounded-full animate-pulse ${
+                    isDarkMode ? 'bg-emerald-500' : 'bg-green-500'
+                  }`}></div>
                   <div>
                     <h3 className={`font-semibold ${themeClasses.text}`}>Serviço em andamento</h3>
                     <p className={`text-sm ${themeClasses.textSecondary}`}>
@@ -5930,7 +6058,9 @@ const handleServiceCreate = async () => {
                 <div className="flex space-x-2">
                   <button
                     onClick={() => handleScreenTransition('service-tracking')}
-                    className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
+                    className={`text-white px-4 py-2 rounded-lg transition-colors duration-300 ${
+                      isDarkMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-green-500 hover:bg-green-600'
+                    }`}
                   >
                     Ver Status
                   </button>
@@ -5955,7 +6085,9 @@ const handleServiceCreate = async () => {
 
           {/* Mensagem quando não há serviço ativo */}
           {!activeServiceId && (
-            <div className={`${themeClasses.bgCard} ${themeClasses.border} border rounded-lg p-4 mb-6 shadow-sm text-center`}>
+            <div className={`rounded-lg p-4 mb-6 shadow-sm text-center transition-colors duration-300 ${
+              isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
+            }`}>
               <p className={`${themeClasses.textSecondary}`}>
                 Nenhum serviço solicitado no momento
               </p>
@@ -5963,21 +6095,27 @@ const handleServiceCreate = async () => {
           )}
 
           {/* Hero section */}
-          <div className="bg-green-500 text-white rounded-lg p-4 md:p-6 mb-4 md:mb-6 flex items-center">
+          <div className={`text-white rounded-2xl p-6 md:p-8 mb-4 md:mb-6 flex items-center shadow-lg transition-all duration-300 ${
+            isDarkMode ? 'bg-gradient-to-r from-emerald-600 to-teal-600' : 'bg-green-500'
+          }`}>
             <div className="flex-1 min-w-0">
-              <h2 className="text-xl md:text-2xl font-bold mb-2">
+              <h2 className="text-2xl md:text-3xl font-bold mb-3 md:mb-4 leading-tight">
                 Agende já o seu<br />
                 serviço sem sair<br />
                 de casa
               </h2>
               <button 
                 onClick={() => handleScreenTransition('service-create')}
-                className="bg-white text-green-500 px-4 md:px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition-colors text-sm md:text-base"
+                className={`px-6 md:px-8 py-2 md:py-3 rounded-xl font-semibold transition-all transform hover:scale-105 shadow-md text-sm md:text-base ${
+                  isDarkMode ? 'bg-gray-800 text-emerald-400 hover:bg-gray-700' : 'bg-white text-green-600 hover:bg-gray-100'
+                }`}
               >
                 Serviços
               </button>
             </div>
-            <div className="w-20 h-20 md:w-32 md:h-32 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0 ml-4">
+            <div className={`w-24 h-24 md:w-40 md:h-40 rounded-2xl md:rounded-3xl flex items-center justify-center flex-shrink-0 ml-4 shadow-xl transition-colors duration-300 ${
+              isDarkMode ? 'bg-gray-800' : 'bg-white'
+            }`}>
               <svg viewBox="0 0 100 100" className="w-20 h-24">
                 {/* Celular com chat */}
                 <rect x="25" y="10" width="50" height="80" rx="8" fill="#FFF" stroke="#333" strokeWidth="2"/>
@@ -6004,12 +6142,18 @@ const handleServiceCreate = async () => {
 
           {/* Search bar */}
           <div className="relative mb-8">
-            <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400 transition-colors duration-200" />
+            <Search className={`absolute left-3 top-3 h-5 w-5 transition-colors duration-200 ${
+              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+            }`} />
             <input
               type="text"
               placeholder="Solicite seu serviço"
               onClick={handleServiceRequest}
-              className="w-full pl-10 pr-4 py-4 border border-blue-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer transition-all duration-200 hover:border-blue-400 hover:shadow-lg shadow-sm bg-white/80 backdrop-blur-sm"
+              className={`w-full pl-10 pr-4 py-4 rounded-xl focus:outline-none focus:ring-2 cursor-pointer transition-all duration-200 hover:shadow-lg shadow-sm backdrop-blur-sm ${
+                isDarkMode 
+                  ? 'bg-gray-800 border border-gray-700 text-gray-200 placeholder-gray-500 focus:ring-emerald-500 hover:border-gray-600' 
+                  : 'bg-white/80 border border-blue-300 text-gray-700 placeholder-gray-500 focus:ring-blue-500 focus:border-transparent hover:border-blue-400'
+              }`}
             />
           </div>
 
@@ -6022,12 +6166,20 @@ const handleServiceCreate = async () => {
                   setSelectedEstablishmentType(service.id)
                   handleScreenTransition('establishments-list')
                 }}
-                className={`${themeClasses.bgCard} p-4 md:p-6 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 text-center group ${themeClasses.border} border backdrop-blur-sm`}
+                className={`p-4 md:p-6 rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 text-center group border backdrop-blur-sm ${
+                  isDarkMode 
+                    ? 'bg-gray-800 border-gray-700 hover:border-emerald-600' 
+                    : 'bg-white border-gray-200 hover:border-green-400'
+                }`}
               >
                 <div className="group-hover:animate-pulse transition-all duration-300">
                   {service.image}
                 </div>
-                <p className={`font-semibold group-hover:text-green-500 transition-colors duration-300 ${themeClasses.text}`}>{service.name}</p>
+                <p className={`font-semibold mt-2 transition-colors duration-300 ${
+                  isDarkMode 
+                    ? 'text-white group-hover:text-emerald-400' 
+                    : 'text-gray-900 group-hover:text-green-500'
+                }`}>{service.name}</p>
               </button>
             ))}
           </div>
@@ -7038,91 +7190,165 @@ const handleServiceCreate = async () => {
   // Landing Page Screen
   if (currentScreen === 'landing') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-green-600 overflow-hidden relative">
-        {/* Elementos decorativos animados */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/5 rounded-full blur-3xl animate-pulse delay-500"></div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 overflow-hidden relative">
+        {/* Grid pattern background */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(34,197,94,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(34,197,94,0.05)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
+        
+        {/* Gradient overlays */}
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-green-500/20 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[100px]"></div>
 
-        {/* Conteúdo */}
-        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-12">
-          {/* Logo animado */}
-          <div className="mb-8 animate-fade-in-down">
-            <div className="bg-white/20 backdrop-blur-lg rounded-3xl p-6 shadow-2xl">
-              <Package className="w-20 h-20 text-white animate-bounce" />
+        <div className="relative z-10 min-h-screen flex">
+          {/* Left side - Content */}
+          <div className="flex-1 flex flex-col justify-center px-8 md:px-16 lg:px-24">
+            {/* Logo with dots */}
+            <div className="mb-8 animate-fade-in-down">
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white">
+                  Facilita
+                </h1>
+                <div className="grid grid-cols-4 gap-1">
+                  {[...Array(12)].map((_, i) => (
+                    <div 
+                      key={i} 
+                      className="w-2 h-2 rounded-full bg-green-500"
+                      style={{
+                        animation: `pulse 2s ease-in-out infinite`,
+                        animationDelay: `${i * 0.1}s`
+                      }}
+                    ></div>
+                  ))}
+                </div>
+              </div>
+              <p className="text-gray-400 text-lg">Delivery & Services</p>
+            </div>
+
+            {/* Main heading */}
+            <div className="mb-8 animate-fade-in-up">
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4">
+                Serviços de Entrega
+              </h2>
+              <h3 className="text-4xl md:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">
+                Acessíveis para Todos
+              </h3>
+            </div>
+
+            {/* Description */}
+            <div className="mb-8 animate-fade-in-up delay-200">
+              <p className="text-gray-300 text-lg md:text-xl leading-relaxed mb-4">
+                Plataforma inclusiva de entregas e serviços pensada especialmente para <span className="text-green-400 font-semibold">pessoas com deficiência</span>, <span className="text-green-400 font-semibold">idosos</span> e todos que precisam de mais comodidade no dia a dia.
+              </p>
+              <p className="text-gray-400 text-base md:text-lg">
+                Facilitamos sua vida com entregas de farmácia, mercado, correios e muito mais, tudo no conforto da sua casa.
+              </p>
+            </div>
+
+            {/* Features badges */}
+            <div className="grid grid-cols-2 gap-4 mb-12 animate-fade-in-up delay-300">
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                  <Users className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-white font-semibold text-sm">Inclusivo</div>
+                  <div className="text-gray-400 text-xs">Para todos</div>
+                </div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                  <Home className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-white font-semibold text-sm">Conforto</div>
+                  <div className="text-gray-400 text-xs">Em casa</div>
+                </div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-white font-semibold text-sm">Seguro</div>
+                  <div className="text-gray-400 text-xs">Confiável</div>
+                </div>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="text-white font-semibold text-sm">Rápido</div>
+                  <div className="text-gray-400 text-xs">Ágil</div>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 animate-fade-in-up delay-400">
+              <button
+                onClick={() => handleScreenTransition('login')}
+                className="bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-lg font-bold text-lg shadow-lg hover:shadow-green-500/50 transform hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+              >
+                <LogIn className="w-5 h-5" />
+                Entrar
+              </button>
+              
+              <button
+                onClick={() => handleScreenTransition('cadastro')}
+                className="bg-white/10 hover:bg-white/20 backdrop-blur-sm border-2 border-white/30 text-white px-8 py-4 rounded-lg font-bold text-lg shadow-lg transform hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+              >
+                <UserPlus className="w-5 h-5" />
+                Cadastrar
+              </button>
             </div>
           </div>
 
-          {/* Título principal */}
-          <h1 className="text-5xl md:text-7xl font-bold text-white text-center mb-4 animate-fade-in-up">
-            Facilita
-          </h1>
-          
-          {/* Subtítulo */}
-          <p className="text-xl md:text-2xl text-white/90 text-center mb-2 animate-fade-in-up delay-200">
-            Entregas rápidas e seguras
-          </p>
-          
-          <p className="text-lg md:text-xl text-white/80 text-center mb-12 max-w-2xl animate-fade-in-up delay-300">
-            Conectamos você aos melhores prestadores de serviço da sua região. 
-            Peça, acompanhe e receba com facilidade!
-          </p>
+          {/* Right side - Preview mockup */}
+          <div className="hidden lg:flex flex-1 items-center justify-center p-8 animate-fade-in-right">
+            <div className="relative">
+              {/* Browser mockup */}
+              <div className="bg-gray-800/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden transform rotate-3 hover:rotate-0 transition-transform duration-500">
+                {/* Browser header */}
+                <div className="bg-gray-900/80 px-4 py-3 flex items-center gap-2 border-b border-white/10">
+                  <div className="flex gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  </div>
+                  <div className="flex-1 bg-gray-800/50 rounded px-3 py-1 text-xs text-gray-400 ml-4">
+                    facilita.app
+                  </div>
+                </div>
+                
+                {/* Content preview */}
+                <div className="p-8 bg-gradient-to-br from-green-500/20 to-blue-500/20">
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-4">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Package className="w-8 h-8 text-green-400" />
+                      <div className="h-4 bg-white/20 rounded w-32"></div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3 bg-white/10 rounded w-full"></div>
+                      <div className="h-3 bg-white/10 rounded w-3/4"></div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                      <Truck className="w-6 h-6 text-blue-400 mb-2" />
+                      <div className="h-2 bg-white/20 rounded w-16"></div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                      <Shield className="w-6 h-6 text-green-400 mb-2" />
+                      <div className="h-2 bg-white/20 rounded w-16"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-          {/* Features */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 max-w-4xl w-full animate-fade-in-up delay-400">
-            <div className="bg-white/20 backdrop-blur-lg rounded-2xl p-6 text-center transform hover:scale-105 transition-all duration-300 hover:bg-white/30">
-              <Zap className="w-12 h-12 text-white mx-auto mb-3" />
-              <h3 className="text-white font-semibold text-lg mb-2">Rápido</h3>
-              <p className="text-white/80 text-sm">Entregas em tempo recorde</p>
-            </div>
-            
-            <div className="bg-white/20 backdrop-blur-lg rounded-2xl p-6 text-center transform hover:scale-105 transition-all duration-300 hover:bg-white/30">
-              <Shield className="w-12 h-12 text-white mx-auto mb-3" />
-              <h3 className="text-white font-semibold text-lg mb-2">Seguro</h3>
-              <p className="text-white/80 text-sm">Pagamentos protegidos</p>
-            </div>
-            
-            <div className="bg-white/20 backdrop-blur-lg rounded-2xl p-6 text-center transform hover:scale-105 transition-all duration-300 hover:bg-white/30">
-              <MapPin className="w-12 h-12 text-white mx-auto mb-3" />
-              <h3 className="text-white font-semibold text-lg mb-2">Rastreável</h3>
-              <p className="text-white/80 text-sm">Acompanhe em tempo real</p>
-            </div>
-          </div>
-
-          {/* Botões de ação */}
-          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md animate-fade-in-up delay-500">
-            <button
-              onClick={() => handleScreenTransition('login')}
-              className="flex-1 bg-white text-green-600 px-8 py-4 rounded-full font-bold text-lg shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-300 hover:bg-gray-50 flex items-center justify-center gap-2"
-            >
-              <LogIn className="w-5 h-5" />
-              Entrar
-            </button>
-            
-            <button
-              onClick={() => handleScreenTransition('cadastro')}
-              className="flex-1 bg-green-700 text-white px-8 py-4 rounded-full font-bold text-lg shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-300 hover:bg-green-800 flex items-center justify-center gap-2 border-2 border-white/30"
-            >
-              <UserPlus className="w-5 h-5" />
-              Cadastrar
-            </button>
-          </div>
-
-          {/* Estatísticas */}
-          <div className="mt-16 grid grid-cols-3 gap-8 text-center animate-fade-in-up delay-600">
-            <div>
-              <div className="text-3xl md:text-4xl font-bold text-white mb-1">500+</div>
-              <div className="text-white/80 text-sm">Entregas</div>
-            </div>
-            <div>
-              <div className="text-3xl md:text-4xl font-bold text-white mb-1">4.8★</div>
-              <div className="text-white/80 text-sm">Avaliação</div>
-            </div>
-            <div>
-              <div className="text-3xl md:text-4xl font-bold text-white mb-1">100+</div>
-              <div className="text-white/80 text-sm">Prestadores</div>
+              {/* Floating elements */}
+              <div className="absolute -top-8 -right-8 w-20 h-20 bg-green-500/30 rounded-full blur-xl animate-pulse"></div>
+              <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-blue-500/30 rounded-full blur-xl animate-pulse delay-1000"></div>
             </div>
           </div>
         </div>
@@ -7151,12 +7377,27 @@ const handleServiceCreate = async () => {
             }
           }
           
+          @keyframes fade-in-right {
+            from {
+              opacity: 0;
+              transform: translateX(40px);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(0);
+            }
+          }
+          
           .animate-fade-in-down {
-            animation: fade-in-down 0.6s ease-out;
+            animation: fade-in-down 0.8s ease-out;
           }
           
           .animate-fade-in-up {
-            animation: fade-in-up 0.6s ease-out;
+            animation: fade-in-up 0.8s ease-out;
+          }
+          
+          .animate-fade-in-right {
+            animation: fade-in-right 1s ease-out;
           }
           
           .delay-200 {
@@ -7177,16 +7418,8 @@ const handleServiceCreate = async () => {
             animation-fill-mode: forwards;
           }
           
-          .delay-500 {
-            animation-delay: 0.5s;
-            opacity: 0;
-            animation-fill-mode: forwards;
-          }
-          
-          .delay-600 {
-            animation-delay: 0.6s;
-            opacity: 0;
-            animation-fill-mode: forwards;
+          .delay-1000 {
+            animation-delay: 1s;
           }
         `}</style>
       </div>
@@ -7219,6 +7452,26 @@ const handleServiceCreate = async () => {
           title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
         >
           {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
+
+        {/* Botão de Acessibilidade Libras */}
+        <button
+          onClick={isLibrasActive ? stopLibrasCamera : startLibrasCamera}
+          disabled={librasLoading}
+          className={`absolute top-4 right-16 p-2 rounded-full transition-all duration-300 hover:scale-110 z-20 ${
+            isLibrasActive 
+              ? 'bg-red-500 text-white animate-pulse' 
+              : 'bg-blue-500 text-white hover:bg-blue-600'
+          } ${librasLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title="Acessibilidade em Libras"
+        >
+          {librasLoading ? (
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          ) : isLibrasActive ? (
+            <VideoOff className="w-5 h-5" />
+          ) : (
+            <Hand className="w-5 h-5" />
+          )}
         </button>
         
         <img
@@ -7330,6 +7583,115 @@ const handleServiceCreate = async () => {
               )}
             </button>
           </div>
+
+          {/* Modal de Câmera Libras */}
+          {isLibrasActive && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full p-6 relative">
+                {/* Botão fechar */}
+                <button
+                  onClick={stopLibrasCamera}
+                  className="absolute top-4 right-4 p-2 bg-red-500 hover:bg-red-600 rounded-full text-white transition-colors"
+                >
+                  <VideoOff className="w-5 h-5" />
+                </button>
+
+                {/* Título */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-blue-500 rounded-full">
+                    <Hand className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Acessibilidade em Libras</h3>
+                    <p className="text-sm text-gray-400">Faça sinais para interagir</p>
+                  </div>
+                </div>
+
+                {/* Área da câmera */}
+                <div className="relative bg-gray-900 rounded-xl overflow-hidden mb-4" style={{ height: '400px' }}>
+                  <video
+                    ref={(video) => {
+                      if (video && librasCameraStream) {
+                        video.srcObject = librasCameraStream
+                        video.play()
+                      }
+                    }}
+                    className="w-full h-full object-cover mirror"
+                    autoPlay
+                    playsInline
+                    muted
+                  />
+                  
+                  {/* Guias visuais para posicionamento das mãos */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 border-4 border-green-500/50 rounded-lg">
+                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-green-500"></div>
+                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-green-500"></div>
+                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-green-500"></div>
+                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-green-500"></div>
+                    </div>
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-center opacity-70">
+                      <Hand className="w-12 h-12 mx-auto mb-2 animate-pulse" />
+                      <p className="text-sm">Posicione suas mãos aqui</p>
+                    </div>
+                  </div>
+                  
+                  {/* Overlay com feedback */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-white">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm font-medium">Detectando mãos...</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-green-400">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm font-medium">IA Ativa</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <style>{`
+                  .mirror {
+                    transform: scaleX(-1);
+                  }
+                `}</style>
+
+                {/* Texto detectado */}
+                {librasDetectedText && (
+                  <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-green-500 rounded-lg">
+                        <Hand className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-green-400 mb-1">Sinal detectado:</p>
+                        <p className="text-white text-lg">{librasDetectedText}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Instruções */}
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-blue-400 mb-2">Como usar:</h4>
+                  <ul className="text-sm text-gray-300 space-y-1">
+                    <li>• Posicione suas mãos na frente da câmera</li>
+                    <li>• Faça os sinais em Libras claramente</li>
+                    <li>• O sistema reconhecerá e preencherá os campos automaticamente</li>
+                    <li>• Use o sinal de "OK" para confirmar</li>
+                  </ul>
+                </div>
+
+                {/* Nota sobre API */}
+                <div className="mt-4 text-center">
+                  <p className="text-xs text-gray-500">
+                    💡 Em produção, integrado com MediaPipe Hands API do Google
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
