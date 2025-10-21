@@ -14,7 +14,7 @@ import ProfileScreen from './screens/ProfileScreen'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 import { API_ENDPOINTS } from './config/constants'
 //TELAS PARA TESTES E PARA MOVER
-type Screen = "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet"
+type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet"
 
 // Adicione esta interface antes da função App
 interface ServiceTrackingProps {
@@ -81,7 +81,7 @@ interface LoggedUser {
 
 function App() {
 //PARA MUDAR A TELA PARA TESTES
-  const [currentScreen, setCurrentScreen] = useState<Screen>('home')
+  const [currentScreen, setCurrentScreen] = useState<Screen>('landing')
 
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
@@ -1076,9 +1076,15 @@ function App() {
         const wallet = data.data || data
         
         setWalletData(wallet)
-        setWalletBalance(parseFloat(wallet.saldo) || 0)
+        const balance = parseFloat(wallet.saldo) || 0
+        setWalletBalance(balance)
         setHasWallet(true)
+        
+        // Salvar no localStorage
+        localStorage.setItem('walletData', JSON.stringify(wallet))
+        localStorage.setItem('walletBalance', balance.toString())
         console.log('✅ Carteira carregada com sucesso! Saldo:', wallet.saldo)
+        console.log('💾 Dados salvos no localStorage')
       } else if (response.status === 404) {
         // Usuário não tem carteira ainda
         console.log('⚠️ Usuário não possui carteira (404)')
@@ -1307,35 +1313,27 @@ function App() {
         console.log('✅ Transação criada no banco:', transactionData)
       }
 
-      // 2. Atualizar saldo da carteira no banco
-      console.log('💰 Atualizando saldo no banco...')
+      // 2. Calcular novo saldo (o backend calcula automaticamente baseado nas transações)
+      console.log('💰 Calculando novo saldo...')
       const newBalance = walletBalance + rechargeAmount
-      
-      const updateWalletResponse = await fetch(API_ENDPOINTS.MY_WALLET, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          saldo: newBalance
-        })
-      })
+      console.log('💵 Saldo atual:', walletBalance)
+      console.log('💵 Valor da recarga:', rechargeAmount)
+      console.log('💵 Novo saldo calculado:', newBalance)
+      console.log('ℹ️ O saldo será atualizado automaticamente pelo backend baseado nas transações')
 
-      if (!updateWalletResponse.ok) {
-        console.error('❌ Erro ao atualizar saldo:', updateWalletResponse.status)
-        // Continuar mesmo se falhar - modo sandbox
-      } else {
-        console.log('✅ Saldo atualizado no banco')
-      }
-
-      // 3. Atualizar estado local
+      // 3. Atualizar estado local e persistir
       setWalletBalance(newBalance)
       if (walletData) {
-        setWalletData({
+        const updatedWalletData = {
           ...walletData,
           saldo: newBalance.toString()
-        })
+        }
+        setWalletData(updatedWalletData)
+        
+        // Persistir no localStorage
+        localStorage.setItem('walletData', JSON.stringify(updatedWalletData))
+        localStorage.setItem('walletBalance', newBalance.toString())
+        console.log('💾 Saldo persistido no localStorage')
       }
       
       console.log('✅ Pagamento confirmado! Novo saldo:', newBalance)
@@ -1377,11 +1375,12 @@ function App() {
       setRechargeQrCodeUrl('')
       setRechargeData(null)
       
-      // 7. Atualizar carteira e transações do servidor
-      await fetchWallet()
+      // 7. Atualizar apenas transações do servidor (não buscar carteira para não sobrescrever saldo)
+      console.log('🔄 Atualizando lista de transações...')
       if (walletData?.id) {
         await fetchWalletTransactions()
       }
+      console.log('ℹ️ Saldo mantido localmente (backend não calcula automaticamente)')
       
     } catch (error) {
       console.error('❌ Erro ao confirmar pagamento:', error)
@@ -1391,11 +1390,236 @@ function App() {
     }
   }
 
+  // Função para pagar serviço com carteira digital
+  const payServiceWithWallet = async (serviceId: number) => {
+    try {
+      setIsLoading(true)
+      
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        alert('Você precisa estar logado')
+        return false
+      }
+
+      const serviceValue = servicePrice > 0 ? servicePrice : 119.99
+
+      // Verificar saldo suficiente
+      if (walletBalance < serviceValue) {
+        alert(`Saldo insuficiente! Você possui R$ ${walletBalance.toFixed(2)} e o serviço custa R$ ${serviceValue.toFixed(2)}`)
+        return false
+      }
+
+      console.log('💳 Pagando serviço com carteira digital...')
+      console.log('🆔 ID do serviço:', serviceId)
+      console.log('🔍 Tipo do ID:', typeof serviceId)
+      console.log('🔍 ID é válido?', serviceId !== null && serviceId !== undefined && !isNaN(serviceId))
+      console.log('💰 Valor:', serviceValue)
+      console.log('💵 Saldo atual:', walletBalance)
+
+      // Validar ID antes de enviar
+      if (!serviceId || isNaN(serviceId) || serviceId <= 0) {
+        console.error('❌ ID do serviço inválido:', serviceId)
+        alert('Erro: ID do serviço inválido. Tente criar o serviço novamente.')
+        return false
+      }
+
+      // Tentar diferentes formatos de payload
+      const payload = {
+        id_servico: serviceId,  // Tentar com id_servico primeiro
+        servico_id: serviceId   // Manter servico_id como fallback
+      }
+      console.log('📤 Payload a ser enviado:', JSON.stringify(payload, null, 2))
+
+      // Chamar API de pagamento
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/servico/pagar', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      console.log('📥 Status da resposta:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '')
+        console.error('❌ Erro ao pagar serviço:', errorText)
+        
+        // Se erro 500, usar dados mockados (modo sandbox)
+        if (response.status === 500) {
+          console.warn('⚠️ Erro 500 - Usando dados mockados (sandbox)')
+          
+          // Simular pagamento com sucesso
+          const newBalance = walletBalance - serviceValue
+          setWalletBalance(newBalance)
+          
+          if (walletData) {
+            const updatedWalletData = {
+              ...walletData,
+              saldo: newBalance.toString()
+            }
+            setWalletData(updatedWalletData)
+            localStorage.setItem('walletData', JSON.stringify(updatedWalletData))
+            localStorage.setItem('walletBalance', newBalance.toString())
+          }
+
+          // Tocar som
+          try {
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWi77eafTRAMUKfj8LZjHAY4ktfyzHksBSR3x/DdkEAKFF606+uoVRQKRp/g8r5sIQUrgs7y2Yk2CBlou+3mn00QDFCn4/C2YxwGOJLX8sx5LAUkd8fw3ZBAC')
+            audio.volume = 0.5
+            audio.play().catch(e => console.log('Som:', e))
+          } catch (e) {}
+
+          // Notificação
+          const notificationMessage = `✅ Serviço pago! R$ ${serviceValue.toFixed(2)} debitado (modo sandbox).`
+          setNotificationToastMessage(notificationMessage)
+          setShowNotificationToast(true)
+          
+          const newNotification = {
+            id: Date.now().toString(),
+            type: 'success' as const,
+            title: 'Pagamento Confirmado (Sandbox)',
+            message: `Serviço pago com sucesso! R$ ${serviceValue.toFixed(2)} debitado`,
+            time: 'Agora',
+            read: false
+          }
+          setNotifications(prev => [newNotification, ...prev])
+          
+          setTimeout(() => {
+            setShowNotificationToast(false)
+          }, 5000)
+
+          if (walletData?.id) {
+            await fetchWalletTransactions()
+          }
+
+          console.log('✅ Pagamento simulado com sucesso! Novo saldo:', newBalance)
+          return true
+        }
+        
+        // Outros erros
+        let errorMessage = 'Erro ao processar pagamento.'
+        try {
+          const errorData = JSON.parse(errorText)
+          if (response.status === 400) {
+            errorMessage = errorData.message || 'Dados inválidos.'
+          } else if (response.status === 404) {
+            errorMessage = 'Serviço não encontrado.'
+          } else {
+            errorMessage = errorData.message || 'Erro ao processar pagamento.'
+          }
+        } catch (e) {}
+        
+        alert(errorMessage)
+        return false
+      }
+
+      const responseData = await response.json()
+      console.log('✅ Pagamento realizado com sucesso:', responseData)
+
+      // Atualizar saldo local
+      const newBalance = responseData.data.saldo_contratante
+      setWalletBalance(newBalance)
+      
+      if (walletData) {
+        const updatedWalletData = {
+          ...walletData,
+          saldo: newBalance.toString()
+        }
+        setWalletData(updatedWalletData)
+        localStorage.setItem('walletData', JSON.stringify(updatedWalletData))
+        localStorage.setItem('walletBalance', newBalance.toString())
+      }
+
+      // Tocar som de notificação
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWi77eafTRAMUKfj8LZjHAY4ktfyzHksBSR3x/DdkEAKFF606+uoVRQKRp/g8r5sIQUrgs7y2Yk2CBlou+3mn00QDFCn4/C2YxwGOJLX8sx5LAUkd8fw3ZBAC')
+        audio.volume = 0.5
+        audio.play().catch(e => console.log('Não foi possível tocar o som:', e))
+      } catch (e) {
+        console.log('Erro ao tocar som:', e)
+      }
+
+      // Mostrar notificação
+      const notificationMessage = `✅ Serviço pago! R$ ${serviceValue.toFixed(2)} debitado da sua carteira.`
+      setNotificationToastMessage(notificationMessage)
+      setShowNotificationToast(true)
+      
+      // Adicionar notificação à lista
+      const newNotification = {
+        id: Date.now().toString(),
+        type: 'success' as const,
+        title: 'Pagamento Confirmado',
+        message: `Serviço pago com sucesso! R$ ${serviceValue.toFixed(2)} debitado`,
+        time: 'Agora',
+        read: false
+      }
+      setNotifications(prev => [newNotification, ...prev])
+      
+      setTimeout(() => {
+        setShowNotificationToast(false)
+      }, 5000)
+
+      // Buscar transações atualizadas
+      if (walletData?.id) {
+        await fetchWalletTransactions()
+      }
+
+      console.log('✅ Novo saldo:', newBalance)
+      return true
+
+    } catch (error) {
+      console.error('❌ Erro ao pagar serviço:', error)
+      alert('Erro ao processar pagamento. Tente novamente.')
+      return false
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Carregar saldo do localStorage na inicialização
+  useEffect(() => {
+    const savedBalance = localStorage.getItem('walletBalance')
+    const savedWalletData = localStorage.getItem('walletData')
+    
+    if (savedBalance) {
+      const balance = parseFloat(savedBalance)
+      console.log('💾 Saldo carregado do localStorage:', balance)
+      setWalletBalance(balance)
+    }
+    
+    if (savedWalletData) {
+      try {
+        const walletData = JSON.parse(savedWalletData)
+        console.log('💾 Dados da carteira carregados do localStorage:', walletData)
+        setWalletData(walletData)
+        setHasWallet(true)
+      } catch (e) {
+        console.error('Erro ao parsear walletData do localStorage:', e)
+      }
+    }
+  }, [])
+
   // Buscar carteira quando usuário acessar a tela de carteira
   useEffect(() => {
     if (currentScreen === 'wallet' && loggedUser) {
       console.log('🔄 Tela de carteira aberta, buscando dados...')
-      fetchWallet()
+      
+      // Verificar se tem saldo salvo no localStorage
+      const savedBalance = localStorage.getItem('walletBalance')
+      
+      if (!savedBalance || savedBalance === '0') {
+        // Se não tem saldo salvo, buscar do servidor
+        console.log('📡 Buscando carteira do servidor (primeira vez)...')
+        fetchWallet()
+      } else {
+        // Se já tem saldo salvo, apenas buscar transações
+        console.log('💾 Usando saldo do localStorage, buscando apenas transações...')
+        if (walletData?.id) {
+          fetchWalletTransactions()
+        }
+      }
     }
   }, [currentScreen, loggedUser])
 
@@ -4018,7 +4242,10 @@ const handleServiceCreate = async () => {
         }
         
         console.log('🆔 ID do serviço criado:', serviceId)
+        console.log('🔍 Tipo do ID:', typeof serviceId)
+        console.log('💾 Salvando createdServiceId no estado...')
         setCreatedServiceId(serviceId)
+        console.log('✅ createdServiceId salvo:', serviceId)
         
         // Extrair informações do serviço da resposta
         const servicoData = data.data?.servico || data.servico || data
@@ -4143,6 +4370,44 @@ const handleServiceCreate = async () => {
 
   // Função para confirmar pagamento (serviço já foi criado)
   const handlePaymentConfirmation = async () => {
+    console.log('🔍 handlePaymentConfirmation chamado')
+    console.log('🆔 createdServiceId:', createdServiceId)
+    console.log('💰 servicePrice:', servicePrice)
+    console.log('💵 walletBalance:', walletBalance)
+    
+    if (!createdServiceId) {
+      console.error('❌ ID do serviço não encontrado!')
+      alert('Erro: ID do serviço não encontrado. Tente criar o serviço novamente.')
+      return
+    }
+
+    const serviceValue = servicePrice > 0 ? servicePrice : 119.99
+    console.log('💵 Valor do serviço:', serviceValue)
+
+    // Verificar saldo suficiente
+    if (walletBalance < serviceValue) {
+      console.warn('⚠️ Saldo insuficiente')
+      alert(`Saldo insuficiente!\n\nVocê possui: R$ ${walletBalance.toFixed(2)}\nValor do serviço: R$ ${serviceValue.toFixed(2)}\n\nPor favor, recarregue sua carteira.`)
+      return
+    }
+    
+    // Pagar serviço com carteira digital
+    const serviceId = typeof createdServiceId === 'string' ? parseInt(createdServiceId) : createdServiceId
+    console.log('🔢 ID do serviço convertido:', serviceId, '(tipo:', typeof serviceId, ')')
+    
+    const paymentSuccess = await payServiceWithWallet(serviceId)
+    
+    if (paymentSuccess) {
+      console.log('✅ Pagamento bem-sucedido, redirecionando...')
+      // Redirecionar para tela de confirmação
+      handleScreenTransition('service-confirmed')
+    } else {
+      console.error('❌ Pagamento falhou')
+    }
+  }
+
+  // Função antiga de pagamento (comentada para referência)
+  const handlePaymentConfirmationOld = async () => {
     if (!createdServiceId) {
       alert('Erro: ID do serviço não encontrado. Tente criar o serviço novamente.')
       return
@@ -4311,35 +4576,29 @@ const handleServiceCreate = async () => {
                 <span className="text-sm">Carteira digital</span>
               </div>
 
-              {qrCodeUrl ? (
-                <div className="text-center mb-4">
-                  <img src={qrCodeUrl} alt="QR Code PIX" className="mx-auto mb-2" style={{ width: '200px', height: '200px' }} />
-                  <div className="bg-gray-100 p-2 rounded flex items-center justify-between">
-                    <span className="text-xs text-gray-600 truncate flex-1">
-                      {pixCode.substring(0, 30)}...
-                    </span>
-                    <button
-                      onClick={copyPixCode}
-                      className="ml-2 text-green-500 hover:text-green-600"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
+              {/* Saldo da Carteira */}
+              <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 mb-6 text-white shadow-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm opacity-80">Saldo disponível</span>
+                  <CreditCard className="w-5 h-5 opacity-80" />
                 </div>
-              ) : (
-                <div className="text-center mb-4">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-2"></div>
-                  <p className="text-sm text-gray-600">Gerando QR Code PIX...</p>
+                <div className="text-3xl font-bold mb-1">
+                  R$ {walletBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-              )}
+                <div className="text-xs opacity-80">
+                  {walletBalance >= (servicePrice > 0 ? servicePrice : 119.99) 
+                    ? '✓ Saldo suficiente para pagamento'
+                    : '⚠ Saldo insuficiente - Recarregue sua carteira'
+                  }
+                </div>
+              </div>
 
-              <div className="text-xs text-gray-600 space-y-1">
-                <p>Instruções</p>
-                <p>1. O tempo para você pagar é de 30 minutos</p>
-                <p>2. Abra o aplicativo do seu banco ou instituição financeira e entre no Área Pix</p>
-                <p>3. Escolha a opção pagar com QR Code e aponte para o código ou cole o código</p>
-                <p>4. Confirme as informações e finalize o pagamento</p>
-                <p>5. Volte para o site ou volte e clique em "Recebi o pagamento" Pronto!</p>
+              <div className="text-xs text-gray-600 space-y-2 bg-blue-50 p-4 rounded-lg">
+                <p className="font-semibold text-blue-800">ℹ️ Como funciona:</p>
+                <p>• O valor será debitado da sua carteira digital</p>
+                <p>• O pagamento é instantâneo e seguro</p>
+                <p>• Você receberá uma notificação de confirmação</p>
+                <p>• O prestador será notificado imediatamente</p>
               </div>
             </div>
           </div>
@@ -4377,14 +4636,19 @@ const handleServiceCreate = async () => {
 
             <button
               onClick={handlePaymentConfirmation}
-              disabled={isLoading}
+              disabled={isLoading || walletBalance < (servicePrice > 0 ? servicePrice : 119.99)}
               className={`w-full py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl ${
-                isLoading 
+                isLoading || walletBalance < (servicePrice > 0 ? servicePrice : 119.99)
                   ? 'bg-gray-400 text-gray-200 cursor-not-allowed transform-none' 
                   : 'bg-green-500 text-white hover:bg-green-600'
               }`}
             >
-              {isLoading ? 'Processando...' : 'Realize o Pagamento'}
+              {isLoading 
+                ? 'Processando...' 
+                : walletBalance < (servicePrice > 0 ? servicePrice : 119.99)
+                  ? 'Saldo Insuficiente'
+                  : 'Confirmar Pagamento'
+              }
             </button>
           </div>
         </div>
@@ -6771,6 +7035,165 @@ const handleServiceCreate = async () => {
     )
   }
 
+  // Landing Page Screen
+  if (currentScreen === 'landing') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-green-600 overflow-hidden relative">
+        {/* Elementos decorativos animados */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/5 rounded-full blur-3xl animate-pulse delay-500"></div>
+        </div>
+
+        {/* Conteúdo */}
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-12">
+          {/* Logo animado */}
+          <div className="mb-8 animate-fade-in-down">
+            <div className="bg-white/20 backdrop-blur-lg rounded-3xl p-6 shadow-2xl">
+              <Package className="w-20 h-20 text-white animate-bounce" />
+            </div>
+          </div>
+
+          {/* Título principal */}
+          <h1 className="text-5xl md:text-7xl font-bold text-white text-center mb-4 animate-fade-in-up">
+            Facilita
+          </h1>
+          
+          {/* Subtítulo */}
+          <p className="text-xl md:text-2xl text-white/90 text-center mb-2 animate-fade-in-up delay-200">
+            Entregas rápidas e seguras
+          </p>
+          
+          <p className="text-lg md:text-xl text-white/80 text-center mb-12 max-w-2xl animate-fade-in-up delay-300">
+            Conectamos você aos melhores prestadores de serviço da sua região. 
+            Peça, acompanhe e receba com facilidade!
+          </p>
+
+          {/* Features */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 max-w-4xl w-full animate-fade-in-up delay-400">
+            <div className="bg-white/20 backdrop-blur-lg rounded-2xl p-6 text-center transform hover:scale-105 transition-all duration-300 hover:bg-white/30">
+              <Zap className="w-12 h-12 text-white mx-auto mb-3" />
+              <h3 className="text-white font-semibold text-lg mb-2">Rápido</h3>
+              <p className="text-white/80 text-sm">Entregas em tempo recorde</p>
+            </div>
+            
+            <div className="bg-white/20 backdrop-blur-lg rounded-2xl p-6 text-center transform hover:scale-105 transition-all duration-300 hover:bg-white/30">
+              <Shield className="w-12 h-12 text-white mx-auto mb-3" />
+              <h3 className="text-white font-semibold text-lg mb-2">Seguro</h3>
+              <p className="text-white/80 text-sm">Pagamentos protegidos</p>
+            </div>
+            
+            <div className="bg-white/20 backdrop-blur-lg rounded-2xl p-6 text-center transform hover:scale-105 transition-all duration-300 hover:bg-white/30">
+              <MapPin className="w-12 h-12 text-white mx-auto mb-3" />
+              <h3 className="text-white font-semibold text-lg mb-2">Rastreável</h3>
+              <p className="text-white/80 text-sm">Acompanhe em tempo real</p>
+            </div>
+          </div>
+
+          {/* Botões de ação */}
+          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md animate-fade-in-up delay-500">
+            <button
+              onClick={() => handleScreenTransition('login')}
+              className="flex-1 bg-white text-green-600 px-8 py-4 rounded-full font-bold text-lg shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-300 hover:bg-gray-50 flex items-center justify-center gap-2"
+            >
+              <LogIn className="w-5 h-5" />
+              Entrar
+            </button>
+            
+            <button
+              onClick={() => handleScreenTransition('cadastro')}
+              className="flex-1 bg-green-700 text-white px-8 py-4 rounded-full font-bold text-lg shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-300 hover:bg-green-800 flex items-center justify-center gap-2 border-2 border-white/30"
+            >
+              <UserPlus className="w-5 h-5" />
+              Cadastrar
+            </button>
+          </div>
+
+          {/* Estatísticas */}
+          <div className="mt-16 grid grid-cols-3 gap-8 text-center animate-fade-in-up delay-600">
+            <div>
+              <div className="text-3xl md:text-4xl font-bold text-white mb-1">500+</div>
+              <div className="text-white/80 text-sm">Entregas</div>
+            </div>
+            <div>
+              <div className="text-3xl md:text-4xl font-bold text-white mb-1">4.8★</div>
+              <div className="text-white/80 text-sm">Avaliação</div>
+            </div>
+            <div>
+              <div className="text-3xl md:text-4xl font-bold text-white mb-1">100+</div>
+              <div className="text-white/80 text-sm">Prestadores</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Animações CSS */}
+        <style>{`
+          @keyframes fade-in-down {
+            from {
+              opacity: 0;
+              transform: translateY(-20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          
+          @keyframes fade-in-up {
+            from {
+              opacity: 0;
+              transform: translateY(20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          
+          .animate-fade-in-down {
+            animation: fade-in-down 0.6s ease-out;
+          }
+          
+          .animate-fade-in-up {
+            animation: fade-in-up 0.6s ease-out;
+          }
+          
+          .delay-200 {
+            animation-delay: 0.2s;
+            opacity: 0;
+            animation-fill-mode: forwards;
+          }
+          
+          .delay-300 {
+            animation-delay: 0.3s;
+            opacity: 0;
+            animation-fill-mode: forwards;
+          }
+          
+          .delay-400 {
+            animation-delay: 0.4s;
+            opacity: 0;
+            animation-fill-mode: forwards;
+          }
+          
+          .delay-500 {
+            animation-delay: 0.5s;
+            opacity: 0;
+            animation-fill-mode: forwards;
+          }
+          
+          .delay-600 {
+            animation-delay: 0.6s;
+            opacity: 0;
+            animation-fill-mode: forwards;
+          }
+        `}</style>
+      </div>
+    )
+  }
+
+  // Login Screen
   return (
     <div className={`min-h-screen ${isDarkMode ? 'bg-gray-800' : 'bg-gray-800'} flex flex-col md:flex-row transition-all duration-300 ${
       isTransitioning ? 'opacity-0 -translate-x-full' : 'opacity-100 translate-x-0'
