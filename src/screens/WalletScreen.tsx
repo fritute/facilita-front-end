@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowLeft, Bell, Eye, Plus } from 'lucide-react'
+import { Bell, Eye, Plus } from 'lucide-react'
 
 interface Transaction {
   id: string
@@ -17,6 +17,12 @@ interface WalletScreenProps {
   hasUnreadNotifications: boolean
   profilePhoto: string | null
   userName: string
+  hasWallet: boolean
+  onCreateWallet: () => void
+  walletData: any
+  onRecharge: () => void
+  transactions: any[]
+  loadingTransactions: boolean
 }
 
 const WalletScreen: React.FC<WalletScreenProps> = ({
@@ -26,10 +32,30 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
   onProfileClick,
   hasUnreadNotifications,
   profilePhoto,
-  userName
+  userName,
+  hasWallet,
+  onCreateWallet,
+  walletData,
+  onRecharge,
+  transactions: apiTransactions,
+  loadingTransactions
 }) => {
-  // Dados estáticos de transações
-  const transactions: Transaction[] = [
+  // Função para formatar valores monetários
+  const formatCurrency = (value: number): string => {
+    return value.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+  }
+
+  // Usar transações da API ou dados estáticos como fallback
+  const transactions: Transaction[] = apiTransactions.length > 0 ? apiTransactions.map(t => ({
+    id: t.id.toString(),
+    type: t.tipo === 'ENTRADA' ? 'income' as const : 'expense' as const,
+    amount: parseFloat(t.valor),
+    description: t.descricao,
+    category: t.tipo === 'ENTRADA' ? 'Recarga' : 'Serviço'
+  })) : [
     {
       id: '1',
       type: 'income',
@@ -62,6 +88,87 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  }
+
+  // Se não tem carteira, mostrar tela de criação
+  if (!hasWallet) {
+    return (
+      <div className="min-h-screen bg-gray-50 overflow-x-hidden pb-20">
+        {/* Header */}
+        <div className="bg-white p-4 flex items-center justify-between shadow-sm">
+          <button onClick={onBack} className="text-gray-800 hover:text-gray-600">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <h1 className="text-lg font-bold text-gray-800">Carteira Digital</h1>
+          <div className="w-6"></div>
+        </div>
+
+        {/* Empty State */}
+        <div className="flex flex-col items-center justify-center px-6 py-20">
+          <div className="w-32 h-32 bg-green-100 rounded-full flex items-center justify-center mb-6">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2">
+              <rect x="2" y="5" width="20" height="14" rx="2" />
+              <path d="M2 10h20" />
+            </svg>
+          </div>
+          
+          <h2 className="text-2xl font-bold text-gray-800 mb-3 text-center">
+            Crie sua Carteira Digital
+          </h2>
+          
+          <p className="text-gray-600 text-center mb-8 max-w-sm">
+            Para usar a carteira digital e receber pagamentos, você precisa criar sua carteira integrada com o PagBank.
+          </p>
+
+          <button
+            onClick={onCreateWallet}
+            className="bg-green-600 text-white px-8 py-3 rounded-full font-semibold hover:bg-green-700 transition-colors shadow-lg"
+          >
+            Criar Carteira Digital
+          </button>
+
+          <div className="mt-12 bg-white rounded-2xl p-6 shadow-sm max-w-sm">
+            <h3 className="font-bold text-gray-800 mb-4">Benefícios:</h3>
+            <ul className="space-y-3">
+              <li className="flex items-start gap-3">
+                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="3">
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <span className="text-sm text-gray-700">Receba pagamentos instantaneamente</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="3">
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <span className="text-sm text-gray-700">Integração segura com PagBank</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="3">
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <span className="text-sm text-gray-700">Acompanhe todas suas transações</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="3">
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <span className="text-sm text-gray-700">Saque quando quiser</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -121,14 +228,21 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
               
               <div className="relative z-10 h-full flex flex-col justify-between">
                 <div className="text-white text-xs mb-1 flex items-center justify-between">
-                  <span className="text-lg font-bold">R$ {balance.toFixed(2)}</span>
+                  <span className="text-lg font-bold">R$ {formatCurrency(balance)}</span>
                   <div className="flex gap-1">
                     <div className="w-6 h-4 bg-white bg-opacity-30 rounded"></div>
                     <div className="w-6 h-4 bg-white bg-opacity-30 rounded"></div>
                   </div>
                 </div>
                 
-                <div className="text-white text-xs opacity-80">Saldo disponível</div>
+                <div className="space-y-1">
+                  <div className="text-white text-xs opacity-80">Saldo disponível</div>
+                  {walletData?.chave_pagbank && (
+                    <div className="text-white text-xs opacity-60">
+                      PagBank: {walletData.chave_pagbank}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -146,7 +260,10 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
 
         {/* Action Buttons */}
         <div className="flex gap-3 mt-4">
-          <button className="bg-green-600 text-white text-sm py-2.5 px-6 rounded-full font-medium hover:bg-green-700 transition-colors shadow-md">
+          <button 
+            onClick={onRecharge}
+            className="bg-green-600 text-white text-sm py-2.5 px-6 rounded-full font-medium hover:bg-green-700 transition-colors shadow-md"
+          >
             Adicionar saldo
           </button>
           <button className="bg-green-600 text-white text-sm py-2.5 px-6 rounded-full font-medium hover:bg-green-700 transition-colors shadow-md">
@@ -157,7 +274,12 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
 
       {/* Transactions */}
       <div className="px-4">
-        <h2 className="text-lg font-bold text-gray-800 mb-4">Transações</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-800">Transações</h2>
+          {loadingTransactions && (
+            <div className="text-sm text-gray-500">Carregando...</div>
+          )}
+        </div>
         
         <div className="space-y-3">
           {transactions.map((transaction) => (
@@ -177,15 +299,16 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
                   </svg>
                 </div>
                 <div>
-                  <p className={`font-semibold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                    {transaction.type === 'income' ? '+' : '-'} R$ {transaction.amount.toFixed(2)}
-                  </p>
+                  <span className={`font-semibold ${
+                    transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {transaction.type === 'income' ? '+' : '-'} R$ {formatCurrency(transaction.amount)}
+                  </span>
                   <p className="text-sm text-gray-600">{transaction.description}</p>
                 </div>
               </div>
               
               <button className="bg-green-500 text-white text-xs py-2 px-4 rounded-full font-medium hover:bg-green-600 transition-colors">
-                {transaction.category}
               </button>
             </div>
           ))}

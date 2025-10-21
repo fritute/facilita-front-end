@@ -57,6 +57,7 @@ interface UserData {
   senha: string
   confirmarSenha: string
   telefone: string
+  foto_perfil?: string // URL base64 ou URL da foto
 }
 
 interface RegisterData {
@@ -151,7 +152,20 @@ function App() {
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null)
   const [serviceStartTime, setServiceStartTime] = useState<Date | null>(null)
   const [orderFilter, setOrderFilter] = useState<'TODOS' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO'>('TODOS')
-  const [walletBalance, setWalletBalance] = useState<number>(367.07)
+  const [walletBalance, setWalletBalance] = useState<number>(0)
+  const [walletData, setWalletData] = useState<any>(null)
+  const [hasWallet, setHasWallet] = useState<boolean>(false)
+  const [loadingWallet, setLoadingWallet] = useState<boolean>(false)
+  const [showCreateWalletModal, setShowCreateWalletModal] = useState(false)
+  const [walletFormData, setWalletFormData] = useState({ chave_pagbank: '', saldo: 0 })
+  const [showRechargeModal, setShowRechargeModal] = useState(false)
+  const [rechargeAmount, setRechargeAmount] = useState<number>(0)
+  const [loadingRecharge, setLoadingRecharge] = useState(false)
+  const [rechargeQrCode, setRechargeQrCode] = useState<string>('')
+  const [rechargeQrCodeUrl, setRechargeQrCodeUrl] = useState<string>('')
+  const [rechargeData, setRechargeData] = useState<any>(null)
+  const [walletTransactions, setWalletTransactions] = useState<any[]>([])
+  const [loadingTransactions, setLoadingTransactions] = useState(false)
   const [showNotificationToast, setShowNotificationToast] = useState(false)
   const [notificationToastMessage, setNotificationToastMessage] = useState('')
   
@@ -1034,6 +1048,365 @@ function App() {
     }
   }
 
+  // Funções de Carteira Digital
+  const fetchWallet = async () => {
+    try {
+      setLoadingWallet(true)
+      const token = localStorage.getItem('authToken')
+      
+      if (!token) {
+        console.warn('⚠️ Token não encontrado para buscar carteira')
+        setHasWallet(false)
+        return
+      }
+
+      console.log('🔍 Buscando carteira do usuário...')
+      const response = await fetch(API_ENDPOINTS.MY_WALLET, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      console.log('📥 Status da resposta:', response.status)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Dados da carteira recebidos:', data)
+        const wallet = data.data || data
+        
+        setWalletData(wallet)
+        setWalletBalance(parseFloat(wallet.saldo) || 0)
+        setHasWallet(true)
+        console.log('✅ Carteira carregada com sucesso! Saldo:', wallet.saldo)
+      } else if (response.status === 404) {
+        // Usuário não tem carteira ainda
+        console.log('⚠️ Usuário não possui carteira (404)')
+        setHasWallet(false)
+        setWalletBalance(0)
+        setWalletData(null)
+      } else if (response.status === 500) {
+        console.warn('⚠️ Erro 500 ao buscar carteira - servidor indisponível')
+        setHasWallet(false)
+      } else if (response.status === 401 || response.status === 403) {
+        console.warn('⚠️ Token inválido ao buscar carteira')
+        setHasWallet(false)
+      } else {
+        console.warn('⚠️ Erro desconhecido ao buscar carteira:', response.status)
+        setHasWallet(false)
+      }
+    } catch (error) {
+      console.warn('⚠️ Erro ao buscar carteira:', error)
+      setHasWallet(false)
+    } finally {
+      setLoadingWallet(false)
+    }
+  }
+
+  const createWallet = async () => {
+    try {
+      setLoadingWallet(true)
+      const token = localStorage.getItem('authToken')
+      
+      if (!token) {
+        alert('Você precisa estar logado para criar uma carteira')
+        handleScreenTransition('login')
+        return
+      }
+
+      if (!walletFormData.chave_pagbank) {
+        alert('Por favor, informe sua chave PagBank')
+        return
+      }
+
+      const response = await fetch(API_ENDPOINTS.WALLET, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          chave_pagbank: walletFormData.chave_pagbank,
+          saldo: walletFormData.saldo || 0
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Carteira criada com sucesso:', data)
+        
+        setShowCreateWalletModal(false)
+        setWalletFormData({ chave_pagbank: '', saldo: 0 })
+        
+        alert('✅ Carteira criada com sucesso!')
+        
+        // Buscar carteira atualizada do servidor
+        await fetchWallet()
+      } else if (response.status === 400) {
+        const errorData = await response.json()
+        alert(`Erro ao criar carteira: ${errorData.message || 'Dados inválidos'}`)
+      } else if (response.status === 409) {
+        alert('Você já possui uma carteira cadastrada')
+        setShowCreateWalletModal(false)
+        setWalletFormData({ chave_pagbank: '', saldo: 0 })
+        // Buscar carteira existente
+        await fetchWallet()
+      } else if (response.status === 500) {
+        alert('Erro no servidor. Tente novamente mais tarde.')
+      } else {
+        alert('Erro ao criar carteira. Tente novamente.')
+      }
+    } catch (error) {
+      console.error('❌ Erro ao criar carteira:', error)
+      alert('Erro ao criar carteira. Verifique sua conexão.')
+    } finally {
+      setLoadingWallet(false)
+    }
+  }
+
+  // Função para buscar transações da carteira
+  const fetchWalletTransactions = async () => {
+    try {
+      if (!walletData?.id) {
+        console.warn('⚠️ ID da carteira não disponível')
+        return
+      }
+
+      setLoadingTransactions(true)
+      const token = localStorage.getItem('authToken')
+      
+      if (!token) {
+        console.warn('⚠️ Token não encontrado para buscar transações')
+        return
+      }
+
+      const response = await fetch(API_ENDPOINTS.WALLET_TRANSACTIONS(walletData.id.toString()), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const transactions = data.data || data
+        setWalletTransactions(Array.isArray(transactions) ? transactions : [])
+      } else if (response.status === 500) {
+        console.warn('⚠️ Erro 500 ao buscar transações - servidor indisponível')
+      } else if (response.status === 401 || response.status === 403) {
+        console.warn('⚠️ Token inválido ao buscar transações')
+      }
+    } catch (error) {
+      console.warn('⚠️ Erro ao buscar transações:', error)
+    } finally {
+      setLoadingTransactions(false)
+    }
+  }
+
+  // Função para solicitar recarga (modo sandbox - sem API)
+  const requestRecharge = async () => {
+    try {
+      if (rechargeAmount <= 0) {
+        alert('Por favor, informe um valor válido para recarga')
+        return
+      }
+
+      setLoadingRecharge(true)
+      const token = localStorage.getItem('authToken')
+      
+      if (!token) {
+        alert('Você precisa estar logado para fazer uma recarga')
+        handleScreenTransition('login')
+        return
+      }
+
+      console.log('💰 Gerando recarga sandbox...')
+      console.log('💵 Valor:', rechargeAmount)
+
+      // Simular dados de recarga para sandbox
+      const mockRechargeData = {
+        message: 'Recarga solicitada com sucesso. Aguardando pagamento.',
+        recarga: {
+          id: Math.floor(Math.random() * 1000),
+          status: 'PENDENTE',
+          valor: rechargeAmount,
+          metodo: 'PIX'
+        },
+        pedido: {
+          id: `ORDE_${Date.now()}`,
+          reference_id: `recarga-sandbox-${Date.now()}`
+        }
+      }
+
+      // Gerar QR Code fictício localmente
+      const pixCode = `00020126580014br.gov.bcb.pix0136${mockRechargeData.pedido.id}520400005303986540${rechargeAmount.toFixed(2)}5802BR5913Facilita App6009SAO PAULO62070503***6304`
+      
+      console.log('📱 Gerando QR Code...')
+      const QRCode = (await import('qrcode')).default
+      const qrCodeDataUrl = await QRCode.toDataURL(pixCode)
+      
+      setRechargeData(mockRechargeData)
+      setRechargeQrCode(pixCode)
+      setRechargeQrCodeUrl(qrCodeDataUrl)
+      
+      console.log('✅ Recarga gerada com sucesso (modo sandbox)')
+      
+    } catch (error) {
+      console.error('❌ Erro ao gerar recarga:', error)
+      alert('Erro ao gerar recarga. Tente novamente.')
+    } finally {
+      setLoadingRecharge(false)
+    }
+  }
+
+  // Função para simular confirmação de pagamento (sandbox)
+  const confirmSandboxPayment = async () => {
+    try {
+      setLoadingRecharge(true)
+      
+      console.log('💳 Simulando pagamento...')
+      console.log('💰 Valor a creditar:', rechargeAmount)
+      
+      const token = localStorage.getItem('authToken')
+      
+      if (!token) {
+        alert('Você precisa estar logado')
+        return
+      }
+
+      if (!walletData?.id) {
+        alert('Carteira não encontrada')
+        return
+      }
+
+      // 1. Criar transação de ENTRADA no banco
+      console.log('📝 Criando transação no banco...')
+      const transactionPayload = {
+        id_carteira: walletData.id,
+        tipo: 'ENTRADA',
+        valor: rechargeAmount,
+        descricao: `Recarga via PIX - R$ ${rechargeAmount.toFixed(2)}`
+      }
+
+      const transactionResponse = await fetch(API_ENDPOINTS.CREATE_TRANSACTION, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(transactionPayload)
+      })
+
+      if (!transactionResponse.ok) {
+        console.error('❌ Erro ao criar transação:', transactionResponse.status)
+        const errorText = await transactionResponse.text().catch(() => '')
+        console.error('Detalhes do erro:', errorText)
+        // Continuar mesmo se falhar - modo sandbox
+      } else {
+        const transactionData = await transactionResponse.json()
+        console.log('✅ Transação criada no banco:', transactionData)
+      }
+
+      // 2. Atualizar saldo da carteira no banco
+      console.log('💰 Atualizando saldo no banco...')
+      const newBalance = walletBalance + rechargeAmount
+      
+      const updateWalletResponse = await fetch(API_ENDPOINTS.MY_WALLET, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          saldo: newBalance
+        })
+      })
+
+      if (!updateWalletResponse.ok) {
+        console.error('❌ Erro ao atualizar saldo:', updateWalletResponse.status)
+        // Continuar mesmo se falhar - modo sandbox
+      } else {
+        console.log('✅ Saldo atualizado no banco')
+      }
+
+      // 3. Atualizar estado local
+      setWalletBalance(newBalance)
+      if (walletData) {
+        setWalletData({
+          ...walletData,
+          saldo: newBalance.toString()
+        })
+      }
+      
+      console.log('✅ Pagamento confirmado! Novo saldo:', newBalance)
+      
+      // 4. Tocar som de notificação
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWi77eafTRAMUKfj8LZjHAY4ktfyzHksBSR3x/DdkEAKFF606+uoVRQKRp/g8r5sIQUrgs7y2Yk2CBlou+3mn00QDFCn4/C2YxwGOJLX8sx5LAUkd8fw3ZBAC')
+        audio.volume = 0.5
+        audio.play().catch(e => console.log('Não foi possível tocar o som:', e))
+      } catch (e) {
+        console.log('Erro ao tocar som:', e)
+      }
+
+      // 5. Mostrar notificação
+      const notificationMessage = `💰 Recarga confirmada! R$ ${rechargeAmount.toFixed(2)} creditado na sua carteira.`
+      setNotificationToastMessage(notificationMessage)
+      setShowNotificationToast(true)
+      
+      // Adicionar notificação à lista
+      const newNotification = {
+        id: Date.now().toString(),
+        type: 'success' as const,
+        title: 'Recarga Confirmada',
+        message: `R$ ${rechargeAmount.toFixed(2)} foi creditado na sua carteira`,
+        time: 'Agora',
+        read: false
+      }
+      setNotifications(prev => [newNotification, ...prev])
+      
+      // Ocultar toast após 5 segundos
+      setTimeout(() => {
+        setShowNotificationToast(false)
+      }, 5000)
+      
+      // 6. Fechar modal e limpar estados
+      setShowRechargeModal(false)
+      setRechargeAmount(0)
+      setRechargeQrCode('')
+      setRechargeQrCodeUrl('')
+      setRechargeData(null)
+      
+      // 7. Atualizar carteira e transações do servidor
+      await fetchWallet()
+      if (walletData?.id) {
+        await fetchWalletTransactions()
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro ao confirmar pagamento:', error)
+      alert('Erro ao confirmar pagamento. Tente novamente.')
+    } finally {
+      setLoadingRecharge(false)
+    }
+  }
+
+  // Buscar carteira quando usuário acessar a tela de carteira
+  useEffect(() => {
+    if (currentScreen === 'wallet' && loggedUser) {
+      console.log('🔄 Tela de carteira aberta, buscando dados...')
+      fetchWallet()
+    }
+  }, [currentScreen, loggedUser])
+
+  // Buscar transações quando carteira for carregada
+  useEffect(() => {
+    if (currentScreen === 'wallet' && walletData?.id) {
+      console.log('🔄 Carteira carregada, buscando transações...')
+      fetchWalletTransactions()
+    }
+  }, [currentScreen, walletData])
+
   // Removido: useEffect de waiting-driver (agora criamos o serviço antes de ir para pagamento)
 
   // Generate PIX QR Code when payment screen loads
@@ -1061,7 +1434,43 @@ function App() {
         console.log('👤 Usuário recuperado do localStorage:', user)
         console.log('🆔 ID recuperado:', user.id, 'Tipo:', typeof user.id)
         console.log('🔑 Token recuperado:', storedToken)
+        console.log('📸 Foto recuperada:', user.foto ? 'Sim' : 'Não')
+        console.log('📸 Tamanho da foto recuperada:', user.foto?.length || 0, 'caracteres')
         
+        // Se não tem foto, buscar do perfil
+        if (!user.foto) {
+          fetch(API_ENDPOINTS.PROFILE, {
+            headers: {
+              'Authorization': `Bearer ${storedToken}`,
+              'Content-Type': 'application/json'
+            }
+          })
+          .then(async res => {
+            if (!res.ok) {
+              // Tratar erros específicos
+              if (res.status === 500) {
+                console.warn('⚠️ Erro 500 ao buscar perfil - servidor indisponível')
+                return null
+              } else if (res.status === 401 || res.status === 403) {
+                console.warn('⚠️ Token inválido ou expirado')
+                return null
+              }
+              throw new Error(`Erro ${res.status}: ${res.statusText}`)
+            }
+            return res.json()
+          })
+          .then(perfilData => {
+            if (perfilData?.foto_perfil) {
+              const updatedUser = { ...user, foto: perfilData.foto_perfil }
+              setLoggedUser(updatedUser)
+              localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
+            }
+          })
+          .catch(err => {
+            // Erro silencioso - não atrapalha o fluxo do usuário
+            console.warn('⚠️ Não foi possível carregar foto do perfil:', err.message)
+          })
+        }
         
         // Redirecionar para Home se usuário está logado e não há serviço ativo
         if (currentScreen === 'login') {
@@ -1136,7 +1545,31 @@ function App() {
     if (response.status === 403) {
       console.error('❌ ERRO 403 - Acesso negado na URL:', url)
       console.error('🔑 Token usado:', token.substring(0, 20) + '...')
-      throw new Error('Acesso negado - permissões insuficientes')
+      
+      // Tentar ler o corpo da resposta para mais detalhes
+      try {
+        const errorBody = await response.clone().json()
+        console.error('📋 Detalhes do erro 403:', errorBody)
+        
+        // Verificar se é token expirado/inválido
+        if (errorBody.message && 
+            (errorBody.message.toLowerCase().includes('token') || 
+             errorBody.message.toLowerCase().includes('expirado') ||
+             errorBody.message.toLowerCase().includes('inválido'))) {
+          console.error('🔐 Token expirado detectado! Redirecionando para login...')
+          // Limpar dados de autenticação
+          localStorage.removeItem('authToken')
+          localStorage.removeItem('loggedUser')
+          throw new Error('Sua sessão expirou. Por favor, faça login novamente.')
+        }
+        
+        throw new Error(`Acesso negado: ${errorBody.message || 'Permissões insuficientes'}`)
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('sessão expirou')) {
+          throw e // Re-throw para manter a mensagem de sessão expirada
+        }
+        throw new Error('Acesso negado - permissões insuficientes')
+      }
     }
 
     return response
@@ -1243,10 +1676,14 @@ function App() {
         throw new Error('ID do usuário não encontrado')
       }
 
-      console.log('📤 Atualizando perfil do usuário ID:', userId)
+      console.log('📤 Atualizando perfil do usuário')
+      console.log('👤 Usuário logado:', loggedUser)
+      console.log('🆔 ID do usuário:', userId)
+      console.log('📦 Dados a enviar:', { nome: name, email: email })
+      console.log('🌐 Endpoint:', API_ENDPOINTS.UPDATE_PROFILE)
 
-      // Usar endpoint UPDATE_PROFILE com PUT
-      const response = await fetch(API_ENDPOINTS.UPDATE_PROFILE, {
+      // Tentar atualizar usando endpoint /usuario/perfil (PUT)
+      let response = await fetch(API_ENDPOINTS.UPDATE_PROFILE, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1258,13 +1695,58 @@ function App() {
         })
       })
 
+      console.log('📥 Status da resposta (PUT /usuario/perfil):', response.status)
+
+      // Se falhar, tentar com PATCH
+      if (!response.ok && response.status !== 401 && response.status !== 403) {
+        console.log('⚠️ PUT falhou, tentando PATCH...')
+        response = await fetch(API_ENDPOINTS.UPDATE_PROFILE, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            nome: name,
+            email: email
+          })
+        })
+        console.log('📥 Status da resposta (PATCH /usuario/perfil):', response.status)
+      }
+
+      // Se ainda falhar, tentar endpoint com ID
+      if (!response.ok && response.status !== 401 && response.status !== 403) {
+        console.log('⚠️ PATCH falhou, tentando PUT com ID...')
+        response = await fetch(API_ENDPOINTS.UPDATE_USER(userId.toString()), {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            nome: name,
+            email: email
+          })
+        })
+        console.log('📥 Status da resposta (PUT /usuario/{id}):', response.status)
+      }
+
       if (!response.ok) {
-        if (response.status === 401) {
+        if (response.status === 401 || response.status === 403) {
           throw new Error('Sessão expirada. Faça login novamente.')
         }
-        const errorData = await response.json().catch(() => ({}))
-        console.error('Erro na resposta:', errorData)
-        throw new Error(errorData.message || 'Erro ao atualizar perfil')
+        const errorText = await response.text()
+        console.error('❌ Erro na resposta (texto):', errorText)
+        
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { message: errorText }
+        }
+        
+        console.error('❌ Erro na resposta (parsed):', errorData)
+        throw new Error(errorData.message || `Erro ao atualizar perfil (${response.status})`)
       }
 
       const responseData = await response.json()
@@ -1282,8 +1764,19 @@ function App() {
       // Atualizar também no localStorage para persistir
       localStorage.setItem('userData', JSON.stringify(updatedUser))
       
+      console.log('✅ Estado local atualizado:', updatedUser)
+      
+      // Mostrar notificação de sucesso
+      const notificationMessage = '✅ Perfil atualizado com sucesso!'
+      setNotificationToastMessage(notificationMessage)
+      setShowNotificationToast(true)
+      
+      setTimeout(() => {
+        setShowNotificationToast(false)
+      }, 3000)
+      
     } catch (error) {
-      console.error('Erro ao atualizar perfil:', error)
+      console.error('❌ Erro ao atualizar perfil:', error)
       throw error
     }
   }
@@ -1382,7 +1875,44 @@ function App() {
         return
       }
       
-      setProfileData({...profileData, foto: file})
+      // Comprimir imagem antes de salvar
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          const ctx = canvas.getContext('2d')
+          
+          // Redimensionar para máximo 800x800 mantendo proporção
+          let width = img.width
+          let height = img.height
+          const maxSize = 800
+          
+          if (width > height && width > maxSize) {
+            height = (height * maxSize) / width
+            width = maxSize
+          } else if (height > maxSize) {
+            width = (width * maxSize) / height
+            height = maxSize
+          }
+          
+          canvas.width = width
+          canvas.height = height
+          ctx?.drawImage(img, 0, 0, width, height)
+          
+          // Converter para blob com qualidade reduzida
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name, { type: 'image/jpeg' })
+              console.log('📸 Imagem original:', (file.size / 1024).toFixed(2), 'KB')
+              console.log('📸 Imagem comprimida:', (compressedFile.size / 1024).toFixed(2), 'KB')
+              setProfileData({...profileData, foto: compressedFile})
+            }
+          }, 'image/jpeg', 0.7) // 70% de qualidade
+        }
+        img.src = e.target?.result as string
+      }
+      reader.readAsDataURL(file)
     }
   }
 
@@ -1468,12 +1998,39 @@ function App() {
           console.log('📋 Dados brutos do usuário da API:', data.usuario)
           console.log('🆔 ID do usuário recebido:', data.usuario.id, 'Tipo:', typeof data.usuario.id)
           
-          const user: LoggedUser = {
+          let user: LoggedUser = {
             id: data.usuario.id,
             nome: data.usuario.nome,
             email: data.usuario.email,
             telefone: data.usuario.telefone,
-            tipo_conta: data.usuario.tipo_conta
+            tipo_conta: data.usuario.tipo_conta,
+            foto: data.usuario.foto_perfil || data.usuario.foto // Carregar foto do backend
+          }
+          
+          // Buscar foto do perfil do usuário (endpoint /usuario/perfil)
+          // para garantir que temos a foto mais atualizada
+          if (data.token) {
+            try {
+              const perfilResponse = await fetch(API_ENDPOINTS.PROFILE, {
+                headers: {
+                  'Authorization': `Bearer ${data.token}`,
+                  'Content-Type': 'application/json'
+                }
+              })
+              
+              if (perfilResponse.ok) {
+                const perfilData = await perfilResponse.json()
+                if (perfilData?.foto_perfil) {
+                  user.foto = perfilData.foto_perfil
+                }
+              } else if (perfilResponse.status === 500) {
+                console.warn('⚠️ Erro 500 ao buscar perfil - servidor indisponível')
+              } else if (perfilResponse.status === 401 || perfilResponse.status === 403) {
+                console.warn('⚠️ Token inválido ao buscar perfil')
+              }
+            } catch (fotoError) {
+              console.warn('⚠️ Não foi possível carregar foto do perfil:', fotoError)
+            }
           }
           
           // Armazenar usuário no localStorage também
@@ -1482,6 +2039,7 @@ function App() {
           setLoggedUser(user)
           console.log('👤 Usuário logado:', user)
           console.log('🆔 ID armazenado no state:', user.id)
+          console.log('📸 Foto no usuário:', user.foto ? 'Sim' : 'Não')
           
           // Redirecionar baseado no tipo de conta
           if (user.tipo_conta === 'CONTRATANTE') {
@@ -1580,6 +2138,8 @@ function App() {
       return
     }
 
+    // Foto de perfil será enviada na tela de completar perfil
+
     setErrors({})
     handleScreenTransition('account-type')
   }
@@ -1651,7 +2211,8 @@ function App() {
             nome: userData.nome,
             email: userData.email,
             telefone: userData.telefone,
-            tipo_conta: selectedAccountType
+            tipo_conta: selectedAccountType,
+            foto: data.usuario?.foto_perfil || data.usuario?.foto // Carregar foto do backend
           }
           
           localStorage.setItem('loggedUser', JSON.stringify(user))
@@ -1698,7 +2259,8 @@ function App() {
                 nome: userData.nome,
                 email: userData.email,
                 telefone: userData.telefone,
-                tipo_conta: selectedAccountType
+                tipo_conta: selectedAccountType,
+                foto: loginData.usuario?.foto_perfil || loginData.usuario?.foto // Carregar foto do backend
               }
               
               localStorage.setItem('loggedUser', JSON.stringify(user))
@@ -2013,20 +2575,76 @@ function App() {
     }
 
     try {
+      // Converter foto para base64 se existir
+      let fotoBase64 = ''
+      if (profileData.foto) {
+        fotoBase64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onloadend = () => resolve(reader.result as string)
+          reader.readAsDataURL(profileData.foto!)
+        })
+        console.log('📸 Foto convertida para base64')
+      }
+
+      // Criar ou obter localização
+      let idLocalizacao = 1 // Fallback padrão (Av. Paulista)
+      
+      // Se o usuário selecionou um endereço, criar nova localização
+      if (profileData.endereco && addressSuggestions.length > 0) {
+        const selectedAddress = addressSuggestions.find(s => s.display_name === profileData.endereco)
+        
+        if (selectedAddress) {
+          console.log('📍 Criando nova localização:', selectedAddress.display_name)
+          
+          try {
+            // Extrair dados do endereço
+            const address = selectedAddress.address || {}
+            const localizacaoPayload = {
+              logradouro: address.road || address.street || 'Não informado',
+              numero: address.house_number || 'S/N',
+              bairro: address.suburb || address.neighbourhood || address.district || 'Não informado',
+              cidade: address.city || address.town || address.village || 'São Paulo',
+              cep: address.postcode || '00000-000',
+              latitude: selectedAddress.lat,
+              longitude: selectedAddress.lon
+            }
+            
+            console.log('📦 Payload da localização:', localizacaoPayload)
+            
+            // Criar localização na API
+            const localizacaoResponse = await fetchWithAuth(`${API_ENDPOINTS.PROFILE.replace('/usuario/perfil', '')}/localizacao`, {
+              method: 'POST',
+              body: JSON.stringify(localizacaoPayload)
+            })
+            
+            if (localizacaoResponse.ok) {
+              const localizacaoData = await localizacaoResponse.json()
+              idLocalizacao = localizacaoData.id || localizacaoData.data?.id || 1
+              console.log('✅ Localização criada com ID:', idLocalizacao)
+            } else {
+              console.warn('⚠️ Erro ao criar localização, usando padrão')
+            }
+          } catch (error) {
+            console.warn('⚠️ Erro ao criar localização:', error)
+          }
+        }
+      }
+      
       // Monta payload - o backend pode pegar id_usuario do token JWT
       // Mas vamos enviar explicitamente também para garantir
+      // NOTA: foto_perfil NÃO vai aqui, será atualizada separadamente na tabela usuario
       const payload = {
         id_usuario: loggedUser.id, // ID do usuário logado
-        id_localizacao: 1, // Fixo por enquanto
+        id_localizacao: idLocalizacao, // ID da localização criada ou padrão
         necessidade: profileData.necessidade.toUpperCase(),
-        cpf: profileData.cpf.replace(/\D/g, ''),
+        cpf: profileData.cpf.replace(/\D/g, '')
       }
       
       // Payload alternativo sem id_usuario (caso o backend pegue do token)
       const payloadSemId = {
-        id_localizacao: 1,
+        id_localizacao: idLocalizacao,
         necessidade: profileData.necessidade.toUpperCase(),
-        cpf: profileData.cpf.replace(/\D/g, ''),
+        cpf: profileData.cpf.replace(/\D/g, '')
       }
 
       console.log('📤 Enviando dados do contratante:', payload)
@@ -2099,6 +2717,77 @@ function App() {
         console.log('🔑 Novo token:', successData.token.substring(0, 50) + '...')
       }
       
+      // Se tem foto, atualizar o perfil do usuário com a foto
+      if (fotoBase64) {
+        console.log('📸 Atualizando foto do usuário...')
+        console.log('📸 Tamanho da foto base64:', fotoBase64.length, 'caracteres')
+        console.log('📸 Primeiros 100 caracteres:', fotoBase64.substring(0, 100))
+        
+        try {
+          // Tentar com todos os dados do usuário (alguns backends exigem isso)
+          const photoPayload = {
+            nome: loggedUser.nome,
+            email: loggedUser.email,
+            telefone: loggedUser.telefone,
+            foto_perfil: fotoBase64
+          }
+          
+          console.log('📤 Enviando atualização de foto para:', API_ENDPOINTS.UPDATE_PROFILE)
+          console.log('📦 Payload (sem foto):', {
+            nome: photoPayload.nome,
+            email: photoPayload.email,
+            telefone: photoPayload.telefone,
+            foto_perfil: '(base64 omitido)'
+          })
+          
+          const updatePhotoResponse = await fetchWithAuth(API_ENDPOINTS.UPDATE_PROFILE, {
+            method: 'PUT',
+            body: JSON.stringify(photoPayload)
+          })
+          
+          console.log('📥 Status da atualização de foto:', updatePhotoResponse.status)
+          
+          if (updatePhotoResponse.ok) {
+            const photoData = await updatePhotoResponse.json()
+            console.log('✅ Foto atualizada com sucesso!')
+            console.log('✅ Resposta da atualização:', photoData)
+            
+            // IMPORTANTE: Salvar foto no loggedUser imediatamente
+            if (loggedUser) {
+              const updatedUser = {
+                ...loggedUser,
+                foto: fotoBase64
+              }
+              setLoggedUser(updatedUser)
+              localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
+              console.log('✅ Foto salva no loggedUser!')
+            }
+          } else {
+            const errorData = await updatePhotoResponse.json().catch(() => ({}))
+            console.error('❌ Erro ao atualizar foto:', errorData)
+            console.warn('⚠️ Status:', updatePhotoResponse.status)
+            
+            // Se falhar, tentar apenas com foto_perfil
+            console.log('🔄 Tentando novamente apenas com foto_perfil...')
+            const simplePayload = { foto_perfil: fotoBase64 }
+            const retryResponse = await fetchWithAuth(API_ENDPOINTS.UPDATE_PROFILE, {
+              method: 'PUT',
+              body: JSON.stringify(simplePayload)
+            })
+            
+            if (retryResponse.ok) {
+              console.log('✅ Foto atualizada na segunda tentativa!')
+            } else {
+              console.error('❌ Falhou também na segunda tentativa')
+            }
+          }
+        } catch (photoError) {
+          console.error('❌ Exceção ao atualizar foto:', photoError)
+        }
+      } else {
+        console.log('⚠️ Nenhuma foto para atualizar (fotoBase64 está vazio)')
+      }
+      
       // Extrair o ID do contratante da resposta (pode vir em vários lugares)
       const idContratante = successData.id || 
                            successData.contratante?.id || 
@@ -2116,7 +2805,8 @@ function App() {
           nome: usuarioCompleto?.nome || loggedUser.nome,
           email: usuarioCompleto?.email || loggedUser.email,
           telefone: usuarioCompleto?.telefone || loggedUser.telefone,
-          tipo_conta: usuarioCompleto?.tipo_conta || loggedUser.tipo_conta
+          tipo_conta: usuarioCompleto?.tipo_conta || loggedUser.tipo_conta,
+          foto: fotoBase64 || usuarioCompleto?.foto_perfil || loggedUser.foto // Salvar foto
         }
         
         setLoggedUser(updatedUser)
@@ -2124,6 +2814,8 @@ function App() {
         console.log('✅ Usuário atualizado com dados completos:', updatedUser)
         console.log('✅ ID do usuário:', updatedUser.id)
         console.log('✅ ID do contratante:', updatedUser.id_contratante)
+        console.log('📸 Foto salva:', updatedUser.foto ? 'Sim (base64)' : 'Não')
+        console.log('📸 Tamanho da foto:', updatedUser.foto?.length || 0, 'caracteres')
       } else {
         console.warn('⚠️ loggedUser não disponível para atualização')
       }
@@ -2227,6 +2919,32 @@ function App() {
           setLoggedUser(updatedUser)
           localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
           console.log('✅ ID do contratante salvo no usuário (da verificação):', idContratante)
+        }
+        
+        // IMPORTANTE: Buscar foto do usuário diretamente do endpoint /usuario/perfil
+        // porque o endpoint /contratante pode não retornar a foto atualizada
+        if (!loggedUser.foto || contratanteData?.usuario?.foto_perfil === null) {
+          try {
+            const perfilResponse = await fetchWithAuth(API_ENDPOINTS.PROFILE)
+            if (perfilResponse.ok) {
+              const perfilData = await perfilResponse.json()
+              if (perfilData?.foto_perfil) {
+                const updatedUser = {
+                  ...loggedUser,
+                  id_contratante: idContratante || loggedUser.id_contratante,
+                  foto: perfilData.foto_perfil
+                }
+                setLoggedUser(updatedUser)
+                localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
+              }
+            } else if (perfilResponse.status === 500) {
+              console.warn('⚠️ Erro 500 ao buscar perfil - servidor indisponível')
+            } else if (perfilResponse.status === 401 || perfilResponse.status === 403) {
+              console.warn('⚠️ Token inválido ao buscar perfil')
+            }
+          } catch (fotoError) {
+            console.warn('⚠️ Não foi possível carregar foto do perfil:', fotoError)
+          }
         }
       } else {
         // Outro erro - assumir que não tem perfil
@@ -3111,6 +3829,24 @@ const handleServiceCreate = async () => {
     }
 
     try {
+      // VERIFICAÇÃO CRÍTICA: Tipo de conta do usuário
+      console.log('=== VERIFICAÇÃO DE PERMISSÕES ===')
+      console.log('👤 Usuário logado:', loggedUser?.email)
+      console.log('🔑 Tipo de conta:', loggedUser?.tipo_conta)
+      console.log('🆔 ID do usuário:', loggedUser?.id)
+      console.log('🆔 ID do contratante:', loggedUser?.id_contratante)
+      
+      // Verificar se é CONTRATANTE
+      if (loggedUser?.tipo_conta !== 'CONTRATANTE') {
+        console.error('❌ ERRO: Usuário não é CONTRATANTE!')
+        console.error('Tipo de conta atual:', loggedUser?.tipo_conta)
+        alert('Erro: Apenas contratantes podem criar serviços. Sua conta é do tipo: ' + (loggedUser?.tipo_conta || 'desconhecido'))
+        return false
+      }
+      
+      console.log('✅ Usuário é CONTRATANTE - pode criar serviços')
+      console.log('==================================')
+      
       // Obter IDs necessários
       console.log('🔍 Obtendo ID do contratante...')
       console.log('🔍 loggedUser.id (usuario):', loggedUser?.id)
@@ -3119,49 +3855,36 @@ const handleServiceCreate = async () => {
       const id_contratante = await getContratanteId()
       console.log('✅ ID do contratante obtido:', id_contratante)
       
-      const id_localizacao = await getCurrentLocationId()
-      console.log('📍 ID da localização obtido:', id_localizacao)
-      console.log('🔍 Fonte do id_localizacao:', loggedUser?.id_localizacao ? 'Perfil do usuário' : 'Fallback (pode ser mockado)')
-      console.log('⚠️ ATENÇÃO: Verifique se id_localizacao=' + id_localizacao + ' existe na tabela LOCALIZACAO do banco!')
-      
-      if (id_localizacao === 1 && !loggedUser?.id_localizacao) {
-        console.warn('🚨 POSSÍVEL PROBLEMA: id_localizacao=1 é fallback, pode não existir no banco!')
-      }
-      
-      const descricaoServico = serviceDescription || selectedServiceType || 'Serviço de entrega personalizado'
-      
-      // Usar APENAS categoria selecionada pelo usuário (não detectar automaticamente)
-      const id_categoria = selectedCategoryId
-      
-      // Validar dados antes de enviar
+      // Validar ID do contratante
       if (!id_contratante || id_contratante <= 0) {
         console.error('❌ ID do contratante inválido:', id_contratante)
         alert('Erro: ID do contratante não foi obtido corretamente. Tente fazer login novamente.')
         return false
       }
       
-      // Categoria é opcional - se não tiver, usa endpoint sem categoria
-      if (id_categoria && id_categoria <= 0) {
-        console.warn('⚠️ ID da categoria inválido, criando serviço sem categoria')
-      }
+      const descricaoServico = serviceDescription || selectedServiceType || 'Serviço de entrega personalizado'
       
-      if (!id_localizacao || id_localizacao <= 0) {
-        console.error('❌ ID da localização inválido:', id_localizacao)
-        alert('Erro: Localização não foi obtida.')
-        return false
-      }
-      
+      // Validar descrição
       if (!descricaoServico || descricaoServico.trim().length < 3) {
         console.error('❌ Descrição do serviço inválida:', descricaoServico)
         alert('Erro: Descrição do serviço deve ter pelo menos 3 caracteres.')
         return false
       }
 
-      // Usar valor definido pelo usuário ou calcular baseado na distância
-      let valorServico = servicePrice
-      if (!valorServico || valorServico <= 0) {
+      // Validar localizações
+      if (!pickupLocation || !deliveryLocation) {
+        console.error('❌ Localizações inválidas:', { pickupLocation, deliveryLocation })
+        alert('Erro: Selecione origem e destino do serviço.')
+        return false
+      }
+
+      // Usar APENAS categoria selecionada pelo usuário (não detectar automaticamente)
+      const id_categoria = selectedCategoryId
+      
+      // Calcular valor adicional baseado no preço do serviço
+      let valorAdicional = servicePrice || 0
+      if (!valorAdicional || valorAdicional <= 0) {
         // Se usuário não definiu valor, calcular automaticamente
-        valorServico = 20.00 // Valor padrão
         if (pickupLocation && deliveryLocation) {
           const distance = calculateDistance(
             pickupLocation.lat,
@@ -3169,34 +3892,13 @@ const handleServiceCreate = async () => {
             deliveryLocation.lat,
             deliveryLocation.lng
           )
-          valorServico = calculatePrice(distance)
+          valorAdicional = Math.max(10, Math.round(distance * 2.5)) // Mínimo 10, 2.5 por km
+        } else {
+          valorAdicional = 10 // Valor padrão
         }
       }
-      
-      // TESTE: Payload mínimo para identificar campo problemático
-      const serviceData: any = {}
-      
-      // Começar apenas com descrição
-      serviceData.descricao = descricaoServico.trim()
-      
-      console.log('🧪 TESTE MÍNIMO: Enviando apenas { descricao }')
-      console.log('🔍 Se funcionar, vamos adicionando campos um por um')
-      console.log('🔍 Se falhar, o problema é no endpoint ou autenticação')
-      
-      // Comentado temporariamente para teste:
-      // serviceData.id_localizacao = Number(id_localizacao)
-      // serviceData.valor = Number(valorServico.toFixed(2))  
-      // serviceData.id_prestador = 1
-      
-      // Remover qualquer campo undefined, null ou vazio
-      Object.keys(serviceData).forEach(key => {
-        if (serviceData[key] === undefined || serviceData[key] === null || serviceData[key] === '') {
-          delete serviceData[key]
-        }
-      })
 
       console.log('=== CRIAÇÃO DE SERVIÇO ===')
-      console.log('📤 Payload para API (NOVO FORMATO):', serviceData)
       console.log('📊 Informações do usuário:', {
         id_usuario: loggedUser?.id,
         id_contratante: id_contratante,
@@ -3204,89 +3906,75 @@ const handleServiceCreate = async () => {
       })
       console.log('🗺 Localizações:', {
         origem: pickupLocation,
-        destino: deliveryLocation,
-        id_localizacao: id_localizacao
+        destino: deliveryLocation
       })
       console.log('🏷️ Categoria selecionada:', {
-        descricao: descricaoServico,
-        id_categoria: id_categoria || 'Nenhuma (opcional)',
-        categoria_nome: getCategoryName(id_categoria)
+        id_categoria: id_categoria || 'Nenhuma',
+        descricao: descricaoServico
       })
-      console.log('💰 Valor calculado:', valorServico.toFixed(2))
-      console.log('✅ Validação dos dados:')
-      console.log('  - id_categoria válido:', typeof id_categoria === 'number' && id_categoria > 0)
-      console.log('  - id_localizacao válido:', typeof id_localizacao === 'number' && id_localizacao > 0)
-      console.log('  - descricao válida:', typeof descricaoServico === 'string' && descricaoServico.length >= 3)
-      console.log('  - valor válido:', typeof valorServico === 'number' && valorServico > 0)
+      console.log('💰 Valor adicional:', valorAdicional)
       console.log('==========================')
 
-      // TESTE: Forçar endpoint /servico para teste mínimo
-      let endpoint: string = API_ENDPOINTS.SERVICES
-      let finalPayload = { ...serviceData }
+      let endpoint: string
+      let payload: any
       
-      console.log('🧪 TESTE: Forçando endpoint /servico para teste mínimo')
-      console.log('🎯 Endpoint usado:', endpoint)
+      // IMPORTANTE: Endpoint de categoria pode estar bloqueado para contratantes
+      // Vamos tentar sempre usar o endpoint sem categoria primeiro
+      console.log('⚠️ ATENÇÃO: Endpoint /from-categoria pode estar bloqueado')
+      console.log('⚠️ Tentando usar endpoint /servico com id_categoria no payload')
+      
+      // Obter id_localizacao
+      const id_localizacao = await getCurrentLocationId()
+      console.log('📍 ID da localização obtido:', id_localizacao)
+      
+      if (!id_localizacao || id_localizacao <= 0) {
+        console.error('❌ ID da localização inválido:', id_localizacao)
+        alert('Erro: Localização não foi obtida.')
+        return false
+      }
+      
+      // SEMPRE usar endpoint /servico (sem categoria na URL)
+      endpoint = API_ENDPOINTS.SERVICES
+      
+      // Se tem categoria, incluir no payload
+      if (id_categoria && id_categoria > 0) {
+        payload = {
+          id_categoria: Number(id_categoria),
+          descricao: descricaoServico.trim(),
+          valor_adicional: Number(valorAdicional),
+          origem_lat: Number(pickupLocation.lat),
+          origem_lng: Number(pickupLocation.lng),
+          destino_lat: Number(deliveryLocation.lat),
+          destino_lng: Number(deliveryLocation.lng)
+        }
+        
+        console.log('🎯 Criando serviço COM CATEGORIA (via endpoint /servico)')
+        console.log('🏷️ ID da categoria:', id_categoria)
+      } else {
+        payload = {
+          descricao: descricaoServico.trim(),
+          valor_adicional: Number(valorAdicional),
+          origem_lat: Number(pickupLocation.lat),
+          origem_lng: Number(pickupLocation.lng),
+          destino_lat: Number(deliveryLocation.lat),
+          destino_lng: Number(deliveryLocation.lng)
+        }
+        
+        console.log('🎯 Criando serviço SEM CATEGORIA')
+      }
+      
+      console.log('🌐 Endpoint:', endpoint)
+      console.log('📤 Payload:', JSON.stringify(payload, null, 2))
       
       console.log('📤 Enviando requisição para API...')
-      console.log('🌐 URL:', endpoint)
-      console.log('📋 Payload final:', JSON.stringify(finalPayload, null, 2))
+      console.log('🌐 Endpoint completo:', endpoint)
+      console.log('📋 Payload JSON:', JSON.stringify(payload, null, 2))
+      console.log('🔑 Token disponível:', !!localStorage.getItem('authToken'))
+      console.log('👤 Tipo de conta do usuário:', loggedUser?.tipo_conta)
       
-      // Logs detalhados de cada campo para debug
-      console.log('🔍 ANÁLISE DETALHADA DOS CAMPOS:')
-      if (finalPayload.descricao_personalizada) {
-        console.log('  📝 descricao_personalizada:', finalPayload.descricao_personalizada, '(tipo:', typeof finalPayload.descricao_personalizada, ', length:', finalPayload.descricao_personalizada?.length, ')')
-        console.log('  💰 valor_personalizado:', finalPayload.valor_personalizado, '(tipo:', typeof finalPayload.valor_personalizado, ')')
-      } else {
-        console.log('  📝 descricao:', finalPayload.descricao, '(tipo:', typeof finalPayload.descricao, ', length:', finalPayload.descricao?.length, ')')
-        console.log('  💰 valor:', finalPayload.valor, '(tipo:', typeof finalPayload.valor, ')')
-        console.log('  🏷️ id_categoria:', finalPayload.id_categoria, '(tipo:', typeof finalPayload.id_categoria, ')')
-      }
-      console.log('  📍 id_localizacao:', finalPayload.id_localizacao, '(tipo:', typeof finalPayload.id_localizacao, ')')
-      console.log('🔍 POSSÍVEIS PROBLEMAS:')
-      console.log('  - id_localizacao=1 existe no banco?')
-      console.log('  - Endpoint', endpoint, 'está correto?')
-      console.log('  - Payload tem campos extras/inválidos?')
-      console.log('  - Backend espera campos diferentes?')
-      console.log('🧪 SE AINDA DER ERRO 500:')
-      console.log('  - Tente apenas: { "descricao": "teste" }')
-      console.log('  - Verifique documentação da API')
-      console.log('  - Confirme se endpoint /servico está funcionando')
-      
-      // TESTE 1: Verificar se endpoint existe com GET
-      console.log('🧪 TESTE 1: Verificando se endpoint existe com GET...')
-      try {
-        const testGet = await fetch(endpoint)
-        console.log('📥 GET Response Status:', testGet.status)
-        console.log('📥 GET Response OK:', testGet.ok)
-      } catch (error) {
-        console.error('❌ Erro no GET:', error)
-      }
-      
-      // TESTE 2: Tentar POST sem autenticação
-      console.log('🧪 TESTE 2: Tentando POST sem autenticação...')
-      try {
-        const testPost = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(finalPayload)
-        })
-        console.log('📥 POST sem auth - Status:', testPost.status)
-        console.log('📥 POST sem auth - OK:', testPost.ok)
-        if (!testPost.ok) {
-          const errorText = await testPost.text()
-          console.log('📥 POST sem auth - Erro:', errorText)
-        }
-      } catch (error) {
-        console.error('❌ Erro no POST sem auth:', error)
-      }
-      
-      // TESTE 3: POST com autenticação (original)
-      console.log('🧪 TESTE 3: POST com autenticação (original)...')
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
-        body: JSON.stringify(finalPayload)
+        body: JSON.stringify(payload)
       })
 
       console.log('📥 Resposta recebida:')
@@ -3299,12 +3987,13 @@ const handleServiceCreate = async () => {
         console.log('✅ Serviço criado com sucesso!')
         console.log('📋 Resposta completa:', JSON.stringify(data, null, 2))
         
-        // A API retorna: { status_code: 201, message: "...", data: { id: ... } }
+        // A API retorna: { status_code: 201, message: "...", data: { servico: { id: ... } } }
         // Extrair ID do serviço de vários formatos possíveis
         let serviceId = data.id || 
                        data.servico_id || 
                        data.service_id ||
-                       data.data?.id ||  // Dentro de "data"
+                       data.data?.id ||
+                       data.data?.servico?.id ||  // Novo formato: data.servico.id
                        data.data?.servico_id
         
         // Se a resposta for um objeto com propriedade 'servico' ou 'service'
@@ -3314,13 +4003,11 @@ const handleServiceCreate = async () => {
         if (!serviceId && data.service) {
           serviceId = data.service.id
         }
-        if (!serviceId && data.data?.servico) {
-          serviceId = data.data.servico.id
-        }
         
         console.log('🔍 Tentando extrair ID do serviço:')
         console.log('  - data.id:', data.id)
         console.log('  - data.data?.id:', data.data?.id)
+        console.log('  - data.data?.servico?.id:', data.data?.servico?.id)
         console.log('  - data.servico?.id:', data.servico?.id)
         console.log('  - ID extraído:', serviceId)
         
@@ -3333,20 +4020,29 @@ const handleServiceCreate = async () => {
         console.log('🆔 ID do serviço criado:', serviceId)
         setCreatedServiceId(serviceId)
         
+        // Extrair informações do serviço da resposta
+        const servicoData = data.data?.servico || data.servico || data
+        const categoriaData = data.data?.categoria || null
+        const detalhesCalculo = data.data?.detalhes_calculo || null
+        
         // Salvar dados do serviço no localStorage para referência
         const serviceInfo = {
           id: serviceId,
-          id_categoria: serviceData.id_categoria,
-          id_localizacao: serviceData.id_localizacao,
-          descricao: serviceData.descricao,
-          valor: serviceData.valor,
-          status: 'PENDENTE',
+          id_categoria: servicoData.id_categoria || id_categoria,
+          id_contratante: servicoData.id_contratante || id_contratante,
+          descricao: servicoData.descricao || descricaoServico,
+          valor: servicoData.valor || detalhesCalculo?.valor_total || valorAdicional,
+          status: servicoData.status || 'PENDENTE',
           origem: pickupLocation,
           destino: deliveryLocation,
+          categoria: categoriaData,
+          detalhes_calculo: detalhesCalculo,
           createdAt: new Date().toISOString(),
           userId: loggedUser?.email
         }
         localStorage.setItem('currentService', JSON.stringify(serviceInfo))
+        
+        console.log('💾 Serviço salvo no localStorage:', serviceInfo)
         
         return true
       } else {
@@ -3379,7 +4075,7 @@ const handleServiceCreate = async () => {
             console.error('  3. id_categoria não existe na tabela CATEGORIA')
             console.error('  4. id_contratante não existe na tabela CONTRATANTE')
             console.error('  5. Violação de constraint no banco de dados')
-            console.error('📋 Dados enviados:', serviceData)
+            console.error('📋 Dados enviados:', payload)
             
             errorMessage = `Erro interno do servidor (500).\n\nPossíveis causas:\n- ID do prestador inválido\n- ID da localização inválido\n- Dados inconsistentes no banco\n\nDetalhes: ${errorData.message || 'Sem detalhes adicionais'}`
           } else {
@@ -3406,6 +4102,28 @@ const handleServiceCreate = async () => {
       }
     } catch (error) {
       console.error('❌ Erro na requisição de criação de serviço:', error)
+      
+      // Verificar se é erro de sessão expirada
+      if (error instanceof Error && error.message.includes('sessão expirou')) {
+        alert(error.message)
+        // Redirecionar para login
+        setCurrentScreen('login')
+        return false
+      }
+      
+      // Verificar se é erro de token inválido
+      if (error instanceof Error && (
+          error.message.includes('Token inválido') || 
+          error.message.includes('Token não encontrado') ||
+          error.message.includes('Acesso negado: Token')
+      )) {
+        alert('Sua sessão expirou. Por favor, faça login novamente.')
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('loggedUser')
+        setLoggedUser(null)
+        setCurrentScreen('login')
+        return false
+      }
       
       // Verificar se é erro de perfil incompleto
       if (error instanceof Error && error.message.includes('ID do contratante não encontrado')) {
@@ -4284,15 +5002,262 @@ const handleServiceCreate = async () => {
   // Wallet Screen
   if (currentScreen === 'wallet') {
     return (
-      <WalletScreen
-        balance={walletBalance}
-        onBack={() => handleScreenTransition('home')}
-        onNotificationClick={() => setIsNotificationOpen(true)}
-        onProfileClick={() => handleScreenTransition('profile')}
-        hasUnreadNotifications={notifications.some(n => !n.read)}
-        profilePhoto={profilePhoto || loggedUser?.foto || null}
-        userName={loggedUser?.nome || 'Usuário'}
-      />
+      <>
+        <WalletScreen
+          balance={walletBalance}
+          onBack={() => handleScreenTransition('home')}
+          onNotificationClick={() => setIsNotificationOpen(true)}
+          onProfileClick={() => handleScreenTransition('profile')}
+          hasUnreadNotifications={notifications.some(n => !n.read)}
+          profilePhoto={profilePhoto || loggedUser?.foto || null}
+          userName={loggedUser?.nome || 'Usuário'}
+          hasWallet={hasWallet}
+          onCreateWallet={() => setShowCreateWalletModal(true)}
+          walletData={walletData}
+          onRecharge={() => setShowRechargeModal(true)}
+          transactions={walletTransactions}
+          loadingTransactions={loadingTransactions}
+        />
+
+        {/* Modal de Criação de Carteira */}
+        {showCreateWalletModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Criar Carteira Digital</h2>
+              
+              <p className="text-gray-600 mb-6">
+                Informe sua chave PagBank para integrar sua carteira digital e começar a receber pagamentos.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Chave PagBank *
+                  </label>
+                  <input
+                    type="text"
+                    value={walletFormData.chave_pagbank}
+                    onChange={(e) => setWalletFormData({ ...walletFormData, chave_pagbank: e.target.value })}
+                    placeholder="Digite sua chave PagBank"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Sua chave de integração com o PagBank
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Saldo Inicial (opcional)
+                  </label>
+                  <input
+                    type="number"
+                    value={walletFormData.saldo}
+                    onChange={(e) => setWalletFormData({ ...walletFormData, saldo: parseFloat(e.target.value) || 0 })}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Valor inicial da carteira (padrão: R$ 0,00)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowCreateWalletModal(false)
+                    setWalletFormData({ chave_pagbank: '', saldo: 0 })
+                  }}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  disabled={loadingWallet}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={createWallet}
+                  disabled={loadingWallet || !walletFormData.chave_pagbank}
+                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {loadingWallet ? 'Criando...' : 'Criar Carteira'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Recarga */}
+        {showRechargeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Adicionar Saldo</h2>
+              
+              {!rechargeQrCode ? (
+                <>
+                  <p className="text-gray-600 mb-6">
+                    Informe o valor que deseja adicionar à sua carteira. Você receberá um QR Code PIX para pagamento.
+                  </p>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Valor da Recarga (R$) *
+                      </label>
+                      <input
+                        type="number"
+                        value={rechargeAmount || ''}
+                        onChange={(e) => setRechargeAmount(parseFloat(e.target.value) || 0)}
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0.01"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg font-semibold"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Valor mínimo: R$ 0,01
+                      </p>
+                    </div>
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-blue-900">Como funciona?</p>
+                          <p className="text-xs text-blue-700 mt-1">
+                            Após confirmar, você receberá um QR Code PIX. Pague usando seu banco e o saldo será creditado automaticamente.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      onClick={() => {
+                        setShowRechargeModal(false)
+                        setRechargeAmount(0)
+                        setRechargeQrCode('')
+                        setRechargeQrCodeUrl('')
+                        setRechargeData(null)
+                      }}
+                      className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                      disabled={loadingRecharge}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={requestRecharge}
+                      disabled={loadingRecharge || rechargeAmount <= 0}
+                      className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    >
+                      {loadingRecharge ? 'Gerando...' : 'Gerar QR Code'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-center">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">Recarga Solicitada!</h3>
+                    <p className="text-gray-600 mb-6">
+                      Escaneie o QR Code abaixo para pagar R$ {rechargeAmount.toFixed(2)}
+                    </p>
+                  </div>
+
+                  {rechargeQrCodeUrl && (
+                    <div className="bg-white border-2 border-gray-200 rounded-xl p-4 mb-4">
+                      <img 
+                        src={rechargeQrCodeUrl} 
+                        alt="QR Code PIX" 
+                        className="w-full max-w-xs mx-auto"
+                      />
+                    </div>
+                  )}
+
+                  {rechargeQrCode && (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Código PIX Copia e Cola
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={rechargeQrCode}
+                          readOnly
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs bg-gray-50"
+                        />
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(rechargeQrCode)
+                            alert('Código copiado!')
+                          }}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+                        >
+                          Copiar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-blue-900">Modo Sandbox (Teste)</p>
+                        <p className="text-xs text-blue-700 mt-1">
+                          Este é um ambiente de testes. Clique no botão abaixo para simular o pagamento e creditar o valor na sua carteira.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <button
+                      onClick={confirmSandboxPayment}
+                      disabled={loadingRecharge}
+                      className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {loadingRecharge ? (
+                        'Processando...'
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Simular Pagamento (Sandbox)
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowRechargeModal(false)
+                        setRechargeAmount(0)
+                        setRechargeQrCode('')
+                        setRechargeQrCodeUrl('')
+                        setRechargeData(null)
+                      }}
+                      disabled={loadingRecharge}
+                      className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </>
     )
   }
 
@@ -4300,6 +5265,7 @@ const handleServiceCreate = async () => {
   if (currentScreen === 'profile') {
     return (
       <ProfileScreen
+        key={`profile-${loggedUser?.nome}-${loggedUser?.email}`}
         userName={loggedUser?.nome || 'Usuário'}
         userEmail={loggedUser?.email || ''}
         userPhone={loggedUser?.telefone || ''}
@@ -5777,6 +6743,8 @@ const handleServiceCreate = async () => {
                   <p className="text-red-500 text-sm mt-1">{errors.telefone}</p>
                 )}
               </div>
+
+              
       
               <div className="flex justify-center">
                 <button

@@ -40,6 +40,15 @@ export const API_ENDPOINTS = {
   // Pagamentos
   PAYMENTS: `${API_BASE_URL}/pagamento`,
   PAGBANK_PAYMENT: `${API_BASE_URL}/pagamento/pagbank`,
+  
+  // Carteira
+  WALLET: `${API_BASE_URL}/carteira`,
+  WALLET_BY_ID: (id: string) => `${API_BASE_URL}/carteira/${id}`,
+  MY_WALLET: `${API_BASE_URL}/carteira/minha-carteira`,
+  WALLET_RECHARGE: `${API_BASE_URL}/recarga/solicitar`,
+  WALLET_TRANSACTIONS: (walletId: string) => `${API_BASE_URL}/transacao/${walletId}`,
+  CREATE_TRANSACTION: `${API_BASE_URL}/transacao`,
+  PAYMENT_WEBHOOK: `${API_BASE_URL}/pagamento/webhook`,
 }
 
 // OpenStreetMap
