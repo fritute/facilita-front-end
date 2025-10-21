@@ -14,6 +14,8 @@ interface ProfileScreenProps {
   onLogout: () => void
   onUpdateProfile: (name: string, email: string) => Promise<void>
   onToggleNotifications: (enabled: boolean) => void
+  isDarkMode?: boolean
+  themeClasses?: any
 }
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({
@@ -28,7 +30,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onChangePassword,
   onLogout,
   onUpdateProfile,
-  onToggleNotifications
+  onToggleNotifications,
+  isDarkMode = false,
+  themeClasses = {
+    bg: 'bg-gray-100',
+    bgCard: 'bg-white',
+    bgSecondary: 'bg-gray-50',
+    text: 'text-gray-800',
+    textSecondary: 'text-gray-600',
+    border: 'border-gray-200'
+  }
 }) => {
   const [isEditingName, setIsEditingName] = useState(false)
   const [isEditingEmail, setIsEditingEmail] = useState(false)
@@ -94,7 +105,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 overflow-x-hidden">
+    <div className={`min-h-screen ${themeClasses.bg} overflow-x-hidden`}>
       {/* Header */}
       <div className="bg-green-500 text-white p-4 relative">
         <button
@@ -111,7 +122,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       {/* Content */}
       <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6">
         {/* Profile Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6 md:p-8">
+        <div className={`${themeClasses.bgCard} rounded-xl shadow-lg p-6 md:p-8`}>
           <div className="flex flex-col items-center text-center">
             {/* Profile Photo */}
             <div className="relative mb-4">
@@ -135,14 +146,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </div>
 
             {/* User Info */}
-            <h2 className="text-2xl font-bold text-gray-800 mb-1">{userName}</h2>
-            <p className="text-gray-600">{userEmail}</p>
+            <h2 className={`text-2xl font-bold ${themeClasses.text} mb-1`}>{userName}</h2>
+            <p className={themeClasses.textSecondary}>{userEmail}</p>
           </div>
         </div>
 
         {/* Profile Details */}
-        <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 space-y-4">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Informações Pessoais</h3>
+        <div className={`${themeClasses.bgCard} rounded-xl shadow-lg p-6 md:p-8 space-y-4`}>
+          <h3 className={`text-lg font-semibold ${themeClasses.text} mb-4`}>Informações Pessoais</h3>
           
           {/* Error Message */}
           {updateError && (
@@ -163,19 +174,19 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           {/* Nome */}
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">Nome</label>
+            <label className={`block text-sm font-medium ${themeClasses.textSecondary} mb-1`}>Nome</label>
             <div className="relative">
               {isEditingName ? (
                 <input
                   type="text"
                   value={editedName}
                   onChange={(e) => setEditedName(e.target.value)}
-                  className="w-full p-3 bg-gray-50 rounded-lg border-2 border-green-500 focus:outline-none"
+                  className={`w-full p-3 ${themeClasses.bgSecondary} rounded-lg border-2 border-green-500 focus:outline-none ${themeClasses.text}`}
                   autoFocus
                 />
               ) : (
-                <div className="p-3 bg-gray-50 rounded-lg flex items-center justify-between">
-                  <p className="text-gray-800">{userName}</p>
+                <div className={`p-3 ${themeClasses.bgSecondary} rounded-lg flex items-center justify-between`}>
+                  <p className={themeClasses.text}>{userName}</p>
                   <button
                     onClick={() => setIsEditingName(true)}
                     className="text-gray-400 hover:text-green-500 transition-colors"
@@ -189,18 +200,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           {/* E-mail */}
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">E-mail</label>
+            <label className={`block text-sm font-medium ${themeClasses.textSecondary} mb-1`}>E-mail</label>
             <div className="relative">
               {isEditingEmail ? (
                 <input
                   type="email"
                   value={editedEmail}
                   onChange={(e) => setEditedEmail(e.target.value)}
-                  className="w-full p-3 bg-gray-50 rounded-lg border-2 border-green-500 focus:outline-none"
+                  className={`w-full p-3 ${themeClasses.bgSecondary} rounded-lg border-2 border-green-500 focus:outline-none ${themeClasses.text}`}
                 />
               ) : (
-                <div className="p-3 bg-gray-50 rounded-lg flex items-center justify-between">
-                  <p className="text-gray-800">{userEmail}</p>
+                <div className={`p-3 ${themeClasses.bgSecondary} rounded-lg flex items-center justify-between`}>
+                  <p className={themeClasses.text}>{userEmail}</p>
                   <button
                     onClick={() => setIsEditingEmail(true)}
                     className="text-gray-400 hover:text-green-500 transition-colors"
@@ -235,33 +246,33 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">Telefone</label>
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-gray-800">{userPhone || 'Não informado'}</p>
+            <label className={`block text-sm font-medium ${themeClasses.textSecondary} mb-1`}>Telefone</label>
+            <div className={`p-3 ${themeClasses.bgSecondary} rounded-lg`}>
+              <p className={themeClasses.text}>{userPhone || 'Não informado'}</p>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">Endereço</label>
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-gray-800">{userAddress || 'Não informado'}</p>
+            <label className={`block text-sm font-medium ${themeClasses.textSecondary} mb-1`}>Endereço</label>
+            <div className={`p-3 ${themeClasses.bgSecondary} rounded-lg`}>
+              <p className={themeClasses.text}>{userAddress || 'Não informado'}</p>
             </div>
           </div>
         </div>
 
         {/* Other Configurations */}
-        <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 space-y-4">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Outras Configurações</h3>
+        <div className={`${themeClasses.bgCard} rounded-xl shadow-lg p-6 md:p-8 space-y-4`}>
+          <h3 className={`text-lg font-semibold ${themeClasses.text} mb-4`}>Outras Configurações</h3>
           
           {/* Notificações */}
-          <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
+          <div className={`flex items-center justify-between py-3 px-4 ${themeClasses.bgSecondary} rounded-lg`}>
             <div className="flex items-center">
               <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
                 <Bell className="w-4 h-4 text-purple-600" />
               </div>
               <div>
-                <span className="font-medium text-gray-800 block">Notificações</span>
-                <span className="text-xs text-gray-500">Receber alertas e avisos</span>
+                <span className={`font-medium ${themeClasses.text} block`}>Notificações</span>
+                <span className={`text-xs ${themeClasses.textSecondary}`}>Receber alertas e avisos</span>
               </div>
             </div>
             <button
@@ -280,8 +291,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 space-y-3">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Ações</h3>
+        <div className={`${themeClasses.bgCard} rounded-xl shadow-lg p-6 md:p-8 space-y-3`}>
+          <h3 className={`text-lg font-semibold ${themeClasses.text} mb-4`}>Ações</h3>
           
           {/* Alterar Senha */}
           <button 

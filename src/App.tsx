@@ -435,6 +435,120 @@ function App() {
           distance: '2.3 km',
           isOpen: false
         }
+      ],
+      'presentes': [
+        {
+          id: 1,
+          name: 'Ri Happy Brinquedos',
+          address: 'Shopping Eldorado - São Paulo - SP',
+          rating: 4.5,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-rihappy-photo',
+          distance: '1.2 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Renner',
+          address: 'Av. Paulista, 1230 - São Paulo - SP',
+          rating: 4.3,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-renner-photo',
+          distance: '0.6 km',
+          isOpen: true
+        },
+        {
+          id: 3,
+          name: 'C&A',
+          address: 'Rua Augusta, 2000 - São Paulo - SP',
+          rating: 4.2,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-cea-photo',
+          distance: '0.9 km',
+          isOpen: true
+        },
+        {
+          id: 4,
+          name: 'Americanas',
+          address: 'Shopping Center Norte - São Paulo - SP',
+          rating: 4.1,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-americanas-photo',
+          distance: '1.5 km',
+          isOpen: true
+        }
+      ],
+      'servicos': [
+        {
+          id: 1,
+          name: 'Salão de Beleza Elegance',
+          address: 'Rua Oscar Freire, 500 - São Paulo - SP',
+          rating: 4.7,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-salao-photo',
+          distance: '0.5 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Lavanderia Express',
+          address: 'Rua Augusta, 800 - São Paulo - SP',
+          rating: 4.4,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-lavanderia-photo',
+          distance: '0.3 km',
+          isOpen: true
+        },
+        {
+          id: 3,
+          name: 'Conserto de Eletrônicos Tech',
+          address: 'Av. Paulista, 900 - São Paulo - SP',
+          rating: 4.6,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-tech-photo',
+          distance: '0.7 km',
+          isOpen: true
+        },
+        {
+          id: 4,
+          name: 'Academia Smart Fit',
+          address: 'Rua da Consolação, 1500 - São Paulo - SP',
+          rating: 4.3,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-smartfit-photo',
+          distance: '1.1 km',
+          isOpen: true
+        }
+      ],
+      'compras': [
+        {
+          id: 1,
+          name: 'Magazine Luiza',
+          address: 'Av. Paulista, 2000 - São Paulo - SP',
+          rating: 4.4,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-magalu-photo',
+          distance: '0.5 km',
+          isOpen: true
+        },
+        {
+          id: 2,
+          name: 'Casas Bahia',
+          address: 'Rua Augusta, 1500 - São Paulo - SP',
+          rating: 4.2,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-casasbahia-photo',
+          distance: '0.8 km',
+          isOpen: true
+        },
+        {
+          id: 3,
+          name: 'Zara',
+          address: 'Shopping Iguatemi - São Paulo - SP',
+          rating: 4.6,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-zara-photo',
+          distance: '1.3 km',
+          isOpen: true
+        },
+        {
+          id: 4,
+          name: 'Fnac',
+          address: 'Av. Paulista, 1230 - São Paulo - SP',
+          rating: 4.5,
+          image: 'https://lh3.googleusercontent.com/places/ANXAkqH8ZQvz8yKxL-fnac-photo',
+          distance: '0.6 km',
+          isOpen: true
+        }
       ]
     }
     
@@ -450,8 +564,9 @@ function App() {
 
   // Classes de tema
   const themeClasses = {
-    bg: isDarkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-gray-50 to-gray-100',
+    bg: isDarkMode ? 'bg-gray-900' : 'bg-gray-100',
     bgCard: isDarkMode ? 'bg-gray-800' : 'bg-white',
+    bgSecondary: isDarkMode ? 'bg-gray-700' : 'bg-gray-50',
     bgPrimary: isDarkMode ? 'bg-gray-800' : 'bg-green-500',
     text: isDarkMode ? 'text-white' : 'text-gray-800',
     textSecondary: isDarkMode ? 'text-gray-300' : 'text-gray-600',
@@ -601,7 +716,10 @@ function App() {
         'banco': 'amenity=bank',
         'hospital': 'amenity=hospital',
         'shopping': 'shop=mall',
-        'correios': 'amenity=post_office'
+        'correios': 'amenity=post_office',
+        'presentes': 'shop=gift|shop=toys|shop=clothes',
+        'servicos': 'shop=hairdresser|shop=laundry|amenity=gym',
+        'compras': 'shop=department_store|shop=clothes|shop=electronics'
       }
 
       const tag = categoryMap[category] || 'amenity=*'
@@ -701,24 +819,14 @@ function App() {
     }
   }
 
-  // Service cards with Undraw-inspired icons
+  // Service cards with images
   const serviceCards = [
     { 
       id: 'farmacia', 
       name: 'Farmácia', 
       image: (
-        <div className="w-16 h-16 mx-auto mb-3 bg-green-100 rounded-full flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Undraw-inspired pharmacy icon */}
-            <circle cx="50" cy="30" r="12" fill="#6C63FF"/>
-            <rect x="44" y="45" width="12" height="25" rx="6" fill="#6C63FF"/>
-            <rect x="35" y="20" width="30" height="20" rx="10" fill="#4CAF50"/>
-            <rect x="47" y="25" width="6" height="10" fill="#FFF"/>
-            <rect x="42" y="28" width="16" height="4" fill="#FFF"/>
-            <circle cx="25" cy="75" r="8" fill="#FF6B6B"/>
-            <circle cx="75" cy="75" r="8" fill="#4ECDC4"/>
-            <rect x="20" y="80" width="60" height="4" fill="#6C63FF"/>
-          </svg>
+        <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
+          <img src="/src/assets/images/undraw_medicine_hqqg 2.png" alt="Farmácia" className="w-full h-full object-contain" />
         </div>
       )
     },
@@ -726,124 +834,8 @@ function App() {
       id: 'mercado', 
       name: 'Mercado', 
       image: (
-        <div className="w-16 h-16 mx-auto mb-3 bg-blue-100 rounded-full flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Undraw-inspired supermarket icon */}
-            <rect x="20" y="35" width="40" height="30" fill="#6C63FF" rx="5"/>
-            <rect x="15" y="30" width="50" height="8" fill="#4ECDC4"/>
-            <circle cx="25" cy="75" r="5" fill="#333"/>
-            <circle cx="55" cy="75" r="5" fill="#333"/>
-            <rect x="10" y="25" width="6" height="25" fill="#FF6B6B"/>
-            <path d="M65 30 Q75 25 75 35 Q75 45 65 40" fill="none" stroke="#333" strokeWidth="2"/>
-            
-            {/* Products in cart */}
-            <rect x="25" y="40" width="8" height="6" fill="#4CAF50"/>
-            <rect x="35" y="38" width="6" height="8" fill="#FF9800"/>
-            <circle cx="48" cy="45" r="4" fill="#E91E63"/>
-            <rect x="45" y="52" width="10" height="4" fill="#2196F3"/>
-          </svg>
-        </div>
-      )
-    },
-    { 
-      id: 'restaurante', 
-      name: 'Restaurante', 
-      image: (
-        <div className="w-16 h-16 mx-auto mb-3 bg-red-100 rounded-full flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Undraw-inspired restaurant icon */}
-            <circle cx="50" cy="40" r="20" fill="#FF6B6B"/>
-            <rect x="45" y="60" width="10" height="15" fill="#6C63FF"/>
-            <path d="M30 35 Q50 25 70 35" fill="none" stroke="#FFF" strokeWidth="3"/>
-            <circle cx="40" cy="40" r="3" fill="#FFF"/>
-            <circle cx="50" cy="38" r="3" fill="#FFF"/>
-            <circle cx="60" cy="40" r="3" fill="#FFF"/>
-            <rect x="25" y="75" width="50" height="4" fill="#4ECDC4"/>
-            <path d="M35 30 L40 25 L45 30" fill="#4CAF50"/>
-            <path d="M55 30 L60 25 L65 30" fill="#4CAF50"/>
-          </svg>
-        </div>
-      )
-    },
-    { 
-      id: 'posto', 
-      name: 'Posto', 
-      image: (
-        <div className="w-16 h-16 mx-auto mb-3 bg-yellow-100 rounded-full flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Undraw-inspired gas station icon */}
-            <rect x="25" y="45" width="30" height="35" fill="#6C63FF"/>
-            <rect x="20" y="40" width="40" height="8" fill="#4ECDC4"/>
-            <circle cx="40" cy="30" r="8" fill="#FF6B6B"/>
-            <rect x="60" y="35" width="8" height="25" fill="#FFD93D"/>
-            <circle cx="64" cy="32" r="3" fill="#4CAF50"/>
-            <path d="M68 35 Q75 30 80 35 Q75 40 68 35" fill="#333"/>
-            <rect x="30" y="50" width="20" height="4" fill="#FFF"/>
-            <rect x="30" y="60" width="15" height="4" fill="#FFF"/>
-            <rect x="30" y="70" width="18" height="4" fill="#FFF"/>
-          </svg>
-        </div>
-      )
-    },
-    { 
-      id: 'banco', 
-      name: 'Banco', 
-      image: (
-        <div className="w-16 h-16 mx-auto mb-3 bg-indigo-100 rounded-full flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Undraw-inspired bank icon */}
-            <rect x="20" y="50" width="60" height="30" fill="#6C63FF"/>
-            <polygon points="50,25 15,45 85,45" fill="#4ECDC4"/>
-            <rect x="30" y="55" width="6" height="20" fill="#FFF"/>
-            <rect x="40" y="55" width="6" height="20" fill="#FFF"/>
-            <rect x="50" y="55" width="6" height="20" fill="#FFF"/>
-            <rect x="60" y="55" width="6" height="20" fill="#FFF"/>
-            <rect x="15" y="80" width="70" height="6" fill="#333"/>
-            <circle cx="50" cy="35" r="4" fill="#FFD93D"/>
-            <text x="50" y="38" textAnchor="middle" fontSize="6" fill="#333">$</text>
-          </svg>
-        </div>
-      )
-    },
-    { 
-      id: 'hospital', 
-      name: 'Hospital', 
-      image: (
-        <div className="w-16 h-16 mx-auto mb-3 bg-pink-100 rounded-full flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Undraw-inspired hospital icon */}
-            <rect x="25" y="35" width="50" height="45" fill="#6C63FF"/>
-            <rect x="20" y="30" width="60" height="8" fill="#4ECDC4"/>
-            <rect x="45" y="15" width="10" height="20" fill="#FF6B6B"/>
-            <rect x="40" y="20" width="20" height="10" fill="#FF6B6B"/>
-            <rect x="35" y="45" width="8" height="8" fill="#FFF"/>
-            <rect x="47" y="45" width="8" height="8" fill="#FFF"/>
-            <rect x="59" y="45" width="8" height="8" fill="#FFF"/>
-            <rect x="35" y="60" width="8" height="8" fill="#FFF"/>
-            <rect x="47" y="60" width="8" height="8" fill="#FFF"/>
-            <rect x="59" y="60" width="8" height="8" fill="#FFF"/>
-          </svg>
-        </div>
-      )
-    },
-    { 
-      id: 'shopping', 
-      name: 'Shopping', 
-      image: (
-        <div className="w-16 h-16 mx-auto mb-3 bg-purple-100 rounded-full flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Undraw-inspired shopping mall icon */}
-            <rect x="15" y="40" width="70" height="40" fill="#6C63FF"/>
-            <rect x="10" y="35" width="80" height="8" fill="#4ECDC4"/>
-            <rect x="25" y="50" width="15" height="15" fill="#FF6B6B"/>
-            <rect x="45" y="50" width="15" height="15" fill="#4CAF50"/>
-            <rect x="65" y="50" width="15" height="15" fill="#FFD93D"/>
-            <circle cx="32" cy="57" r="2" fill="#FFF"/>
-            <circle cx="52" cy="57" r="2" fill="#FFF"/>
-            <circle cx="72" cy="57" r="2" fill="#FFF"/>
-            <rect x="40" y="25" width="20" height="15" fill="#FF6B6B"/>
-            <polygon points="50,20 45,30 55,30" fill="#4ECDC4"/>
-          </svg>
+        <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
+          <img src="/src/assets/images/market-removebg-preview 1.png" alt="Mercado" className="w-full h-full object-contain" />
         </div>
       )
     },
@@ -851,20 +843,53 @@ function App() {
       id: 'correios', 
       name: 'Correios', 
       image: (
-        <div className="w-16 h-16 mx-auto mb-3 bg-orange-100 rounded-full flex items-center justify-center">
-          <svg viewBox="0 0 100 100" className="w-12 h-12">
-            {/* Undraw-inspired post office icon */}
-            <rect x="25" y="40" width="50" height="35" fill="#FFD93D"/>
-            <rect x="20" y="35" width="60" height="8" fill="#FF6B6B"/>
-            <rect x="35" y="50" width="30" height="20" fill="#6C63FF"/>
-            <rect x="40" y="55" width="20" height="3" fill="#FFF"/>
-            <rect x="40" y="60" width="15" height="3" fill="#FFF"/>
-            <rect x="40" y="65" width="18" height="3" fill="#FFF"/>
-            <circle cx="30" cy="78" r="3" fill="#4ECDC4"/>
-            <circle cx="70" cy="78" r="3" fill="#4ECDC4"/>
-            <rect x="45" y="25" width="10" height="15" fill="#4CAF50"/>
-            <polygon points="50,20 47,30 53,30" fill="#4CAF50"/>
-          </svg>
+        <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
+          <img src="/src/assets/images/undraw_delivery-truck_mjui 4.png" alt="Correios" className="w-full h-full object-contain" />
+        </div>
+      )
+    },
+    { 
+      id: 'shopping', 
+      name: 'Shopping', 
+      image: (
+        <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
+          <img src="/src/assets/images/undraw_shopping-app_b80f 2.png" alt="Shopping" className="w-full h-full object-contain" />
+        </div>
+      )
+    },
+    { 
+      id: 'restaurante', 
+      name: 'Restaurante', 
+      image: (
+        <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
+          <img src="/src/assets/images/undraw_chef_yoa7.png" alt="Restaurante" className="w-full h-full object-contain" />
+        </div>
+      )
+    },
+    { 
+      id: 'presentes', 
+      name: 'Presentes', 
+      image: (
+        <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
+          <img src="/src/assets/images/undraw_gifts_4gy3.png" alt="Presentes" className="w-full h-full object-contain" />
+        </div>
+      )
+    },
+    { 
+      id: 'servicos', 
+      name: 'Serviços', 
+      image: (
+        <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
+          <img src="/src/assets/images/undraw_urban-design_tz8n 2.png" alt="Serviços" className="w-full h-full object-contain" />
+        </div>
+      )
+    },
+    { 
+      id: 'compras', 
+      name: 'Compras', 
+      image: (
+        <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
+          <img src="/src/assets/images/undraw_shopping-spree_h07u.png" alt="Compras" className="w-full h-full object-contain" />
         </div>
       )
     }
@@ -4611,7 +4636,7 @@ const handleServiceCreate = async () => {
   // Payment Screen
   if (currentScreen === 'payment') {
     return (
-      <div className={`min-h-screen bg-gray-100 transition-all duration-300 ${
+      <div className={`min-h-screen ${themeClasses.bg} transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
         <div className="bg-green-500 text-white p-4 relative">
@@ -4633,22 +4658,22 @@ const handleServiceCreate = async () => {
         <div className="flex flex-col lg:flex-row min-h-screen">
           {/* Left side - Service details */}
           <div className="flex-1 p-6">
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className={`${themeClasses.bgCard} rounded-lg shadow-md p-6 mb-6`}>
               <div className="flex items-center mb-4">
                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mr-3">
                   <FileText className="w-4 h-4 text-white" />
                 </div>
-                <h3 className="font-semibold">Detalhes do serviço</h3>
+                <h3 className={`font-semibold ${themeClasses.text}`}>Detalhes do serviço</h3>
               </div>
 
-              <div className="border rounded-lg p-4 mb-4">
+              <div className={`${themeClasses.border} border rounded-lg p-4 mb-4`}>
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <p className="text-sm text-gray-600">Modalidade: Carro - Personalizado</p>
+                    <p className={`text-sm ${themeClasses.textSecondary}`}>Modalidade: Carro - Personalizado</p>
                     <div className="flex items-center mt-2">
                       <img src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" alt="Driver" className="w-8 h-8 rounded-full mr-2" />
                       <div>
-                        <p className="font-semibold text-sm">RV9G33</p>
+                        <p className={`font-semibold text-sm ${themeClasses.text}`}>RV9G33</p>
                         <p className="text-xs text-blue-500">Entregador • Katiê Bueno</p>
                         <div className="flex items-center">
                           <Star className="w-3 h-3 text-yellow-400 fill-current" />
@@ -4658,7 +4683,7 @@ const handleServiceCreate = async () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-lg">R$ {(servicePrice > 0 ? servicePrice : 291.76).toFixed(2)}</p>
+                    <p className={`font-bold text-lg ${themeClasses.text}`}>R$ {(servicePrice > 0 ? servicePrice : 291.76).toFixed(2)}</p>
                   </div>
                 </div>
               </div>
@@ -4667,13 +4692,13 @@ const handleServiceCreate = async () => {
                 <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mr-3">
                   <CreditCard className="w-4 h-4 text-white" />
                 </div>
-                <h3 className="font-semibold">Pagamento</h3>
+                <h3 className={`font-semibold ${themeClasses.text}`}>Pagamento</h3>
               </div>
 
               <div className="flex items-center mb-4">
                 <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
                 <CreditCard className="w-4 h-4 mr-2" />
-                <span className="text-sm">Carteira digital</span>
+                <span className={`text-sm ${themeClasses.text}`}>Carteira digital</span>
               </div>
 
               {/* Saldo da Carteira */}
@@ -4693,8 +4718,8 @@ const handleServiceCreate = async () => {
                 </div>
               </div>
 
-              <div className="text-xs text-gray-600 space-y-2 bg-blue-50 p-4 rounded-lg">
-                <p className="font-semibold text-blue-800">ℹ️ Como funciona:</p>
+              <div className={`text-xs ${themeClasses.textSecondary} space-y-2 ${isDarkMode ? 'bg-blue-900 bg-opacity-30' : 'bg-blue-50'} p-4 rounded-lg`}>
+                <p className={`font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-800'}`}>ℹ️ Como funciona:</p>
                 <p>• O valor será debitado da sua carteira digital</p>
                 <p>• O pagamento é instantâneo e seguro</p>
                 <p>• Você receberá uma notificação de confirmação</p>
@@ -4704,29 +4729,29 @@ const handleServiceCreate = async () => {
           </div>
 
           {/* Right side - Payment summary */}
-          <div className="lg:w-96 bg-white p-6 shadow-lg">
-            <h3 className="font-semibold mb-4">Detalhes</h3>
+          <div className={`lg:w-96 ${themeClasses.bgCard} p-6 shadow-lg`}>
+            <h3 className={`font-semibold mb-4 ${themeClasses.text}`}>Detalhes</h3>
             
             <div className="space-y-3 mb-6">
               <div className="flex justify-between">
-                <span className="text-gray-600">Valor</span>
-                <span className="font-semibold">R$ {(servicePrice > 0 ? servicePrice : 119.99).toFixed(2)}</span>
+                <span className={themeClasses.textSecondary}>Valor</span>
+                <span className={`font-semibold ${themeClasses.text}`}>R$ {(servicePrice > 0 ? servicePrice : 119.99).toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Taxas</span>
+                <span className={themeClasses.textSecondary}>Taxas</span>
                 <span className="text-green-500">Free</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Descontos</span>
-                <span>R$ 0</span>
+                <span className={themeClasses.textSecondary}>Descontos</span>
+                <span className={themeClasses.text}>R$ 0</span>
               </div>
               <hr />
-              <div className="flex justify-between font-bold text-lg">
+              <div className={`flex justify-between font-bold text-lg ${themeClasses.text}`}>
                 <span>Total</span>
                 <span>R$ {(servicePrice > 0 ? servicePrice : 119.99).toFixed(2)}</span>
               </div>
               {pickupLocation && deliveryLocation && (
-                <div className="text-xs text-gray-500 mt-2">
+                <div className={`text-xs ${themeClasses.textSecondary} mt-2`}>
                   <p><strong>Origem:</strong> {pickupLocation.address.substring(0, 50)}{pickupLocation.address.length > 50 ? '...' : ''}</p>
                   <p><strong>Entrega:</strong> {deliveryLocation.address.substring(0, 50)}{deliveryLocation.address.length > 50 ? '...' : ''}</p>
                   <p className="mt-1"><strong>Distância:</strong> {pickupLocation && deliveryLocation ? calculateDistance(pickupLocation.lat, pickupLocation.lng, deliveryLocation.lat, deliveryLocation.lng).toFixed(2) : '0'} km</p>
@@ -4757,7 +4782,7 @@ const handleServiceCreate = async () => {
   }
   if (currentScreen === 'service-confirmed') {
   return (
-    <div className="min-h-screen flex bg-gray-100">
+    <div className={`min-h-screen flex ${themeClasses.bg}`}>
       {/* Lado esquerdo verde com check */}
       <div className="w-1/3 bg-green-500 flex items-center justify-center rounded-r-3xl">
         <div className="w-32 h-32 flex items-center justify-center rounded-full border-8 border-white">
@@ -4783,8 +4808,8 @@ const handleServiceCreate = async () => {
           ← Voltar
         </button>
 
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Serviço Confirmado</h2>
-        <p className="text-gray-600 mb-2">Obrigado por escolher a Facilita</p>
+        <h2 className={`text-2xl font-bold ${themeClasses.text} mb-2`}>Serviço Confirmado</h2>
+        <p className={`${themeClasses.textSecondary} mb-2`}>Obrigado por escolher a Facilita</p>
         {createdServiceId && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 w-full max-w-md">
             <p className="text-sm text-green-700 font-medium mb-2">✅ Serviço criado com sucesso!</p>
@@ -4792,10 +4817,10 @@ const handleServiceCreate = async () => {
           </div>
         )}
 
-        <div className="bg-white border rounded-lg shadow-md p-6 w-full max-w-md">
+        <div className={`${themeClasses.bgCard} ${themeClasses.border} border rounded-lg shadow-md p-6 w-full max-w-md`}>
           <div className="flex justify-between items-center">
             <div>
-              <p className="text-sm text-gray-600">Modalidade: Carro - Personalizado</p>
+              <p className={`text-sm ${themeClasses.textSecondary}`}>Modalidade: Carro - Personalizado</p>
               <div className="flex items-center mt-2">
                 <img
                   src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg"
@@ -4803,7 +4828,7 @@ const handleServiceCreate = async () => {
                   className="w-10 h-10 rounded-full mr-2"
                 />
                 <div>
-                  <p className="font-semibold text-sm">RVJ9G33</p>
+                  <p className={`font-semibold text-sm ${themeClasses.text}`}>RVJ9G33</p>
                   <p className="text-xs text-blue-500">Entregador • {entregadorData?.nome || 'Aguardando prestador'}</p>
                   <div className="flex items-center">
                     <Star className="w-3 h-3 text-yellow-400 fill-current" />
@@ -4812,39 +4837,39 @@ const handleServiceCreate = async () => {
                 </div>
               </div>
             </div>
-            <p className="font-bold text-lg">R$ {(servicePrice > 0 ? servicePrice : 119.99).toFixed(2)}</p>
+            <p className={`font-bold text-lg ${themeClasses.text}`}>R$ {(servicePrice > 0 ? servicePrice : 119.99).toFixed(2)}</p>
           </div>
         </div>
 
         {/* Detalhes */}
-        <div className="mt-6 w-full max-w-md text-sm text-gray-600 space-y-2">
+        <div className={`mt-6 w-full max-w-md text-sm ${themeClasses.textSecondary} space-y-2`}>
           <div className="flex justify-between">
             <span>Nome</span>
-            <span className="font-medium">{entregadorData?.nome || 'Aguardando prestador'}</span>
+            <span className={`font-medium ${themeClasses.text}`}>{entregadorData?.nome || 'Aguardando prestador'}</span>
           </div>
           <div className="flex justify-between">
             <span>Data</span>
-            <span className="font-medium">{new Date().toLocaleDateString('pt-BR')}</span>
+            <span className={`font-medium ${themeClasses.text}`}>{new Date().toLocaleDateString('pt-BR')}</span>
           </div>
           <div className="flex justify-between">
             <span>Hora</span>
-            <span className="font-medium">{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span className={`font-medium ${themeClasses.text}`}>{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
           {pickupLocation && deliveryLocation ? (
             <>
               <div className="flex justify-between">
                 <span>Origem</span>
-                <span className="font-medium text-xs">{pickupLocation.address.substring(0, 30)}...</span>
+                <span className={`font-medium text-xs ${themeClasses.text}`}>{pickupLocation.address.substring(0, 30)}...</span>
               </div>
               <div className="flex justify-between">
                 <span>Destino</span>
-                <span className="font-medium text-xs">{deliveryLocation.address.substring(0, 30)}...</span>
+                <span className={`font-medium text-xs ${themeClasses.text}`}>{deliveryLocation.address.substring(0, 30)}...</span>
               </div>
             </>
           ) : (
             <div className="flex justify-between">
               <span>Localizações</span>
-              <span className="font-medium text-xs">Não especificadas</span>
+              <span className={`font-medium text-xs ${themeClasses.text}`}>Não especificadas</span>
             </div>
           )}
           <div className="flex justify-between">
@@ -5201,7 +5226,7 @@ const handleServiceCreate = async () => {
   // Change Password Screen
   if (currentScreen === 'change-password') {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+      <div className={`min-h-screen ${themeClasses.bg} flex items-center justify-center p-4`}>
         <div className="w-full max-w-md">
           {/* Header */}
           <div className="text-center mb-8">
@@ -5211,7 +5236,7 @@ const handleServiceCreate = async () => {
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">Perfil</h1>
+            <h1 className={`text-2xl font-bold ${themeClasses.text} mb-2`}>Perfil</h1>
           </div>
 
           {/* Profile Photo */}
@@ -5239,12 +5264,12 @@ const handleServiceCreate = async () => {
           </div>
 
           {/* Form */}
-          <div className="bg-white rounded-xl shadow-lg p-6 space-y-6">
-            <h2 className="text-lg font-semibold text-gray-800 text-center mb-6">Alterar senha</h2>
+          <div className={`${themeClasses.bgCard} rounded-xl shadow-lg p-6 space-y-6`}>
+            <h2 className={`text-lg font-semibold ${themeClasses.text} text-center mb-6`}>Alterar senha</h2>
             
             {/* Current Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
                 Digite a senha atual
               </label>
               <div className="relative">
@@ -5255,7 +5280,7 @@ const handleServiceCreate = async () => {
                     ...prev,
                     currentPassword: e.target.value
                   }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className={`w-full px-4 py-3 ${themeClasses.input} rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                   placeholder="Digite a senha atual"
                 />
                 <button
@@ -5270,7 +5295,7 @@ const handleServiceCreate = async () => {
 
             {/* New Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
                 Nova Senha
               </label>
               <div className="relative">
@@ -5281,7 +5306,7 @@ const handleServiceCreate = async () => {
                     ...prev,
                     newPassword: e.target.value
                   }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className={`w-full px-4 py-3 ${themeClasses.input} rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                   placeholder="Nova Senha"
                 />
                 <button
@@ -5296,7 +5321,7 @@ const handleServiceCreate = async () => {
 
             {/* Confirm New Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
                 Confirmar nova senha
               </label>
               <div className="relative">
@@ -5307,7 +5332,7 @@ const handleServiceCreate = async () => {
                     ...prev,
                     confirmPassword: e.target.value
                   }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className={`w-full px-4 py-3 ${themeClasses.input} rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                   placeholder="Confirmar nova senha"
                 />
                 <button
@@ -5335,7 +5360,7 @@ const handleServiceCreate = async () => {
             )}
 
             {/* Password Requirements */}
-            <div className="text-xs text-gray-500 space-y-1">
+            <div className={`text-xs ${themeClasses.textSecondary} space-y-1`}>
               <p>A senha deve conter:</p>
               <ul className="list-disc list-inside space-y-1 ml-2">
                 <li>Mínimo de 6 caracteres</li>
@@ -5381,21 +5406,23 @@ const handleServiceCreate = async () => {
           onRecharge={() => setShowRechargeModal(true)}
           transactions={walletTransactions}
           loadingTransactions={loadingTransactions}
+          isDarkMode={isDarkMode}
+          themeClasses={themeClasses}
         />
 
         {/* Modal de Criação de Carteira */}
         {showCreateWalletModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Criar Carteira Digital</h2>
+            <div className={`${themeClasses.bgCard} rounded-2xl p-6 max-w-md w-full shadow-2xl`}>
+              <h2 className={`text-2xl font-bold ${themeClasses.text} mb-4`}>Criar Carteira Digital</h2>
               
-              <p className="text-gray-600 mb-6">
+              <p className={`${themeClasses.textSecondary} mb-6`}>
                 Informe sua chave PagBank para integrar sua carteira digital e começar a receber pagamentos.
               </p>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
                     Chave PagBank *
                   </label>
                   <input
@@ -5403,15 +5430,15 @@ const handleServiceCreate = async () => {
                     value={walletFormData.chave_pagbank}
                     onChange={(e) => setWalletFormData({ ...walletFormData, chave_pagbank: e.target.value })}
                     placeholder="Digite sua chave PagBank"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className={`w-full px-4 py-3 ${themeClasses.input} rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>
                     Sua chave de integração com o PagBank
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
                     Saldo Inicial (opcional)
                   </label>
                   <input
@@ -5421,9 +5448,9 @@ const handleServiceCreate = async () => {
                     placeholder="0.00"
                     step="0.01"
                     min="0"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className={`w-full px-4 py-3 ${themeClasses.input} rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>
                     Valor inicial da carteira (padrão: R$ 0,00)
                   </p>
                 </div>
@@ -5455,18 +5482,18 @@ const handleServiceCreate = async () => {
         {/* Modal de Recarga */}
         {showRechargeModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Adicionar Saldo</h2>
+            <div className={`${themeClasses.bgCard} rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto`}>
+              <h2 className={`text-2xl font-bold ${themeClasses.text} mb-4`}>Adicionar Saldo</h2>
               
               {!rechargeQrCode ? (
                 <>
-                  <p className="text-gray-600 mb-6">
+                  <p className={`${themeClasses.textSecondary} mb-6`}>
                     Informe o valor que deseja adicionar à sua carteira. Você receberá um QR Code PIX para pagamento.
                   </p>
 
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
                         Valor da Recarga (R$) *
                       </label>
                       <input
@@ -5476,21 +5503,21 @@ const handleServiceCreate = async () => {
                         placeholder="0.00"
                         step="0.01"
                         min="0.01"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg font-semibold"
+                        className={`w-full px-4 py-3 ${themeClasses.input} rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg font-semibold`}
                       />
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>
                         Valor mínimo: R$ 0,01
                       </p>
                     </div>
 
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className={`${isDarkMode ? 'bg-blue-900 bg-opacity-30 border-blue-700' : 'bg-blue-50 border-blue-200'} border rounded-lg p-4`}>
                       <div className="flex items-start gap-3">
                         <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-blue-900">Como funciona?</p>
-                          <p className="text-xs text-blue-700 mt-1">
+                          <p className={`text-sm font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-900'}`}>Como funciona?</p>
+                          <p className={`text-xs ${isDarkMode ? 'text-blue-400' : 'text-blue-700'} mt-1`}>
                             Após confirmar, você receberá um QR Code PIX. Pague usando seu banco e o saldo será creditado automaticamente.
                           </p>
                         </div>
@@ -5529,14 +5556,14 @@ const handleServiceCreate = async () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-800 mb-2">Recarga Solicitada!</h3>
-                    <p className="text-gray-600 mb-6">
+                    <h3 className={`text-lg font-bold ${themeClasses.text} mb-2`}>Recarga Solicitada!</h3>
+                    <p className={`${themeClasses.textSecondary} mb-6`}>
                       Escaneie o QR Code abaixo para pagar R$ {rechargeAmount.toFixed(2)}
                     </p>
                   </div>
 
                   {rechargeQrCodeUrl && (
-                    <div className="bg-white border-2 border-gray-200 rounded-xl p-4 mb-4">
+                    <div className={`${themeClasses.bgCard} border-2 ${themeClasses.border} rounded-xl p-4 mb-4`}>
                       <img 
                         src={rechargeQrCodeUrl} 
                         alt="QR Code PIX" 
@@ -5547,7 +5574,7 @@ const handleServiceCreate = async () => {
 
                   {rechargeQrCode && (
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
                         Código PIX Copia e Cola
                       </label>
                       <div className="flex gap-2">
@@ -5555,7 +5582,7 @@ const handleServiceCreate = async () => {
                           type="text"
                           value={rechargeQrCode}
                           readOnly
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs bg-gray-50"
+                          className={`flex-1 px-3 py-2 ${themeClasses.input} rounded-lg text-xs`}
                         />
                         <button
                           onClick={() => {
@@ -5656,6 +5683,8 @@ const handleServiceCreate = async () => {
           setNotificationsEnabled(enabled)
           localStorage.setItem('notificationsEnabled', JSON.stringify(enabled))
         }}
+        isDarkMode={isDarkMode}
+        themeClasses={themeClasses}
       />
     )
   }
@@ -5683,7 +5712,7 @@ const handleServiceCreate = async () => {
         {/* Content */}
         <div className="max-w-2xl mx-auto p-6 space-y-6">
           {/* Profile Header */}
-          <div className="bg-white rounded-xl shadow-lg p-8 backdrop-blur-sm border border-gray-100">
+          <div className={`${themeClasses.bgCard} rounded-xl shadow-lg p-8 backdrop-blur-sm border ${themeClasses.border}`}>
             <div className="flex flex-col items-center text-center">
               {/* Profile Photo */}
               <div className="relative mb-4">
@@ -5727,23 +5756,23 @@ const handleServiceCreate = async () => {
                 </button>
               </div>
               
-              <h2 className="text-2xl font-bold text-gray-800 mb-1">{loggedUser?.nome || 'Usuário'}</h2>
-              <p className="text-gray-600 mb-4">{loggedUser?.email}</p>
+              <h2 className={`text-2xl font-bold ${themeClasses.text} mb-1`}>{loggedUser?.nome || 'Usuário'}</h2>
+              <p className={`${themeClasses.textSecondary} mb-4`}>{loggedUser?.email}</p>
             </div>
           </div>
 
           {/* Profile Information */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Informações do Perfil</h3>
+          <div className={`${themeClasses.bgCard} rounded-lg shadow-md p-6`}>
+            <h3 className={`text-lg font-semibold ${themeClasses.text} mb-4`}>Informações do Perfil</h3>
             
             <div className="space-y-4">
               {/* Nome */}
-              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div className={`flex items-center justify-between py-3 border-b ${themeClasses.border}`}>
                 <div className="flex items-center">
                   <User className="w-5 h-5 text-gray-400 mr-3" />
                   <div>
-                    <p className="font-medium text-gray-800">Nome Completo</p>
-                    <p className="text-gray-600 text-sm">{loggedUser?.nome || 'Não informado'}</p>
+                    <p className={`font-medium ${themeClasses.text}`}>Nome Completo</p>
+                    <p className={`${themeClasses.textSecondary} text-sm`}>{loggedUser?.nome || 'Não informado'}</p>
                   </div>
                 </div>
                 <button className="text-green-500 hover:text-green-600">
@@ -5754,12 +5783,12 @@ const handleServiceCreate = async () => {
               </div>
 
               {/* Email */}
-              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div className={`flex items-center justify-between py-3 border-b ${themeClasses.border}`}>
                 <div className="flex items-center">
                   <Mail className="w-5 h-5 text-gray-400 mr-3" />
                   <div>
-                    <p className="font-medium text-gray-800">Email</p>
-                    <p className="text-gray-600 text-sm">{loggedUser?.email || 'Não informado'}</p>
+                    <p className={`font-medium ${themeClasses.text}`}>Email</p>
+                    <p className={`${themeClasses.textSecondary} text-sm`}>{loggedUser?.email || 'Não informado'}</p>
                   </div>
                 </div>
                 <button className="text-green-500 hover:text-green-600">
@@ -5770,12 +5799,12 @@ const handleServiceCreate = async () => {
               </div>
 
               {/* Telefone */}
-              <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div className={`flex items-center justify-between py-3 border-b ${themeClasses.border}`}>
                 <div className="flex items-center">
                   <Phone className="w-5 h-5 text-gray-400 mr-3" />
                   <div>
-                    <p className="font-medium text-gray-800">Telefone</p>
-                    <p className="text-gray-600 text-sm">{loggedUser?.telefone || 'Não informado'}</p>
+                    <p className={`font-medium ${themeClasses.text}`}>Telefone</p>
+                    <p className={`${themeClasses.textSecondary} text-sm`}>{loggedUser?.telefone || 'Não informado'}</p>
                   </div>
                 </div>
                 <button className="text-green-500 hover:text-green-600">
@@ -5788,19 +5817,19 @@ const handleServiceCreate = async () => {
           </div>
 
           {/* Other Configurations */}
-          <div className="bg-white rounded-xl shadow-lg p-6 backdrop-blur-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Outras Configurações</h3>
+          <div className={`${themeClasses.bgCard} rounded-xl shadow-lg p-6 backdrop-blur-sm border ${themeClasses.border}`}>
+            <h3 className={`text-lg font-semibold ${themeClasses.text} mb-4`}>Outras Configurações</h3>
             
             <div className="space-y-4">
               {/* Notificações */}
-              <div className="flex items-center justify-between py-3 px-4 bg-gray-50 rounded-lg">
+              <div className={`flex items-center justify-between py-3 px-4 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'} rounded-lg`}>
                 <div className="flex items-center">
                   <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
                     <Bell className="w-4 h-4 text-purple-600" />
                   </div>
                   <div>
-                    <span className="font-medium text-gray-800 block">Notificações</span>
-                    <span className="text-xs text-gray-500">Receber alertas e avisos</span>
+                    <span className={`font-medium ${themeClasses.text} block`}>Notificações</span>
+                    <span className={`text-xs ${themeClasses.textSecondary}`}>Receber alertas e avisos</span>
                   </div>
                 </div>
                 <button
@@ -6158,7 +6187,7 @@ const handleServiceCreate = async () => {
           </div>
 
           {/* Service cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {serviceCards.map((service) => (
               <button
                 key={service.id}
@@ -6166,7 +6195,7 @@ const handleServiceCreate = async () => {
                   setSelectedEstablishmentType(service.id)
                   handleScreenTransition('establishments-list')
                 }}
-                className={`p-4 md:p-6 rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 text-center group border backdrop-blur-sm ${
+                className={`p-6 md:p-8 rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 text-center group border backdrop-blur-sm min-h-[200px] ${
                   isDarkMode 
                     ? 'bg-gray-800 border-gray-700 hover:border-emerald-600' 
                     : 'bg-white border-gray-200 hover:border-green-400'
@@ -6175,7 +6204,7 @@ const handleServiceCreate = async () => {
                 <div className="group-hover:animate-pulse transition-all duration-300">
                   {service.image}
                 </div>
-                <p className={`font-semibold mt-2 transition-colors duration-300 ${
+                <p className={`font-semibold text-lg md:text-xl mt-3 md:mt-4 transition-colors duration-300 ${
                   isDarkMode 
                     ? 'text-white group-hover:text-emerald-400' 
                     : 'text-gray-900 group-hover:text-green-500'
@@ -6734,7 +6763,10 @@ const handleServiceCreate = async () => {
       'banco': 'Bancos',
       'hospital': 'Hospitais',
       'shopping': 'Shopping Centers',
-      'correios': 'Correios'
+      'correios': 'Correios',
+      'presentes': 'Lojas de Presentes e Roupas',
+      'servicos': 'Serviços',
+      'compras': 'Lojas e Compras'
     }
     
     const typeName = typeNames[selectedEstablishmentType as keyof typeof typeNames] || 'Estabelecimentos'

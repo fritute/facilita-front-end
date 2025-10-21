@@ -333,15 +333,15 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
 
         {/* Cards de serviços */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
           {serviceCards.map((card) => (
             <button
               key={card.id}
               onClick={() => onServiceCardClick(card.id)}
-              className={`${card.color} rounded-2xl p-4 text-center hover:shadow-xl transition-all transform hover:scale-105 ${isDarkMode ? 'border border-gray-700' : 'border border-gray-200'}`}
+              className={`${card.color} rounded-2xl p-8 text-center hover:shadow-xl transition-all transform hover:scale-105 ${isDarkMode ? 'border border-gray-700' : 'border border-gray-200'} min-h-[160px]`}
             >
-              <div className="flex justify-center mb-2">{card.image}</div>
-              <p className={`font-bold text-lg ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{card.name}</p>
+              <div className="flex justify-center mb-4">{card.image}</div>
+              <p className={`font-bold text-xl ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{card.name}</p>
             </button>
           ))}
         </div>
