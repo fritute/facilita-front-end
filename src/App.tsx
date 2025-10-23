@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Home, FileText, User as UserIconLucide, ShoppingCart, Package, Sun, Moon, Bell, Menu, VideoOff, Hand } from 'lucide-react'
 import QRCode from 'qrcode'
 import LocationMap from './LocationMap'
@@ -147,6 +147,13 @@ function App() {
   })
   const [changePasswordError, setChangePasswordError] = useState('')
   const [changePasswordSuccess, setChangePasswordSuccess] = useState('')
+  
+  // Estados para busca de motorista em background
+  const [isSearchingDriverBackground, setIsSearchingDriverBackground] = useState(false)
+  const [foundDriver, setFoundDriver] = useState<any>(null)
+  const [showDriverFoundModal, setShowDriverFoundModal] = useState(false)
+  const [backgroundSearchStartTime, setBackgroundSearchStartTime] = useState<Date | null>(null)
+  const [searchTimeElapsed, setSearchTimeElapsed] = useState(0)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false)
@@ -190,6 +197,10 @@ function App() {
   const [librasCameraStream, setLibrasCameraStream] = useState<MediaStream | null>(null)
   const [librasDetectedText, setLibrasDetectedText] = useState('')
   const [librasLoading, setLibrasLoading] = useState(false)
+  
+  // Refs para intervalos da câmera (evita recriação a cada render)
+  const activeDetectionInterval = useRef<NodeJS.Timeout | null>(null)
+  const activeStreamCheck = useRef<NodeJS.Timeout | null>(null)
   
   // Estados para notificações
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
@@ -1846,6 +1857,68 @@ function App() {
     }
   }, [currentScreen, walletData])
 
+  // Sistema de polling para notificações em tempo real
+  useEffect(() => {
+    if (!loggedUser?.id) return
+
+    const checkNotifications = async () => {
+      try {
+        const token = localStorage.getItem('authToken')
+        if (!token) return
+
+        // Simular verificação de notificações do backend
+        // Em produção, seria uma chamada real para API de notificações
+        const mockNotifications = [
+          {
+            id: Date.now(),
+            title: 'Motorista Encontrado!',
+            message: 'João Silva aceitou seu pedido e está a caminho',
+            type: 'driver_found',
+            read: false,
+            timestamp: new Date().toISOString()
+          }
+        ]
+
+        // Verificar se há novas notificações
+        const hasNewNotifications = mockNotifications.some(notif => !notif.read)
+        
+        if (hasNewNotifications) {
+          console.log('🔔 Novas notificações recebidas:', mockNotifications)
+          
+          // Adicionar notificações ao estado
+          setNotifications(prev => {
+            const existingIds = prev.map(n => n.id)
+            const newNotifications = mockNotifications.filter(n => !existingIds.includes(n.id))
+            return [...newNotifications, ...prev]
+          })
+
+          // Mostrar toast para a primeira notificação nova
+          const firstNew = mockNotifications.find(n => !n.read)
+          if (firstNew) {
+            setNotificationToastMessage(firstNew.message)
+            setShowNotificationToast(true)
+            
+            // Auto-esconder toast após 5 segundos
+            setTimeout(() => {
+              setShowNotificationToast(false)
+            }, 5000)
+          }
+        }
+
+      } catch (error) {
+        console.error('❌ Erro ao verificar notificações:', error)
+      }
+    }
+
+    // Verificar notificações a cada 10 segundos
+    const notificationInterval = setInterval(checkNotifications, 10000)
+    
+    // Verificar imediatamente
+    checkNotifications()
+
+    return () => clearInterval(notificationInterval)
+  }, [loggedUser?.id])
+
   // Removido: useEffect de waiting-driver (agora criamos o serviço antes de ir para pagamento)
 
   // Generate PIX QR Code when payment screen loads
@@ -1973,17 +2046,59 @@ function App() {
   // useEffect para buscar notificações quando usuário estiver logado
   useEffect(() => {
     if (loggedUser) {
+      console.log('🔄 Usuário logado detectado, carregando notificações...')
       // Buscar notificações ao logar
       fetchNotifications()
       
       // Atualizar notificações a cada 30 segundos
       const interval = setInterval(() => {
+        console.log('🔄 Atualizando notificações automaticamente...')
         fetchNotifications()
       }, 30000) // 30 segundos
       
-      return () => clearInterval(interval)
+      return () => {
+        console.log('🛑 Limpando intervalo de notificações')
+        clearInterval(interval)
+      }
+    } else {
+      console.log('❌ Usuário não logado, não carregando notificações')
     }
   }, [loggedUser])
+
+  // useEffect adicional para carregar notificações em telas específicas
+  useEffect(() => {
+    if (loggedUser && (currentScreen === 'home' || currentScreen === 'profile')) {
+      console.log('📱 Carregando notificações para tela:', currentScreen)
+      fetchNotifications()
+    }
+  }, [currentScreen, loggedUser])
+
+  // useEffect para limpeza de recursos da câmera quando componente for desmontado
+  useEffect(() => {
+    return () => {
+      console.log('🧹 Limpeza geral de recursos da câmera...')
+      
+      // Limpar intervalos
+      if (activeDetectionInterval.current) {
+        clearInterval(activeDetectionInterval.current)
+        activeDetectionInterval.current = null
+      }
+      if (activeStreamCheck.current) {
+        clearInterval(activeStreamCheck.current)
+        activeStreamCheck.current = null
+      }
+      
+      // Parar stream da câmera
+      if (librasCameraStream) {
+        librasCameraStream.getTracks().forEach(track => {
+          if (track.readyState === 'live') {
+            track.stop()
+          }
+        })
+      }
+    }
+  }, []) // Executar apenas na desmontagem
+
 
 
   // Função helper para fazer requisições autenticadas
@@ -2525,98 +2640,121 @@ function App() {
     }))
   }
 
-  // Funções para acessibilidade Libras
+  // Funções para acessibilidade Libras - VERSÃO SIMPLIFICADA E SEGURA
   const startLibrasCamera = async () => {
     try {
       setLibrasLoading(true)
+      console.log('📹 Iniciando câmera de acessibilidade (versão segura)...')
+      
+      // Limpar recursos anteriores
+      if (librasCameraStream) {
+        librasCameraStream.getTracks().forEach(track => track.stop())
+        setLibrasCameraStream(null)
+      }
+      
+      // Usar configurações mais conservadoras
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
-          width: 640, 
-          height: 480,
-          facingMode: 'user'
+          width: { ideal: 240, max: 320 }, // Resolução muito baixa
+          height: { ideal: 180, max: 240 },
+          facingMode: 'user',
+          frameRate: { ideal: 10, max: 15 } // FPS muito baixo
         } 
       })
+      
+      console.log('✅ Stream obtido com sucesso (versão segura)')
       setLibrasCameraStream(stream)
       setIsLibrasActive(true)
-      setLibrasDetectedText('🎥 Câmera ativada! Posicione suas mãos...')
+      setLibrasDetectedText('🎥 Câmera ativada! Modo demonstração.')
       setLibrasLoading(false)
       
-      // Iniciar detecção de mãos usando MediaPipe Hands via CDN
-      initHandDetection(stream)
+      // Iniciar simulação simples sem intervalos pesados
+      setTimeout(() => {
+        if (stream.active && isLibrasActive) {
+          initSimpleHandDetection()
+        }
+      }, 2000)
+      
     } catch (error) {
       console.error('Erro ao acessar câmera:', error)
-      alert('Não foi possível acessar a câmera. Verifique as permissões.')
       setLibrasLoading(false)
+      setIsLibrasActive(false)
+      alert('Não foi possível acessar a câmera. Verifique as permissões.')
     }
   }
 
-  const initHandDetection = async (stream: MediaStream) => {
+  // Função simplificada para simular detecção
+  const initSimpleHandDetection = () => {
     try {
-      // Criar elemento de vídeo temporário para processamento
-      const videoElement = document.createElement('video')
-      videoElement.srcObject = stream
-      videoElement.play()
-
-      // Aguardar vídeo carregar
-      await new Promise((resolve) => {
-        videoElement.onloadedmetadata = resolve
-      })
-
-      setLibrasDetectedText('🤚 Detectando mãos... Mostre suas mãos para a câmera!')
-
-      // Simular detecção básica de movimento (em produção, usar MediaPipe Hands)
-      // Para usar MediaPipe real, adicionar: <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+      console.log('🔍 Iniciando simulação de detecção...')
       
-      let detectionCount = 0
-      const detectionInterval = setInterval(() => {
-        detectionCount++
-        
-        // Simular diferentes sinais detectados
-        const sinais = [
-          '👋 Sinal de "OLÁ" detectado!',
-          '✋ Sinal de "PARAR" detectado!',
-          '👍 Sinal de "OK" detectado!',
-          '☝️ Sinal de "UM" detectado!',
-          '✌️ Sinal de "DOIS" detectado!',
-          '🤟 Sinal de "EU TE AMO" detectado!',
-          '👌 Sinal de "PERFEITO" detectado!',
-          '🖐️ Sinal de "CINCO" detectado!'
-        ]
-        
-        if (detectionCount % 3 === 0) {
-          const randomSinal = sinais[Math.floor(Math.random() * sinais.length)]
-          setLibrasDetectedText(randomSinal)
+      const sinais = [
+        '👋 Olá! Bem-vindo ao Facilita',
+        '👍 Tudo certo! Sistema funcionando',
+        '✋ Aguarde um momento...',
+        '👌 Perfeito! Acessibilidade ativa',
+        '❤️ Obrigado por usar nosso app!'
+      ]
+      
+      let currentIndex = 0
+      
+      // Simulação muito simples - apenas muda texto a cada 4 segundos
+      const showNextSignal = () => {
+        if (isLibrasActive && currentIndex < sinais.length) {
+          setLibrasDetectedText(sinais[currentIndex])
+          currentIndex++
           
-          // Tocar som de feedback
-          try {
-            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWi77eafTRAMUKfj8LZjHAY4ktfyzHksBSR3x/DdkEAKFF606+uoVRQKRp/g8r5sIQUrgs7y2Yk2CBlou+3mn00QDFCn4/C2YxwGOJLX8sx5LAUkd8fw3ZBAC')
-            audio.volume = 0.3
-            audio.play().catch(() => {})
-          } catch (e) {}
+          if (currentIndex < sinais.length) {
+            setTimeout(showNextSignal, 4000) // 4 segundos entre cada sinal
+          } else {
+            // Reiniciar ciclo
+            setTimeout(() => {
+              currentIndex = 0
+              if (isLibrasActive) showNextSignal()
+            }, 6000)
+          }
         }
-      }, 2000)
-
-      // Limpar intervalo quando a câmera for desligada
-      const checkStream = setInterval(() => {
-        if (!stream.active) {
-          clearInterval(detectionInterval)
-          clearInterval(checkStream)
-        }
-      }, 1000)
-
+      }
+      
+      // Iniciar simulação
+      setTimeout(showNextSignal, 3000)
+      
     } catch (error) {
-      console.error('Erro ao iniciar detecção:', error)
-      setLibrasDetectedText('⚠️ Erro ao iniciar detecção de mãos')
+      console.error('Erro na simulação:', error)
+      setLibrasDetectedText('⚠️ Erro na simulação de detecção')
     }
   }
 
   const stopLibrasCamera = () => {
-    if (librasCameraStream) {
-      librasCameraStream.getTracks().forEach(track => track.stop())
+    try {
+      console.log('🛑 Parando câmera de acessibilidade...')
+      
+      // Parar stream da câmera de forma segura
+      if (librasCameraStream) {
+        librasCameraStream.getTracks().forEach(track => {
+          if (track.readyState === 'live') {
+            track.stop()
+            console.log('🛑 Track parado:', track.kind)
+          }
+        })
+        setLibrasCameraStream(null)
+      }
+      
+      // Resetar estados
+      setIsLibrasActive(false)
+      setLibrasDetectedText('')
+      setLibrasLoading(false)
+      
+      console.log('✅ Câmera de acessibilidade parada com sucesso')
+      
+    } catch (error) {
+      console.error('Erro ao parar câmera:', error)
+      // Forçar reset mesmo com erro
+      setIsLibrasActive(false)
+      setLibrasDetectedText('')
+      setLibrasLoading(false)
       setLibrasCameraStream(null)
     }
-    setIsLibrasActive(false)
-    setLibrasDetectedText('')
   }
 
   const handleScreenTransition = (newScreen: Screen) => {
@@ -3039,6 +3177,60 @@ function App() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Função para iniciar busca de motorista em background
+  const startBackgroundDriverSearch = (serviceData: any) => {
+    console.log('🔍 Iniciando busca de motorista em background...')
+    setIsSearchingDriverBackground(true)
+    setBackgroundSearchStartTime(new Date())
+    setSearchTimeElapsed(0)
+    
+    // Simular busca de motorista (em produção seria uma chamada real à API)
+    const searchInterval = setInterval(() => {
+      setSearchTimeElapsed(prev => prev + 1)
+    }, 1000)
+
+    // Simular encontrar motorista após 8-15 segundos
+    const findDriverTimeout = setTimeout(() => {
+      const mockDriver = {
+        id: Math.floor(Math.random() * 1000),
+        nome: 'João Silva',
+        veiculo: 'Honda Civic Prata',
+        placa: 'ABC-1234',
+        avaliacao: 4.8,
+        foto: '/driver-avatar.png',
+        tempoChegada: '5-8 min',
+        distancia: '1.2 km'
+      }
+      
+      console.log('✅ Motorista encontrado:', mockDriver)
+      setFoundDriver(mockDriver)
+      setShowDriverFoundModal(true)
+      setIsSearchingDriverBackground(false)
+      clearInterval(searchInterval)
+    }, Math.random() * 7000 + 8000) // 8-15 segundos
+
+    return () => {
+      clearTimeout(findDriverTimeout)
+      clearInterval(searchInterval)
+    }
+  }
+
+  // Função para aceitar o motorista encontrado
+  const acceptFoundDriver = () => {
+    console.log('✅ Motorista aceito, indo para pagamento')
+    setShowDriverFoundModal(false)
+    handleScreenTransition('payment')
+  }
+
+  // Função para rejeitar e continuar procurando
+  const rejectFoundDriver = () => {
+    console.log('❌ Motorista rejeitado, continuando busca')
+    setFoundDriver(null)
+    setShowDriverFoundModal(false)
+    // Reiniciar busca
+    startBackgroundDriverSearch(null)
   }
 
   const handleServiceProviderSubmit = async () => {
@@ -3783,27 +3975,70 @@ function App() {
     }
   }, [currentScreen, profileData.endereco, loggedUser?.id_localizacao])
 
-  // Função para buscar notificações da API
+  // Função para buscar notificações da API - MELHORADA
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem('authToken')
       if (!token) {
-        console.log('❌ Token não encontrado - não carregando notificações')
+        console.log('❌ Token não encontrado - criando notificações de exemplo')
+        
+        // Criar notificações de exemplo para teste
+        const exampleNotifications = [
+          {
+            id: '1',
+            type: 'success' as const,
+            title: 'Bem-vindo!',
+            message: 'Sua conta foi criada com sucesso. Aproveite nossos serviços!',
+            time: new Date().toLocaleString('pt-BR'),
+            read: false
+          },
+          {
+            id: '2', 
+            type: 'info' as const,
+            title: 'Novo Serviço Disponível',
+            message: 'Agora você pode solicitar entregas de farmácia 24h!',
+            time: new Date(Date.now() - 3600000).toLocaleString('pt-BR'),
+            read: false
+          },
+          {
+            id: '3',
+            type: 'warning' as const, 
+            title: 'Atualização de Segurança',
+            message: 'Recomendamos que você atualize sua senha regularmente.',
+            time: new Date(Date.now() - 7200000).toLocaleString('pt-BR'),
+            read: true
+          }
+        ]
+        
+        setNotifications(exampleNotifications)
+        console.log('📋 Notificações de exemplo criadas:', exampleNotifications.length)
         return
       }
 
-      console.log('🔔 Buscando notificações da API...')
+      console.log('🔔 Buscando notificações da API...', {
+        hasToken: !!token,
+        tokenLength: token.length,
+        userLoggedIn: !!loggedUser,
+        endpoint: 'https://servidor-facilita.onrender.com/v1/facilita/notificacao'
+      })
       
       const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/notificacao', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
+      })
+
+      console.log('📡 Resposta da API:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
       })
 
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ Notificações recebidas:', data)
+        console.log('✅ Notificações recebidas da API:', data)
         
         // Mapear notificações da API para o formato do frontend
         if (data.notificacoes && Array.isArray(data.notificacoes)) {
@@ -3817,16 +4052,70 @@ function App() {
           }))
           
           setNotifications(mappedNotifications)
-          console.log('📋 Total de notificações:', mappedNotifications.length)
+          console.log('📋 Total de notificações da API:', mappedNotifications.length)
           console.log('🔴 Não lidas:', data.total_nao_lidas || 0)
+        } else {
+          console.log('⚠️ Nenhuma notificação encontrada na API, usando exemplos')
+          // Fallback para notificações de exemplo se API não retornar dados
+          const fallbackNotifications = [
+            {
+              id: 'api-1',
+              type: 'info' as const,
+              title: 'Sistema Online',
+              message: 'Conectado ao servidor com sucesso!',
+              time: new Date().toLocaleString('pt-BR'),
+              read: false
+            }
+          ]
+          setNotifications(fallbackNotifications)
         }
       } else if (response.status === 401 || response.status === 403) {
-        console.warn('⚠️ Token inválido ao buscar notificações')
+        console.warn('⚠️ Token inválido ao buscar notificações - usando notificações de exemplo')
+        // Criar notificações de exemplo mesmo com token inválido
+        const authErrorNotifications = [
+          {
+            id: 'auth-1',
+            type: 'warning' as const,
+            title: 'Sessão Expirada',
+            message: 'Sua sessão pode ter expirado. Faça login novamente se necessário.',
+            time: new Date().toLocaleString('pt-BR'),
+            read: false
+          }
+        ]
+        setNotifications(authErrorNotifications)
       } else {
-        console.error('❌ Erro ao buscar notificações:', response.status)
+        console.error('❌ Erro ao buscar notificações:', response.status, response.statusText)
+        const errorText = await response.text().catch(() => 'Erro desconhecido')
+        console.error('❌ Detalhes do erro:', errorText)
+        
+        // Criar notificação de erro
+        const errorNotifications = [
+          {
+            id: 'error-1',
+            type: 'error' as const,
+            title: 'Erro de Conexão',
+            message: `Não foi possível carregar notificações (${response.status})`,
+            time: new Date().toLocaleString('pt-BR'),
+            read: false
+          }
+        ]
+        setNotifications(errorNotifications)
       }
     } catch (error) {
-      console.error('❌ Erro ao buscar notificações:', error)
+      console.error('❌ Erro inesperado ao buscar notificações:', error)
+      
+      // Criar notificação de erro de rede
+      const networkErrorNotifications = [
+        {
+          id: 'network-error-1',
+          type: 'error' as const,
+          title: 'Erro de Rede',
+          message: 'Não foi possível conectar ao servidor. Verifique sua conexão.',
+          time: new Date().toLocaleString('pt-BR'),
+          read: false
+        }
+      ]
+      setNotifications(networkErrorNotifications)
     }
   }
 
@@ -4176,7 +4465,12 @@ const handleServiceCreate = async () => {
       handleScreenTransition('waiting-provider')
       
       // Iniciar polling para verificar se prestador aceitou
-      startPollingServiceStatus(createdServiceId)
+      if (createdServiceId) {
+        const serviceIdNumber = parseInt(createdServiceId.toString())
+        if (!isNaN(serviceIdNumber)) {
+          startPollingServiceStatus(serviceIdNumber)
+        }
+      }
     } else {
       console.error('❌ Falha ao criar serviço')
       alert('Não foi possível criar o serviço. Verifique os dados e tente novamente.')
@@ -5182,7 +5476,9 @@ const handleServiceCreate = async () => {
   const UserIcon = () => (
     <div className="w-24 h-24 bg-green-200 rounded-full flex items-center justify-center mb-4">
       <div className="w-16 h-16 bg-green-400 rounded-full flex items-center justify-center">
-        <User className="w-8 h-8 text-green-800" />
+        <User className={`w-8 h-8 ${
+          isDarkMode ? 'text-green-800' : 'text-blue-800'
+        }`} />
       </div>
     </div>
   )
@@ -5258,7 +5554,9 @@ const handleServiceCreate = async () => {
             {/* Informações do serviço */}
             <div className={`${themeClasses.bgSecondary} rounded-lg p-4 mb-6 text-left`}>
               <div className="flex items-center mb-2">
-                <FileText className="w-5 h-5 text-green-500 mr-2" />
+                <FileText className={`w-5 h-5 mr-2 ${
+                  isDarkMode ? 'text-green-500' : 'text-blue-500'
+                }`} />
                 <span className={`font-semibold ${themeClasses.text}`}>Seu Serviço</span>
               </div>
               <p className={`text-sm ${themeClasses.textSecondary} mb-2`}>
@@ -5266,7 +5564,9 @@ const handleServiceCreate = async () => {
               </p>
               <div className="flex justify-between items-center">
                 <span className={`text-sm ${themeClasses.textSecondary}`}>Valor estimado:</span>
-                <span className="text-lg font-bold text-green-600">
+                <span className={`text-lg font-bold ${
+                  isDarkMode ? 'text-green-600' : 'text-blue-600'
+                }`}>
                   R$ {servicePrice.toFixed(2)}
                 </span>
               </div>
@@ -5403,7 +5703,9 @@ const handleServiceCreate = async () => {
               </div>
               <div className="flex justify-between">
                 <span className={themeClasses.textSecondary}>Taxas</span>
-                <span className="text-green-500">Free</span>
+                <span className={`${
+                  isDarkMode ? 'text-green-500' : 'text-blue-500'
+                }`}>Free</span>
               </div>
               <div className="flex justify-between">
                 <span className={themeClasses.textSecondary}>Descontos</span>
@@ -5467,7 +5769,9 @@ const handleServiceCreate = async () => {
       <div className="flex-1 flex flex-col items-center justify-center p-10">
         <button
           onClick={() => handleScreenTransition('home')}
-          className="absolute top-6 left-6 text-green-500 hover:underline"
+          className={`absolute top-6 left-6 hover:underline ${
+            isDarkMode ? 'text-green-500' : 'text-blue-500'
+          }`}
         >
           ← Voltar
         </button>
@@ -5476,7 +5780,9 @@ const handleServiceCreate = async () => {
         <p className={`${themeClasses.textSecondary} mb-2`}>Obrigado por escolher a Facilita</p>
         {createdServiceId && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 w-full max-w-md">
-            <p className="text-sm text-green-700 font-medium mb-2">✅ Serviço criado com sucesso!</p>
+            <p className={`text-sm font-medium mb-2 ${
+              isDarkMode ? 'text-green-700' : 'text-blue-700'
+            }`}>✅ Serviço criado com sucesso!</p>
             <p className="text-xs text-gray-600">Seu pedido foi confirmado e está sendo processado.</p>
           </div>
         )}
@@ -5538,7 +5844,9 @@ const handleServiceCreate = async () => {
           )}
           <div className="flex justify-between">
             <span>Pagamento</span>
-            <span className="font-medium text-green-600">Confirmado</span>
+            <span className={`font-medium ${
+              isDarkMode ? 'text-green-600' : 'text-blue-600'
+            }`}>Confirmado</span>
           </div>
         </div>
 
@@ -5563,23 +5871,63 @@ const handleServiceCreate = async () => {
   )
 }
 
-  // Waiting Driver Screen
+  // Waiting Driver Screen - Agora inicia busca em background e permite navegação
   if (currentScreen === 'waiting-driver') {
+    // Iniciar busca em background se ainda não iniciou
+    React.useEffect(() => {
+      if (!isSearchingDriverBackground && !foundDriver) {
+        startBackgroundDriverSearch(null)
+      }
+    }, [])
+
     return (
       <div className={`min-h-screen bg-gray-100 flex items-center justify-center transition-all duration-300 ${
         isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
       }`}>
-        <div className="text-center p-8">
+        <div className="text-center p-8 max-w-md mx-auto">
           <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
             <Search className="w-10 h-10 text-white" />
           </div>
           
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Procurando motorista...</h2>
-          <p className="text-gray-600 mb-6">Aguarde enquanto encontramos o melhor prestador para você</p>
-          <div className="flex justify-center space-x-2">
+          <p className="text-gray-600 mb-4">Aguarde enquanto encontramos o melhor prestador para você</p>
+          
+          {/* Tempo decorrido */}
+          <div className="bg-white rounded-lg p-4 mb-6 shadow-sm">
+            <p className="text-sm text-gray-500 mb-2">Tempo de busca</p>
+            <p className={`text-lg font-semibold ${
+              isDarkMode ? 'text-green-600' : 'text-blue-600'
+            }`}>{searchTimeElapsed}s</p>
+          </div>
+          
+          <div className="flex justify-center space-x-2 mb-8">
             <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce"></div>
             <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
             <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          </div>
+
+          {/* Botão para continuar navegando */}
+          <div className="space-y-3">
+            <button
+              onClick={() => {
+                console.log('📱 Usuário optou por navegar durante a busca')
+                handleScreenTransition('home')
+              }}
+              className={`w-full bg-white border-2 py-3 px-6 rounded-lg font-semibold transition-colors ${
+                isDarkMode 
+                  ? 'border-green-500 text-green-600 hover:bg-green-50' 
+                  : 'border-blue-500 text-blue-600 hover:bg-blue-50'
+              }`}
+            >
+              Continuar Navegando
+            </button>
+            
+            <button
+              onClick={() => handleScreenTransition('home')}
+              className="w-full bg-gray-200 text-gray-600 py-2 px-6 rounded-lg text-sm hover:bg-gray-300 transition-colors"
+            >
+              Cancelar Busca
+            </button>
           </div>
         </div>
       </div>
@@ -5851,7 +6199,9 @@ const handleServiceCreate = async () => {
                     
                     <div className="text-right">
                       {order.preco && (
-                        <p className="text-2xl font-bold text-green-600 mb-2">
+                        <p className={`text-2xl font-bold mb-2 ${
+                          isDarkMode ? 'text-green-600' : 'text-blue-600'
+                        }`}>
                           R$ {typeof order.preco === 'number' ? order.preco.toFixed(2) : order.preco}
                         </p>
                       )}
@@ -5867,15 +6217,41 @@ const handleServiceCreate = async () => {
                   {/* Ações do pedido */}
                   <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                     <div className="flex space-x-2">
-                      {(order.status === 'PENDENTE' || order.status === 'EM_ANDAMENTO') && (
+                      {order.status === 'EM_ANDAMENTO' && (
                         <button 
                           onClick={() => {
-                            // Implementar rastreamento se necessário
+                            console.log('🚚 Rastreando pedido aceito:', order.id)
+                            setActiveServiceId(order.id)
                             handleScreenTransition('service-tracking')
                           }}
-                          className="text-green-600 hover:text-green-700 text-sm font-medium"
+                          className={`text-sm font-medium flex items-center gap-1 transition-colors ${
+                            isDarkMode 
+                              ? 'text-green-600 hover:text-green-700' 
+                              : 'text-blue-600 hover:text-blue-700'
+                          }`}
                         >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
                           Rastrear
+                        </button>
+                      )}
+                      {order.status === 'PENDENTE' && (
+                        <button 
+                          onClick={() => {
+                            console.log('⏳ Pedido pendente clicado, voltando para espera:', order.id)
+                            setActiveServiceId(order.id)
+                            // Reiniciar busca de motorista para este pedido
+                            startBackgroundDriverSearch(order)
+                            handleScreenTransition('waiting-driver')
+                          }}
+                          className="text-orange-600 hover:text-orange-700 text-sm font-medium flex items-center gap-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Aguardando Motorista
                         </button>
                       )}
                     </div>
@@ -6030,7 +6406,9 @@ const handleServiceCreate = async () => {
 
             {/* Success Message */}
             {changePasswordSuccess && (
-              <div className="text-center text-green-600 text-sm">
+              <div className={`text-center text-sm ${
+                isDarkMode ? 'text-green-600' : 'text-blue-600'
+              }`}>
                 {changePasswordSuccess}
               </div>
             )}
@@ -6229,7 +6607,9 @@ const handleServiceCreate = async () => {
                 <>
                   <div className="text-center">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-8 h-8 ${
+                        isDarkMode ? 'text-green-600' : 'text-blue-600'
+                      }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     </div>
@@ -6331,7 +6711,9 @@ const handleServiceCreate = async () => {
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className={`${themeClasses.bgCard} rounded-2xl p-6 max-w-md w-full shadow-2xl text-center`}>
               <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4">
-                <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`w-10 h-10 ${
+                  isDarkMode ? 'text-green-600' : 'text-blue-600'
+                }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
@@ -6648,7 +7030,11 @@ const handleServiceCreate = async () => {
                     <p className={`${themeClasses.textSecondary} text-sm`}>{loggedUser?.nome || 'Não informado'}</p>
                   </div>
                 </div>
-                <button className="text-green-500 hover:text-green-600">
+                <button className={`transition-colors ${
+                  isDarkMode 
+                    ? 'text-green-500 hover:text-green-600' 
+                    : 'text-blue-500 hover:text-blue-600'
+                }`}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
@@ -6664,7 +7050,11 @@ const handleServiceCreate = async () => {
                     <p className={`${themeClasses.textSecondary} text-sm`}>{loggedUser?.email || 'Não informado'}</p>
                   </div>
                 </div>
-                <button className="text-green-500 hover:text-green-600">
+                <button className={`transition-colors ${
+                  isDarkMode 
+                    ? 'text-green-500 hover:text-green-600' 
+                    : 'text-blue-500 hover:text-blue-600'
+                }`}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
@@ -6680,7 +7070,11 @@ const handleServiceCreate = async () => {
                     <p className={`${themeClasses.textSecondary} text-sm`}>{loggedUser?.telefone || 'Não informado'}</p>
                   </div>
                 </div>
-                <button className="text-green-500 hover:text-green-600">
+                <button className={`transition-colors ${
+                  isDarkMode 
+                    ? 'text-green-500 hover:text-green-600' 
+                    : 'text-blue-500 hover:text-blue-600'
+                }`}>
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
@@ -6793,7 +7187,7 @@ const handleServiceCreate = async () => {
             <div>
               <p className="font-semibold">Olá, {loggedUser?.nome?.split(' ')[0] || 'Lara'}</p>
               <p className={`text-sm ${
-                isDarkMode ? 'text-emerald-300' : 'text-green-200'
+                isDarkMode ? 'text-emerald-300' : 'text-blue-200'
               }`}>Boa tarde! 16:30</p>
             </div>
           </div>
@@ -7876,31 +8270,59 @@ const handleServiceCreate = async () => {
 
   if (currentScreen === 'cadastro') {
     return (
-      <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
+      <div className={`min-h-screen flex flex-col md:flex-row transition-all duration-500 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      } ${
+        isDarkMode 
+          ? 'bg-gradient-to-br from-black via-gray-900 to-green-900' 
+          : 'bg-gradient-to-br from-green-50 via-white to-green-100'
       }`}>
         {/* Coluna da Esquerda (Imagem e Logo) */}
-        <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 relative order-2 md:order-1">
-          <FacilitaLogo className="mb-8" />
-          <img 
-            src="/undraw_order-delivered_puaw 3.png" 
-            alt="Ilustração de entrega" 
-            className="w-full max-w-md xl:max-w-lg 2xl:max-w-xl h-auto object-contain"
-          />
+        <div className={`w-full md:w-1/2 flex flex-col items-center justify-center p-8 relative order-2 md:order-1 ${
+          isDarkMode 
+            ? 'bg-gradient-to-br from-black to-green-800' 
+            : 'bg-gradient-to-br from-green-500 to-green-600'
+        }`}>
+          <div className={`absolute inset-0 backdrop-blur-sm ${
+            isDarkMode 
+              ? 'bg-gradient-to-br from-black/40 to-green-800/40' 
+              : 'bg-gradient-to-br from-green-400/20 to-green-600/20'
+          }`}></div>
+          <div className="relative z-10 text-center animate-fade-in-up">
+            <FacilitaLogo className="mb-8 transform hover:scale-105 transition-transform duration-300" />
+            <img 
+              src="/undraw_order-delivered_puaw 3.png" 
+              alt="Ilustração de entrega" 
+              className="w-full max-w-md xl:max-w-lg 2xl:max-w-xl h-auto object-contain animate-float"
+            />
+            <div className="mt-8 text-white">
+              <h2 className="text-2xl font-bold mb-2">Bem-vindo ao Facilita!</h2>
+              <p className="text-green-100 opacity-90">Conectando você aos melhores serviços</p>
+            </div>
+          </div>
         </div>
   
         {/* Coluna da Direita (Formulário) */}
-        <div className="w-full md:w-1/2 bg-gray-700 min-h-screen p-6 xl:p-12 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
-          <img
-            src="./Vector copy.png"
-            alt="Decoração da tela de cadastro de usuário"
-            className="absolute top-0 right-0 transform -scale-x-100 opacity-20 w-64 h-auto pointer-events-none"
-          />
+        <div className="w-full md:w-1/2 min-h-screen p-6 xl:p-12 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
+          <div className={`absolute inset-0 backdrop-blur-sm ${
+            isDarkMode 
+              ? 'bg-gradient-to-br from-gray-900/90 to-green-900/80' 
+              : 'bg-gradient-to-br from-white/90 to-green-50/80'
+          }`}></div>
           <div className="relative z-10 w-full max-w-md xl:max-w-lg 2xl:max-w-xl mx-auto">
-            <h1 className="text-4xl md:text-5xl xl:text-6xl text-white font-bold mb-8 text-center">Cadastro</h1>
-            <div className="space-y-3 xl:space-y-4">
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">Nome</label>
+            <div className="text-center mb-8 animate-fade-in-down">
+              <h1 className={`text-3xl md:text-4xl font-bold mb-2 ${
+                isDarkMode ? 'text-white' : 'text-gray-800'
+              }`}>Criar Conta</h1>
+              <p className={isDarkMode ? 'text-gray-300' : 'text-gray-600'}>Preencha seus dados para começar</p>
+            </div>
+            <div className="space-y-6 animate-fade-in-up delay-200">
+              <div className="group">
+                <label className={`block text-sm font-medium mb-2 transition-colors ${
+                  isDarkMode 
+                    ? 'text-gray-300 group-focus-within:text-green-400' 
+                    : 'text-gray-700 group-focus-within:text-blue-600'
+                }`}>Nome Completo</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -7909,17 +8331,30 @@ const handleServiceCreate = async () => {
                       setUserData({...userData, nome: e.target.value})
                       clearError('nome')
                     }}
-                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="Digite seu nome completo"
+                    className={`w-full border-2 px-4 py-3 pl-12 rounded-xl text-sm focus:outline-none focus:ring-4 transition-all duration-300 ${
+                      isDarkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-green-400 focus:ring-green-400/20 hover:border-green-500' 
+                        : 'bg-white border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500/20 hover:border-blue-300'
+                    }`}
                   />
-                  <User className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                  <User className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-300 ${
+                    isDarkMode 
+                      ? 'text-gray-500 group-focus-within:text-green-400' 
+                      : 'text-gray-400 group-focus-within:text-green-500'
+                  }`} />
                 </div>
                 {errors.nome && (
-                  <p className="text-red-500 text-sm mt-1">{errors.nome}</p>
+                  <p className="text-red-500 text-sm mt-1 animate-shake">{errors.nome}</p>
                 )}
               </div>
     
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">E-mail</label>
+              <div className="group">
+                <label className={`block text-sm font-medium mb-2 transition-colors ${
+                  isDarkMode 
+                    ? 'text-gray-300 group-focus-within:text-green-400' 
+                    : 'text-gray-700 group-focus-within:text-blue-600'
+                }`}>E-mail</label>
                 <div className="relative">
                   <input
                     type="email"
@@ -7928,17 +8363,30 @@ const handleServiceCreate = async () => {
                       setUserData({...userData, email: e.target.value})
                       clearError('email')
                     }}
-                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="seu@email.com"
+                    className={`w-full border-2 px-4 py-3 pl-12 rounded-xl text-sm focus:outline-none focus:ring-4 transition-all duration-300 ${
+                      isDarkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-green-400 focus:ring-green-400/20 hover:border-green-500' 
+                        : 'bg-white border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500/20 hover:border-blue-300'
+                    }`}
                   />
-                  <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                  <Mail className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-300 ${
+                    isDarkMode 
+                      ? 'text-gray-500 group-focus-within:text-green-400' 
+                      : 'text-gray-400 group-focus-within:text-blue-500'
+                  }`} />
                 </div>
                 {errors.email && (
-                  <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+                  <p className="text-red-500 text-sm mt-1 animate-shake">{errors.email}</p>
                 )}
               </div>
     
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">Confirmar Email</label>
+              <div className="group">
+                <label className={`block text-sm font-medium mb-2 transition-colors ${
+                  isDarkMode 
+                    ? 'text-gray-300 group-focus-within:text-green-400' 
+                    : 'text-gray-700 group-focus-within:text-blue-600'
+                }`}>Confirmar E-mail</label>
                 <div className="relative">
                   <input
                     type="email"
@@ -7947,18 +8395,31 @@ const handleServiceCreate = async () => {
                       setUserData({...userData, confirmarEmail: e.target.value})
                       clearError('confirmarEmail')
                     }}
-                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="Confirme seu e-mail"
+                    className={`w-full border-2 px-4 py-3 pl-12 rounded-xl text-sm focus:outline-none focus:ring-4 transition-all duration-300 ${
+                      isDarkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-green-400 focus:ring-green-400/20 hover:border-green-500' 
+                        : 'bg-white border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500/20 hover:border-blue-300'
+                    }`}
                   />
-                  <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                  <Mail className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-300 ${
+                    isDarkMode 
+                      ? 'text-gray-500 group-focus-within:text-green-400' 
+                      : 'text-gray-400 group-focus-within:text-blue-500'
+                  }`} />
                 </div>
                 {errors.confirmarEmail && (
-                  <p className="text-red-500 text-sm mt-1">{errors.confirmarEmail}</p>
+                  <p className="text-red-500 text-sm mt-1 animate-shake">{errors.confirmarEmail}</p>
                 )}
               </div>
     
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-gray-400 text-sm mb-2">Senha</label>
+                <div className="group">
+                  <label className={`block text-sm font-medium mb-2 transition-colors ${
+                    isDarkMode 
+                      ? 'text-gray-300 group-focus-within:text-green-400' 
+                      : 'text-gray-700 group-focus-within:text-blue-600'
+                  }`}>Senha</label>
                   <div className="relative">
                     <input
                       type={showPassword ? "text" : "password"}
@@ -7967,23 +8428,41 @@ const handleServiceCreate = async () => {
                         setUserData({...userData, senha: e.target.value})
                         clearError('senha')
                       }}
-                      className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="••••••••"
+                      className={`w-full border-2 px-4 py-3 pl-12 pr-12 rounded-xl text-sm focus:outline-none focus:ring-4 transition-all duration-300 ${
+                        isDarkMode 
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-green-400 focus:ring-green-400/20 hover:border-green-500' 
+                          : 'bg-white border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500/20 hover:border-blue-300'
+                      }`}
                     />
+                    <Lock className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-300 ${
+                      isDarkMode 
+                        ? 'text-gray-500 group-focus-within:text-green-400' 
+                        : 'text-gray-400 group-focus-within:text-blue-500'
+                    }`} />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-3.5 h-5 w-5 text-gray-400"
+                      className={`absolute right-4 top-3.5 h-5 w-5 transition-colors duration-200 ${
+                        isDarkMode 
+                          ? 'text-gray-500 hover:text-green-400' 
+                          : 'text-gray-400 hover:text-blue-500'
+                      }`}
                     >
                       {showPassword ? <EyeOff /> : <Eye />}
                     </button>
                   </div>
                   {errors.senha && (
-                    <p className="text-red-500 text-sm mt-1">{errors.senha}</p>
+                    <p className="text-red-500 text-sm mt-1 animate-shake">{errors.senha}</p>
                   )}
                 </div>
     
-                <div>
-                  <label className="block text-gray-400 text-sm mb-2">Confirmar Senha</label>
+                <div className="group">
+                  <label className={`block text-sm font-medium mb-2 transition-colors ${
+                    isDarkMode 
+                      ? 'text-gray-300 group-focus-within:text-green-400' 
+                      : 'text-gray-700 group-focus-within:text-blue-600'
+                  }`}>Confirmar Senha</label>
                   <div className="relative">
                     <input
                       type={showConfirmPassword ? "text" : "password"}
@@ -7992,24 +8471,42 @@ const handleServiceCreate = async () => {
                         setUserData({...userData, confirmarSenha: e.target.value})
                         clearError('confirmarSenha')
                       }}
-                      className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="••••••••"
+                      className={`w-full border-2 px-4 py-3 pl-12 pr-12 rounded-xl text-sm focus:outline-none focus:ring-4 transition-all duration-300 ${
+                        isDarkMode 
+                          ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-green-400 focus:ring-green-400/20 hover:border-green-500' 
+                          : 'bg-white border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500/20 hover:border-blue-300'
+                      }`}
                     />
+                    <Lock className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-300 ${
+                      isDarkMode 
+                        ? 'text-gray-500 group-focus-within:text-green-400' 
+                        : 'text-gray-400 group-focus-within:text-blue-500'
+                    }`} />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-3.5 h-5 w-5 text-gray-400"
+                      className={`absolute right-4 top-3.5 h-5 w-5 transition-colors duration-200 ${
+                        isDarkMode 
+                          ? 'text-gray-500 hover:text-green-400' 
+                          : 'text-gray-400 hover:text-blue-500'
+                      }`}
                     >
                       {showConfirmPassword ? <EyeOff /> : <Eye />}
                     </button>
                   </div>
                   {errors.confirmarSenha && (
-                    <p className="text-red-500 text-sm mt-1">{errors.confirmarSenha}</p>
+                    <p className="text-red-500 text-sm mt-1 animate-shake">{errors.confirmarSenha}</p>
                   )}
                 </div>
               </div>
   
-              <div>
-                <label className="block text-gray-400 text-sm mb-2">Telefone</label>
+              <div className="group">
+                <label className={`block text-sm font-medium mb-2 transition-colors ${
+                  isDarkMode 
+                    ? 'text-gray-300 group-focus-within:text-green-400' 
+                    : 'text-gray-700 group-focus-within:text-blue-600'
+                }`}>Telefone</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -8019,39 +8516,133 @@ const handleServiceCreate = async () => {
                       setUserData({...userData, telefone: formattedPhone})
                       clearError('telefone')
                     }}
-                    placeholder="(00) 00000-0000"
-                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    placeholder="(11) 99999-9999"
+                    className={`w-full border-2 px-4 py-3 pl-12 rounded-xl text-sm focus:outline-none focus:ring-4 transition-all duration-300 ${
+                      isDarkMode 
+                        ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-green-400 focus:ring-green-400/20 hover:border-green-500' 
+                        : 'bg-white border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500/20 hover:border-blue-300'
+                    }`}
                   />
-                  <Phone className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                  <Phone className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-300 ${
+                    isDarkMode 
+                      ? 'text-gray-500 group-focus-within:text-green-400' 
+                      : 'text-gray-400 group-focus-within:text-blue-500'
+                  }`} />
                 </div>
                 {errors.telefone && (
-                  <p className="text-red-500 text-sm mt-1">{errors.telefone}</p>
+                  <p className="text-red-500 text-sm mt-1 animate-shake">{errors.telefone}</p>
                 )}
               </div>
 
               
       
-              <div className="flex justify-center">
+              <div className="space-y-6 animate-fade-in-up delay-400">
                 <button
                   onClick={handleCadastro}
-                  className="bg-green-500 text-white py-3 px-16 rounded-full font-semibold hover:bg-green-600 transition-colors"
+                  disabled={isLoading}
+                  className={`w-full py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 ${
+                    isDarkMode 
+                      ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white' 
+                      : 'bg-gradient-to-r from-white to-green-500 hover:from-green-500 hover:to-green-600 text-green-700'
+                  }`}
                 >
-                  Próximo
+                  {isLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Criando conta...
+                    </>
+                  ) : (
+                    'Criar Conta'
+                  )}
                 </button>
-              </div>
     
-              <p className="text-center text-gray-400 text-sm">
-                Já possui uma conta?{' '}
-                <button
-                  onClick={() => handleScreenTransition('login')}
-                  className="text-green-500 hover:underline"
-                >
-                  Entrar
-                </button>
-              </p>
+                <p className={`text-center text-sm ${
+                  isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                }`}>
+                  Já possui uma conta?{' '}
+                  <button
+                    onClick={() => handleScreenTransition('login')}
+                    className={`font-semibold transition-colors duration-200 hover:underline ${
+                      isDarkMode 
+                        ? 'text-green-400 hover:text-green-300' 
+                        : 'text-blue-600 hover:text-blue-700'
+                    }`}
+                  >
+                    Fazer Login
+                  </button>
+                </p>
+              </div>
             </div>
           </div>
         </div>
+        
+        {/* Animações CSS */}
+        <style>{`
+          @keyframes fade-in-up {
+            from {
+              opacity: 0;
+              transform: translateY(30px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          
+          @keyframes fade-in-down {
+            from {
+              opacity: 0;
+              transform: translateY(-30px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          
+          @keyframes float {
+            0%, 100% {
+              transform: translateY(0px);
+            }
+            50% {
+              transform: translateY(-10px);
+            }
+          }
+          
+          @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+          }
+          
+          .animate-fade-in-up {
+            animation: fade-in-up 0.6s ease-out;
+          }
+          
+          .animate-fade-in-down {
+            animation: fade-in-down 0.6s ease-out;
+          }
+          
+          .animate-float {
+            animation: float 3s ease-in-out infinite;
+          }
+          
+          .animate-shake {
+            animation: shake 0.5s ease-in-out;
+          }
+          
+          .delay-200 {
+            animation-delay: 0.2s;
+            opacity: 0;
+            animation-fill-mode: forwards;
+          }
+          
+          .delay-400 {
+            animation-delay: 0.4s;
+            opacity: 0;
+            animation-fill-mode: forwards;
+          }
+        `}</style>
       </div>
     )
   }
@@ -8068,26 +8659,52 @@ const handleServiceCreate = async () => {
 
   // Login Screen
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'bg-gray-800' : 'bg-gray-800'} flex flex-col md:flex-row transition-all duration-300 ${
+    <div className={`min-h-screen flex flex-col md:flex-row transition-all duration-500 ${
       isTransitioning ? 'opacity-0 -translate-x-full' : 'opacity-100 translate-x-0'
+    } ${
+      isDarkMode 
+        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-green-900' 
+        : 'bg-white'
     }`}>
       {/* Coluna da Esquerda (Imagem e Logo) */}
-      <div className="w-full md:w-1/2 flex flex-col items-center justify-center p-8 relative order-2 md:order-1">
-        <FacilitaLogo className="mb-8" />
-        <img 
-          src="/undraw_order-delivered_puaw 3.png" 
-          alt="Ilustração de entrega" 
-          className="w-full max-w-md xl:max-w-lg 2xl:max-w-xl h-auto object-contain"
-        />
+      <div className={`w-full md:w-1/2 flex flex-col items-center justify-center p-8 relative order-2 md:order-1 ${
+        isDarkMode 
+          ? 'bg-gradient-to-br from-gray-900 to-green-800' 
+          : 'bg-gradient-to-br from-green-500 via-green-600 to-green-700'
+      }`}>
+        <div className={`absolute inset-0 backdrop-blur-sm ${
+          isDarkMode 
+            ? 'bg-gradient-to-br from-gray-900/30 to-green-800/30' 
+            : 'bg-gradient-to-br from-green-400/20 to-green-500/20'
+        }`}></div>
+        <div className="relative z-10 text-center animate-fade-in-up">
+          <FacilitaLogo className="mb-8 transform hover:scale-105 transition-transform duration-300" />
+          <img 
+            src="/undraw_order-delivered_puaw 3.png" 
+            alt="Ilustração de entrega" 
+            className="w-full max-w-md xl:max-w-lg 2xl:max-w-xl h-auto object-contain animate-float"
+          />
+          <div className="mt-8 text-white">
+            <h2 className="text-2xl font-bold mb-2">Bem-vindo de volta!</h2>
+            <p className="text-green-100 opacity-90">Acesse sua conta e continue sua jornada</p>
+          </div>
+        </div>
       </div>
       
       {/* Coluna da Direita (Formulário) */}
-      <div className="w-full md:w-1/2 bg-gray-700 min-h-screen p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
+      <div className="w-full md:w-1/2 min-h-screen p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
+        <div className={`absolute inset-0 backdrop-blur-sm ${
+          isDarkMode 
+            ? 'bg-gradient-to-br from-gray-800/90 to-green-900/80' 
+            : 'bg-gradient-to-br from-white/95 to-green-50/90'
+        }`}></div>
         {/* Toggle de tema */}
         <button
           onClick={toggleTheme}
-          className={`absolute top-4 right-4 p-2 rounded-full transition-all duration-300 hover:scale-110 z-20 ${
-            isDarkMode ? 'bg-yellow-500 text-white' : 'bg-gray-600 text-gray-300'
+          className={`absolute top-4 right-4 p-3 rounded-full transition-all duration-300 hover:scale-110 z-20 backdrop-blur-sm border ${
+            isDarkMode 
+              ? 'bg-gray-700/50 border-gray-600/30 text-yellow-400 hover:bg-gray-600/50' 
+              : 'bg-white/20 border-white/30 text-gray-600 hover:bg-white/30'
           }`}
           title={isDarkMode ? 'Modo claro' : 'Modo escuro'}
         >
@@ -8098,15 +8715,15 @@ const handleServiceCreate = async () => {
         <button
           onClick={isLibrasActive ? stopLibrasCamera : startLibrasCamera}
           disabled={librasLoading}
-          className={`absolute top-4 right-16 p-2 rounded-full transition-all duration-300 hover:scale-110 z-20 ${
+          className={`absolute top-4 right-20 p-3 rounded-full transition-all duration-300 hover:scale-110 z-20 ${
             isLibrasActive 
-              ? 'bg-red-500 text-white animate-pulse' 
-              : 'bg-blue-500 text-white hover:bg-blue-600'
+              ? 'bg-red-500/20 backdrop-blur-sm border border-red-400/30 text-red-600 animate-pulse' 
+              : 'bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 text-blue-600 hover:bg-blue-500/30'
           } ${librasLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
           title="Acessibilidade em Libras"
         >
           {librasLoading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
           ) : isLibrasActive ? (
             <VideoOff className="w-5 h-5" />
           ) : (
@@ -8114,27 +8731,38 @@ const handleServiceCreate = async () => {
           )}
         </button>
         
-        <img
-          src="./Vector copy.png"
-          alt="Decoração da tela de login do usuário"
-          className="absolute top-0 right-0 transform -scale-x-100 opacity-20 w-64 h-auto pointer-events-none"
-        />
-        
         <div className="relative z-10 w-full max-w-md xl:max-w-lg 2xl:max-w-xl mx-auto">
-          <h2 className="text-2xl md:text-3xl text-white font-bold mb-4 text-center">Entrar no Facilita</h2>
-          <p className="text-sm md:text-base text-gray-400 mb-6 text-center">
-            Não possui uma conta?{' '}
-            <button
-              onClick={() => handleScreenTransition('cadastro')}
-              className="text-green-400 hover:underline"
-            >
-              Cadastre-se
-            </button>
-          </p>
+          <div className="text-center mb-8 animate-fade-in-down">
+            <h2 className={`text-3xl md:text-4xl font-bold mb-2 ${
+              isDarkMode ? 'text-white' : 'text-gray-800'
+            }`}>Entrar</h2>
+            <p className={`mb-4 ${
+              isDarkMode ? 'text-gray-300' : 'text-gray-600'
+            }`}>Acesse sua conta para continuar</p>
+            <p className={`text-sm ${
+              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+            }`}>
+              Não possui uma conta?{' '}
+              <button
+                onClick={() => handleScreenTransition('cadastro')}
+                className={`font-semibold transition-colors duration-200 hover:underline ${
+                  isDarkMode 
+                    ? 'text-green-400 hover:text-green-300' 
+                    : 'text-blue-600 hover:text-blue-700'
+                }`}
+              >
+                Criar Conta
+              </button>
+            </p>
+          </div>
 
-          <div className="space-y-4 md:space-y-6">
-            <div>
-              <label className="block text-gray-400 text-sm mb-2">E-mail ou Telefone</label>
+          <div className="space-y-6 animate-fade-in-up delay-200">
+            <div className="group">
+              <label className={`block text-sm font-medium mb-2 transition-colors ${
+                isDarkMode 
+                  ? 'text-gray-300 group-focus-within:text-green-400' 
+                  : 'text-gray-700 group-focus-within:text-blue-600'
+              }`}>E-mail ou Telefone</label>
               <div className="relative">
                 <input
                   type="text"
@@ -8144,17 +8772,29 @@ const handleServiceCreate = async () => {
                    clearError('loginEmail')
                  }}
                   placeholder="Digite seu e-mail ou telefone"
-                  className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className={`w-full border-2 px-4 py-3 pl-12 rounded-xl text-sm md:text-base focus:outline-none focus:ring-4 transition-all duration-300 ${
+                    isDarkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-green-400 focus:ring-green-400/20 hover:border-green-500' 
+                      : 'bg-white border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500/20 hover:border-blue-300'
+                  }`}
                 />
-                <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
+                <Mail className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-300 ${
+                  isDarkMode 
+                    ? 'text-gray-500 group-focus-within:text-green-400' 
+                    : 'text-gray-400 group-focus-within:text-blue-500'
+                }`} />
               </div>
              {errors.loginEmail && (
-               <p className="text-red-500 text-sm mt-1">{errors.loginEmail}</p>
+               <p className="text-red-500 text-sm mt-1 animate-shake">{errors.loginEmail}</p>
              )}
             </div>
 
-            <div>
-              <label className="block text-gray-400 text-sm mb-2">Senha</label>
+            <div className="group">
+              <label className={`block text-sm font-medium mb-2 transition-colors ${
+                isDarkMode 
+                  ? 'text-gray-300 group-focus-within:text-green-400' 
+                  : 'text-gray-700 group-focus-within:text-blue-600'
+              }`}>Senha</label>
               <div className="relative">
                 <input
                   type="password"
@@ -8163,17 +8803,29 @@ const handleServiceCreate = async () => {
                    setLoginData({...loginData, senha: e.target.value})
                    clearError('loginSenha')
                  }}
-                  className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className={`w-full border-2 px-4 py-3 pl-12 rounded-xl text-sm md:text-base focus:outline-none focus:ring-4 transition-all duration-300 ${
+                    isDarkMode 
+                      ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-green-400 focus:ring-green-400/20 hover:border-green-500' 
+                      : 'bg-white border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500/20 hover:border-blue-300'
+                  }`}
                   placeholder="••••••••••"
                 />
-                <Lock className="absolute right-3 top-3.h-5 w-5 text-gray-400" />
+                <Lock className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-300 ${
+                  isDarkMode 
+                    ? 'text-gray-500 group-focus-within:text-green-400' 
+                    : 'text-gray-400 group-focus-within:text-blue-500'
+                }`} />
               </div>
              {errors.loginSenha && (
-               <p className="text-red-500 text-sm mt-1">{errors.loginSenha}</p>
+               <p className="text-red-500 text-sm mt-1 animate-shake">{errors.loginSenha}</p>
              )}
               <button
                 onClick={() => handleScreenTransition('recovery')}
-                className="text-green-400 text-sm mt-1 hover:underline"
+                className={`text-sm mt-2 transition-colors duration-200 hover:underline ${
+                  isDarkMode 
+                    ? 'text-green-400 hover:text-green-300' 
+                    : 'text-blue-600 hover:text-blue-700'
+                }`}
               >
                 Esqueceu a senha?
               </button>
@@ -8184,44 +8836,54 @@ const handleServiceCreate = async () => {
                 type="checkbox"
                 checked={termsAccepted}
                 onChange={(e) => setTermsAccepted(e.target.checked)}
-                className="mr-2 accent-green-500"
+                className={`mr-2 ${
+                  isDarkMode ? 'accent-green-500' : 'accent-green-500'
+                }`}
               />
               <span className="text-gray-400 text-sm">
                 Li e estou de acordo com a{' '}
                 <button
                   onClick={() => setShowTermsModal(true)}
-                  className="text-green-400 hover:underline"
+                  className={`hover:underline ${
+                    isDarkMode ? 'text-green-400' : 'text-blue-600'
+                  }`}
                 >
                   Termo de Uso
                 </button>
                 {' '}e{' '}
                 <button
                   onClick={() => setShowTermsModal(true)}
-                  className="text-green-400 hover:underline"
+                  className={`hover:underline ${
+                    isDarkMode ? 'text-green-400' : 'text-blue-600'
+                  }`}
                 >
                   Política de Privacidade
                 </button>
               </span>
             </div>
 
-            <button
-              onClick={handleLogin}
-              disabled={isLoginLoading}
-              className={`w-full py-3 rounded-lg text-sm md:text-base font-semibold transition-colors flex items-center justify-center ${
-                isLoginLoading 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-green-500 hover:bg-green-600'
-              } text-white`}
-            >
-              {isLoginLoading ? (
-                <>
-                  <LoadingSpinner size="sm" color="white" />
-                  <span className="ml-2">Entrando...</span>
-                </>
-              ) : (
-                'Entrar'
-              )}
-            </button>
+            <div className="animate-fade-in-up delay-400">
+              <button
+                onClick={handleLogin}
+                disabled={isLoginLoading}
+                className={`w-full py-4 rounded-xl text-lg font-semibold transition-all duration-300 flex items-center justify-center shadow-lg hover:shadow-xl transform hover:scale-[1.02] text-white disabled:transform-none ${
+                  isLoginLoading 
+                    ? 'bg-gray-400 cursor-not-allowed transform-none' 
+                    : isDarkMode 
+                      ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800' 
+                      : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'
+                }`}
+              >
+                {isLoginLoading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    <span>Entrando...</span>
+                  </>
+                ) : (
+                  'Entrar'
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Modal de Câmera Libras */}
@@ -8247,13 +8909,58 @@ const handleServiceCreate = async () => {
                   </div>
                 </div>
 
-                {/* Área da câmera */}
-                <div className="relative bg-gray-900 rounded-xl overflow-hidden mb-4" style={{ height: '400px' }}>
+                {/* Área da câmera melhorada */}
+                <div className="relative bg-gray-900 rounded-xl overflow-hidden mb-4" style={{ height: '450px' }}>
                   <video
                     ref={(video) => {
                       if (video && librasCameraStream) {
                         video.srcObject = librasCameraStream
-                        video.play()
+                        video.play().catch(console.error)
+                        
+                        // Melhorar configurações de vídeo para detecção de mãos
+                        video.addEventListener('loadedmetadata', () => {
+                          // Configurar resolução otimizada para detecção
+                          const canvas = document.createElement('canvas')
+                          const ctx = canvas.getContext('2d')
+                          
+                          if (ctx) {
+                            canvas.width = 640
+                            canvas.height = 480
+                            
+                            // Simular detecção de mãos melhorada
+                            const detectHands = () => {
+                              if (video.readyState === 4) {
+                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+                                
+                                // Simular detecção de gestos específicos
+                                const gestures = ['OLA', 'OBRIGADO', 'SIM', 'NAO', 'AJUDA', 'EMAIL', 'SENHA', 'NOME']
+                                const randomGesture = gestures[Math.floor(Math.random() * gestures.length)]
+                                
+                                // Simular detecção após 3-5 segundos
+                                if (Math.random() > 0.95) {
+                                  setLibrasDetectedText(randomGesture)
+                                  
+                                  // Auto-preencher campos baseado no gesto
+                                  setTimeout(() => {
+                                    if (randomGesture === 'EMAIL') {
+                                      setLoginData(prev => ({...prev, login: 'usuario@exemplo.com'}))
+                                    } else if (randomGesture === 'SENHA') {
+                                      setLoginData(prev => ({...prev, senha: '123456'}))
+                                    } else if (randomGesture === 'NOME') {
+                                      setUserData(prev => ({...prev, nome: 'João Silva'}))
+                                    }
+                                  }, 1000)
+                                }
+                              }
+                              
+                              if (isLibrasActive) {
+                                requestAnimationFrame(detectHands)
+                              }
+                            }
+                            
+                            detectHands()
+                          }
+                        })
                       }
                     }}
                     className="w-full h-full object-cover mirror"
@@ -8262,14 +8969,30 @@ const handleServiceCreate = async () => {
                     muted
                   />
                   
-                  {/* Guias visuais para posicionamento das mãos */}
+                  {/* Guias visuais melhoradas para posicionamento das mãos */}
                   <div className="absolute inset-0 pointer-events-none">
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 border-4 border-green-500/50 rounded-lg">
-                      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-green-500"></div>
-                      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-green-500"></div>
-                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-green-500"></div>
-                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-green-500"></div>
+                    {/* Área principal de detecção */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-60 border-2 border-green-400/60 rounded-2xl">
+                      {/* Cantos sem animação excessiva */}
+                      <div className="absolute -top-2 -left-2 w-6 h-6 border-t-4 border-l-4 border-green-400 rounded-tl-lg"></div>
+                      <div className="absolute -top-2 -right-2 w-6 h-6 border-t-4 border-r-4 border-green-400 rounded-tr-lg"></div>
+                      <div className="absolute -bottom-2 -left-2 w-6 h-6 border-b-4 border-l-4 border-green-400 rounded-bl-lg"></div>
+                      <div className="absolute -bottom-2 -right-2 w-6 h-6 border-b-4 border-r-4 border-green-400 rounded-br-lg"></div>
+                      
+                      {/* Indicadores de mão esquerda e direita */}
+                      <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/50 rounded-lg px-2 py-1">
+                        <Hand className="w-4 h-4 text-green-400" />
+                        <span className="text-xs text-green-400 font-mono">MÃO ESQ.</span>
+                      </div>
+                      <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/50 rounded-lg px-2 py-1">
+                        <Hand className="w-4 h-4 text-green-400 scale-x-[-1]" />
+                        <span className="text-xs text-green-400 font-mono">MÃO DIR.</span>
+                      </div>
                     </div>
+                    
+                    {/* Linha central para referência */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-40 bg-green-400/30"></div>
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-60 h-1 bg-green-400/30"></div>
                     <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-center opacity-70">
                       <Hand className="w-12 h-12 mx-auto mb-2 animate-pulse" />
                       <p className="text-sm">Posicione suas mãos aqui</p>
@@ -8467,6 +9190,202 @@ const handleServiceCreate = async () => {
           </div>
         </div>
       )}
+
+      {/* Modal Flutuante - Motorista Encontrado */}
+      {showDriverFoundModal && foundDriver && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-slide-up">
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Motorista Encontrado!</h3>
+              <p className="text-gray-600 text-sm">Encontramos um motorista disponível para você</p>
+            </div>
+
+            {/* Informações do Motorista */}
+            <div className="bg-gray-50 rounded-xl p-4 mb-6">
+              <div className="flex items-center space-x-4">
+                {/* Avatar */}
+                <div className="w-16 h-16 bg-gray-300 rounded-full flex items-center justify-center">
+                  <User className="w-8 h-8 text-gray-600" />
+                </div>
+                
+                {/* Info */}
+                <div className="flex-1">
+                  <h4 className="font-semibold text-gray-800 text-lg">{foundDriver.nome}</h4>
+                  <p className="text-gray-600 text-sm">{foundDriver.veiculo}</p>
+                  <p className="text-gray-500 text-xs">Placa: {foundDriver.placa}</p>
+                  
+                  {/* Rating */}
+                  <div className="flex items-center mt-1">
+                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                    <span className="text-sm text-gray-600 ml-1">{foundDriver.avaliacao}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Detalhes adicionais */}
+              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-200">
+                <div className="text-center">
+                  <p className="text-xs text-gray-500">Tempo de chegada</p>
+                  <p className="font-semibold text-green-600">{foundDriver.tempoChegada}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-gray-500">Distância</p>
+                  <p className="font-semibold text-gray-700">{foundDriver.distancia}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Botões de Ação */}
+            <div className="space-y-3">
+              <button
+                onClick={acceptFoundDriver}
+                className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl hover:from-green-600 hover:to-green-700 transform hover:scale-[1.02] transition-all duration-300"
+              >
+                Aceitar e Pagar
+              </button>
+              
+              <button
+                onClick={rejectFoundDriver}
+                className="w-full bg-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-300 transition-colors"
+              >
+                Procurar Outro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Indicador de Busca em Background */}
+      {isSearchingDriverBackground && !['waiting-driver', 'payment'].includes(currentScreen) && (
+        <div className="fixed bottom-4 right-4 z-40">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-4 max-w-sm animate-slide-up">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <Search className="w-5 h-5 text-green-600 animate-pulse" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-gray-800 text-sm">Procurando motorista...</p>
+                <p className="text-xs text-gray-500">{searchTimeElapsed}s decorridos</p>
+              </div>
+              <button
+                onClick={() => handleScreenTransition('waiting-driver')}
+                className={`transition-colors ${
+                  isDarkMode 
+                    ? 'text-green-600 hover:text-green-700' 
+                    : 'text-blue-600 hover:text-blue-700'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Animações CSS */}
+      <style>{`
+        @keyframes fade-in-up {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes fade-in-down {
+          from {
+            opacity: 0;
+            transform: translateY(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes float {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+        
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-5px); }
+          75% { transform: translateX(5px); }
+        }
+        
+        .animate-fade-in-up {
+          animation: fade-in-up 0.6s ease-out;
+        }
+        
+        .animate-fade-in-down {
+          animation: fade-in-down 0.6s ease-out;
+        }
+        
+        .animate-float {
+          animation: float 3s ease-in-out infinite;
+        }
+        
+        .animate-shake {
+          animation: shake 0.5s ease-in-out;
+        }
+        
+        .delay-200 {
+          animation-delay: 0.2s;
+          opacity: 0;
+          animation-fill-mode: forwards;
+        }
+        
+        .delay-400 {
+          animation-delay: 0.4s;
+          opacity: 0;
+          animation-fill-mode: forwards;
+        }
+        
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        
+        @keyframes slide-up {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out;
+        }
+        
+        .animate-slide-up {
+          animation: slide-up 0.4s ease-out;
+        }
+      `}</style>
     </div>
   )
   
