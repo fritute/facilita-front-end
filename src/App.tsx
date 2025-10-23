@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Copy, Home, FileText, MessageSquare, User as UserIconLucide, ShoppingCart, Truck, Package, Users, Sun, Moon, Bell, Menu, Zap, Shield, LogIn, UserPlus, Video, VideoOff, Hand } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Home, FileText, User as UserIconLucide, ShoppingCart, Package, Sun, Moon, Bell, Menu, VideoOff, Hand } from 'lucide-react'
 import QRCode from 'qrcode'
 import LocationMap from './LocationMap'
 import ServiceTracking from './components/ServiceTracking'
@@ -8,13 +8,11 @@ import CompleteProfileModal from './components/CompleteProfileModal'
 import LoadingSpinner from './components/LoadingSpinner'
 import NotificationSidebar from './components/NotificationSidebar'
 import ServiceCreateScreen from './components/ServiceCreateScreen'
-import HomeScreen from './screens/HomeScreen'
-import WalletScreen from './screens/WalletScreen'
-import ProfileScreen from './screens/ProfileScreen'
+import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen } from './screens'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 import { API_ENDPOINTS } from './config/constants'
 //TELAS PARA TESTES E PARA MOVER
-type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet"
+type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet"
 
 // Adicione esta interface antes da função App
 interface ServiceTrackingProps {
@@ -115,6 +113,9 @@ function App() {
   const [selectedAddress, setSelectedAddress] = useState<any>(null)
   const [pickupLocation, setPickupLocation] = useState<{address: string, lat: number, lng: number} | null>(null)
   const [deliveryLocation, setDeliveryLocation] = useState<{address: string, lat: number, lng: number} | null>(null)
+  const [stopPoints, setStopPoints] = useState<Array<{address: string, lat: number, lng: number, description: string}>>([])
+  const [isSelectingStopPoint, setIsSelectingStopPoint] = useState(false)
+  const [stopPointDescription, setStopPointDescription] = useState('')
   const [servicePrice, setServicePrice] = useState<number>(0)
   const [driverOrigin, setDriverOrigin] = useState<{lat: number, lng: number} | null>(null)
   const [showCompleteProfileModal, setShowCompleteProfileModal] = useState(false)
@@ -169,6 +170,16 @@ function App() {
   const [showNotificationToast, setShowNotificationToast] = useState(false)
   const [notificationToastMessage, setNotificationToastMessage] = useState('')
   
+  // Estados para modais de carteira
+  const [showRechargeSuccessModal, setShowRechargeSuccessModal] = useState(false)
+  const [showRechargeErrorModal, setShowRechargeErrorModal] = useState(false)
+  const [rechargeErrorMessage, setRechargeErrorMessage] = useState('')
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false)
+  const [withdrawAmount, setWithdrawAmount] = useState<number>(0)
+  const [pixKeyType, setPixKeyType] = useState<'email' | 'telefone' | 'cpf' | 'aleatoria'>('email')
+  const [pixKey, setPixKey] = useState('')
+  const [loadingWithdraw, setLoadingWithdraw] = useState(false)
+  
   // Estados para categorias de serviço
   const [serviceCategories, setServiceCategories] = useState<any[]>([])
   const [loadingCategories, setLoadingCategories] = useState(false)
@@ -182,24 +193,17 @@ function App() {
   
   // Estados para notificações
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
-  const [notifications, setNotifications] = useState([
-    {
-      id: '1',
-      type: 'success' as const,
-      title: 'Serviço concluído',
-      message: 'Seu pedido foi entregue com sucesso!',
-      time: 'Há 2 horas',
-      read: false
-    },
-    {
-      id: '2',
-      type: 'info' as const,
-      title: 'Novo prestador disponível',
-      message: 'Um prestador aceitou seu pedido',
-      time: 'Há 5 horas',
-      read: false
-    }
-  ])
+  const [notifications, setNotifications] = useState<Array<{
+    id: string
+    type: 'success' | 'info' | 'warning' | 'error'
+    title: string
+    message: string
+    time: string
+    read: boolean
+  }>>([])
+  
+  // Estado para polling do status do serviço
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
 
   // Função para buscar estabelecimentos por tipo com integração OpenStreetMap
   const getEstablishmentsByType = (type: string) => {
@@ -1079,6 +1083,54 @@ function App() {
     }
   }
 
+  // Funções auxiliares para localStorage por usuário
+  const getUserWalletKey = (userId: number | undefined) => {
+    return userId ? `wallet_${userId}` : null
+  }
+
+  const getUserWalletBalanceKey = (userId: number | undefined) => {
+    return userId ? `walletBalance_${userId}` : null
+  }
+
+  const saveUserWallet = (userId: number | undefined, walletData: any, balance: number) => {
+    const walletKey = getUserWalletKey(userId)
+    const balanceKey = getUserWalletBalanceKey(userId)
+    
+    if (walletKey && balanceKey) {
+      localStorage.setItem(walletKey, JSON.stringify(walletData))
+      localStorage.setItem(balanceKey, balance.toString())
+      console.log(`💾 Carteira do usuário ${userId} salva no localStorage`)
+    }
+  }
+
+  const loadUserWallet = (userId: number | undefined) => {
+    const walletKey = getUserWalletKey(userId)
+    const balanceKey = getUserWalletBalanceKey(userId)
+    
+    if (walletKey && balanceKey) {
+      const savedWallet = localStorage.getItem(walletKey)
+      const savedBalance = localStorage.getItem(balanceKey)
+      
+      return {
+        wallet: savedWallet ? JSON.parse(savedWallet) : null,
+        balance: savedBalance ? parseFloat(savedBalance) : 0
+      }
+    }
+    
+    return { wallet: null, balance: 0 }
+  }
+
+  const clearUserWallet = (userId: number | undefined) => {
+    const walletKey = getUserWalletKey(userId)
+    const balanceKey = getUserWalletBalanceKey(userId)
+    
+    if (walletKey && balanceKey) {
+      localStorage.removeItem(walletKey)
+      localStorage.removeItem(balanceKey)
+      console.log(`🗑️ Carteira do usuário ${userId} removida do localStorage`)
+    }
+  }
+
   // Funções de Carteira Digital
   const fetchWallet = async () => {
     try {
@@ -1111,11 +1163,9 @@ function App() {
         setWalletBalance(balance)
         setHasWallet(true)
         
-        // Salvar no localStorage
-        localStorage.setItem('walletData', JSON.stringify(wallet))
-        localStorage.setItem('walletBalance', balance.toString())
+        // Salvar no localStorage por usuário
+        saveUserWallet(loggedUser?.id, wallet, balance)
         console.log('✅ Carteira carregada com sucesso! Saldo:', wallet.saldo)
-        console.log('💾 Dados salvos no localStorage')
       } else if (response.status === 404) {
         // Usuário não tem carteira ainda
         console.log('⚠️ Usuário não possui carteira (404)')
@@ -1361,9 +1411,8 @@ function App() {
         }
         setWalletData(updatedWalletData)
         
-        // Persistir no localStorage
-        localStorage.setItem('walletData', JSON.stringify(updatedWalletData))
-        localStorage.setItem('walletBalance', newBalance.toString())
+        // Persistir no localStorage por usuário
+        saveUserWallet(loggedUser?.id, updatedWalletData, newBalance)
         console.log('💾 Saldo persistido no localStorage')
       }
       
@@ -1399,12 +1448,15 @@ function App() {
         setShowNotificationToast(false)
       }, 5000)
       
-      // 6. Fechar modal e limpar estados
+      // 6. Fechar modal de recarga e mostrar modal de sucesso
       setShowRechargeModal(false)
       setRechargeAmount(0)
       setRechargeQrCode('')
       setRechargeQrCodeUrl('')
       setRechargeData(null)
+      
+      // Mostrar modal de sucesso
+      setShowRechargeSuccessModal(true)
       
       // 7. Atualizar apenas transações do servidor (não buscar carteira para não sobrescrever saldo)
       console.log('🔄 Atualizando lista de transações...')
@@ -1415,9 +1467,158 @@ function App() {
       
     } catch (error) {
       console.error('❌ Erro ao confirmar pagamento:', error)
-      alert('Erro ao confirmar pagamento. Tente novamente.')
+      setRechargeErrorMessage('Erro ao confirmar pagamento. Tente novamente.')
+      setShowRechargeErrorModal(true)
+      setShowRechargeModal(false)
     } finally {
       setLoadingRecharge(false)
+    }
+  }
+
+  // Função para validar chave PIX
+  const validatePixKey = (key: string, type: string): { valid: boolean; error: string } => {
+    if (!key || key.trim() === '') {
+      return { valid: false, error: 'Por favor, informe sua chave PIX' }
+    }
+
+    switch (type) {
+      case 'email':
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(key)) {
+          return { valid: false, error: 'E-mail inválido. Use o formato: exemplo@email.com' }
+        }
+        break
+      
+      case 'telefone':
+        const phoneDigits = key.replace(/\D/g, '')
+        if (phoneDigits.length !== 11) {
+          return { valid: false, error: 'Telefone inválido. Use o formato: (11) 98765-4321' }
+        }
+        break
+      
+      case 'cpf':
+        const cpfDigits = key.replace(/\D/g, '')
+        if (cpfDigits.length !== 11) {
+          return { valid: false, error: 'CPF inválido. Use o formato: 123.456.789-00' }
+        }
+        break
+      
+      case 'aleatoria':
+        if (key.length < 10) {
+          return { valid: false, error: 'Chave aleatória deve ter no mínimo 10 caracteres' }
+        }
+        break
+    }
+
+    return { valid: true, error: '' }
+  }
+
+  // Função para sacar dinheiro via PIX
+  const handleWithdraw = async () => {
+    try {
+      if (withdrawAmount <= 0) {
+        alert('Por favor, informe um valor válido para saque')
+        return
+      }
+
+      if (withdrawAmount > walletBalance) {
+        alert(`Saldo insuficiente! Você possui R$ ${walletBalance.toFixed(2)}`)
+        return
+      }
+
+      // Validar chave PIX
+      const validation = validatePixKey(pixKey, pixKeyType)
+      if (!validation.valid) {
+        alert(validation.error)
+        return
+      }
+
+      setLoadingWithdraw(true)
+      const token = localStorage.getItem('authToken')
+      
+      if (!token) {
+        alert('Você precisa estar logado para fazer um saque')
+        handleScreenTransition('login')
+        return
+      }
+
+      if (!walletData?.id) {
+        alert('Carteira não encontrada')
+        return
+      }
+
+      // 1. Criar transação de SAÍDA no banco
+      const transactionPayload = {
+        id_carteira: walletData.id,
+        tipo: 'SAIDA',
+        valor: withdrawAmount,
+        descricao: `Saque via PIX (${pixKeyType}) - R$ ${withdrawAmount.toFixed(2)}`
+      }
+
+      const transactionResponse = await fetch(API_ENDPOINTS.CREATE_TRANSACTION, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(transactionPayload)
+      })
+
+      if (!transactionResponse.ok) {
+        throw new Error('Falha ao processar saque')
+      }
+
+      // 2. Calcular novo saldo
+      const newBalance = walletBalance - withdrawAmount
+
+      // 3. Atualizar estado local e persistir
+      setWalletBalance(newBalance)
+      if (walletData) {
+        const updatedWalletData = {
+          ...walletData,
+          saldo: newBalance.toString()
+        }
+        setWalletData(updatedWalletData)
+        saveUserWallet(loggedUser?.id, updatedWalletData, newBalance)
+      }
+      
+      // 4. Mostrar notificação
+      const notificationMessage = `💸 Saque confirmado! R$ ${withdrawAmount.toFixed(2)} enviado para sua chave PIX.`
+      setNotificationToastMessage(notificationMessage)
+      setShowNotificationToast(true)
+      
+      const newNotification = {
+        id: Date.now().toString(),
+        type: 'success' as const,
+        title: 'Saque Confirmado',
+        message: `R$ ${withdrawAmount.toFixed(2)} foi enviado para sua chave PIX`,
+        time: 'Agora',
+        read: false
+      }
+      setNotifications(prev => [newNotification, ...prev])
+      
+      setTimeout(() => {
+        setShowNotificationToast(false)
+      }, 5000)
+      
+      // 5. Fechar modal e limpar estados
+      setShowWithdrawModal(false)
+      setWithdrawAmount(0)
+      setPixKey('')
+      setPixKeyType('email')
+      
+      // 6. Atualizar lista de transações
+      if (walletData?.id) {
+        await fetchWalletTransactions()
+      }
+      
+      alert('✅ Saque realizado com sucesso! O valor será transferido para sua chave PIX em até 1 hora útil.')
+      
+    } catch (error) {
+      console.error('❌ Erro ao processar saque:', error)
+      alert('Erro ao processar saque. Tente novamente.')
+    } finally {
+      setLoadingWithdraw(false)
     }
   }
 
@@ -1491,8 +1692,7 @@ function App() {
               saldo: newBalance.toString()
             }
             setWalletData(updatedWalletData)
-            localStorage.setItem('walletData', JSON.stringify(updatedWalletData))
-            localStorage.setItem('walletBalance', newBalance.toString())
+            saveUserWallet(loggedUser?.id, updatedWalletData, newBalance)
           }
 
           // Tocar som
@@ -1559,8 +1759,7 @@ function App() {
           saldo: newBalance.toString()
         }
         setWalletData(updatedWalletData)
-        localStorage.setItem('walletData', JSON.stringify(updatedWalletData))
-        localStorage.setItem('walletBalance', newBalance.toString())
+        saveUserWallet(loggedUser?.id, updatedWalletData, newBalance)
       }
 
       // Tocar som de notificação
@@ -1609,48 +1808,33 @@ function App() {
     }
   }
 
-  // Carregar saldo do localStorage na inicialização
+  // Carregar saldo do localStorage quando usuário logar
   useEffect(() => {
-    const savedBalance = localStorage.getItem('walletBalance')
-    const savedWalletData = localStorage.getItem('walletData')
-    
-    if (savedBalance) {
-      const balance = parseFloat(savedBalance)
-      console.log('💾 Saldo carregado do localStorage:', balance)
-      setWalletBalance(balance)
-    }
-    
-    if (savedWalletData) {
-      try {
-        const walletData = JSON.parse(savedWalletData)
-        console.log('💾 Dados da carteira carregados do localStorage:', walletData)
-        setWalletData(walletData)
+    if (loggedUser?.id) {
+      const userData = loadUserWallet(loggedUser.id)
+      
+      if (userData.wallet) {
+        console.log('💾 Dados da carteira do usuário', loggedUser.id, 'carregados do localStorage')
+        setWalletData(userData.wallet)
+        setWalletBalance(userData.balance)
         setHasWallet(true)
-      } catch (e) {
-        console.error('Erro ao parsear walletData do localStorage:', e)
+      } else {
+        console.log('📭 Usuário', loggedUser.id, 'não tem carteira salva localmente')
+        setWalletBalance(0)
+        setWalletData(null)
+        setHasWallet(false)
       }
     }
-  }, [])
+  }, [loggedUser?.id])
 
   // Buscar carteira quando usuário acessar a tela de carteira
   useEffect(() => {
     if (currentScreen === 'wallet' && loggedUser) {
       console.log('🔄 Tela de carteira aberta, buscando dados...')
       
-      // Verificar se tem saldo salvo no localStorage
-      const savedBalance = localStorage.getItem('walletBalance')
-      
-      if (!savedBalance || savedBalance === '0') {
-        // Se não tem saldo salvo, buscar do servidor
-        console.log('📡 Buscando carteira do servidor (primeira vez)...')
-        fetchWallet()
-      } else {
-        // Se já tem saldo salvo, apenas buscar transações
-        console.log('💾 Usando saldo do localStorage, buscando apenas transações...')
-        if (walletData?.id) {
-          fetchWalletTransactions()
-        }
-      }
+      // Sempre buscar do servidor para garantir dados atualizados
+      console.log('📡 Buscando carteira do servidor...')
+      fetchWallet()
     }
   }, [currentScreen, loggedUser])
 
@@ -1763,6 +1947,43 @@ function App() {
       fetchServiceCategories()
     }
   }, [currentScreen])
+
+  // useEffect para carregar profileData do localStorage ao iniciar
+  useEffect(() => {
+    const storedProfileData = localStorage.getItem('profileData')
+    if (storedProfileData) {
+      try {
+        const parsedData = JSON.parse(storedProfileData)
+        setProfileData(parsedData)
+        console.log('📋 Dados do perfil recuperados do localStorage:', parsedData)
+      } catch (error) {
+        console.error('❌ Erro ao recuperar dados do perfil:', error)
+      }
+    }
+  }, [])
+
+  // useEffect para salvar profileData no localStorage sempre que mudar
+  useEffect(() => {
+    if (profileData.endereco || profileData.cpf || profileData.necessidade) {
+      localStorage.setItem('profileData', JSON.stringify(profileData))
+      console.log('💾 Dados do perfil salvos no localStorage:', profileData)
+    }
+  }, [profileData])
+
+  // useEffect para buscar notificações quando usuário estiver logado
+  useEffect(() => {
+    if (loggedUser) {
+      // Buscar notificações ao logar
+      fetchNotifications()
+      
+      // Atualizar notificações a cada 30 segundos
+      const interval = setInterval(() => {
+        fetchNotifications()
+      }, 30000) // 30 segundos
+      
+      return () => clearInterval(interval)
+    }
+  }, [loggedUser])
 
 
   // Função helper para fazer requisições autenticadas
@@ -1934,11 +2155,11 @@ function App() {
       console.log('📤 Atualizando perfil do usuário')
       console.log('👤 Usuário logado:', loggedUser)
       console.log('🆔 ID do usuário:', userId)
+      console.log('🔑 Token:', token ? token.substring(0, 20) + '...' : 'Não encontrado')
       console.log('📦 Dados a enviar:', { nome: name, email: email })
-      console.log('🌐 Endpoint:', API_ENDPOINTS.UPDATE_PROFILE)
 
-      // Tentar atualizar usando endpoint /usuario/perfil (PUT)
-      let response = await fetch(API_ENDPOINTS.UPDATE_PROFILE, {
+      // Usar endpoint correto: https://servidor-facilita.onrender.com/v1/facilita/usuario/perfil
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/perfil', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1950,41 +2171,8 @@ function App() {
         })
       })
 
-      console.log('📥 Status da resposta (PUT /usuario/perfil):', response.status)
-
-      // Se falhar, tentar com PATCH
-      if (!response.ok && response.status !== 401 && response.status !== 403) {
-        console.log('⚠️ PUT falhou, tentando PATCH...')
-        response = await fetch(API_ENDPOINTS.UPDATE_PROFILE, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            nome: name,
-            email: email
-          })
-        })
-        console.log('📥 Status da resposta (PATCH /usuario/perfil):', response.status)
-      }
-
-      // Se ainda falhar, tentar endpoint com ID
-      if (!response.ok && response.status !== 401 && response.status !== 403) {
-        console.log('⚠️ PATCH falhou, tentando PUT com ID...')
-        response = await fetch(API_ENDPOINTS.UPDATE_USER(userId.toString()), {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            nome: name,
-            email: email
-          })
-        })
-        console.log('📥 Status da resposta (PUT /usuario/{id}):', response.status)
-      }
+      console.log('📥 Status da resposta:', response.status)
+      console.log('📥 Headers da resposta:', Object.fromEntries(response.headers.entries()))
 
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
@@ -2017,9 +2205,10 @@ function App() {
       setLoggedUser(updatedUser)
       
       // Atualizar também no localStorage para persistir
-      localStorage.setItem('userData', JSON.stringify(updatedUser))
+      localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
       
       console.log('✅ Estado local atualizado:', updatedUser)
+      console.log('✅ localStorage atualizado com chave "loggedUser"')
       
       // Mostrar notificação de sucesso
       const notificationMessage = '✅ Perfil atualizado com sucesso!'
@@ -2033,6 +2222,162 @@ function App() {
     } catch (error) {
       console.error('❌ Erro ao atualizar perfil:', error)
       throw error
+    }
+  }
+
+  // Função para deletar conta do usuário
+  const handleDeleteAccount = async () => {
+    const confirmDelete = window.confirm(
+      '⚠️ ATENÇÃO: Você está prestes a deletar sua conta permanentemente.\n\n' +
+      'Esta ação NÃO pode ser desfeita e você perderá:\n' +
+      '• Todos os seus dados pessoais\n' +
+      '• Histórico de serviços\n' +
+      '• Saldo da carteira\n' +
+      '• Todas as transações\n\n' +
+      'Tem certeza que deseja continuar?'
+    )
+
+    if (!confirmDelete) {
+      return
+    }
+
+    // Segunda confirmação
+    const finalConfirm = window.confirm(
+      '🚨 ÚLTIMA CONFIRMAÇÃO\n\n' +
+      'Você tem ABSOLUTA CERTEZA que deseja deletar sua conta?\n\n' +
+      'Digite OK para confirmar ou Cancelar para voltar.'
+    )
+
+    if (!finalConfirm) {
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem('authToken')
+      
+      if (!token) {
+        alert('Você precisa estar logado para deletar sua conta')
+        handleScreenTransition('login')
+        return
+      }
+
+      const userId = loggedUser?.id
+      if (!userId) {
+        alert('ID do usuário não encontrado')
+        return
+      }
+
+      console.log('🗑️ Deletando conta do usuário ID:', userId)
+      console.log('🔗 URL:', `https://servidor-facilita.onrender.com/v1/facilita/usuario/${userId}`)
+      console.log('🔑 Token:', token ? token.substring(0, 20) + '...' : 'Não encontrado')
+      console.log('📋 Headers enviados:', {
+        'Authorization': `Bearer ${token.substring(0, 30)}...`,
+        'Content-Type': 'application/json'
+      })
+
+      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/usuario/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      console.log('📥 Status da resposta:', response.status)
+      console.log('📥 Status text:', response.statusText)
+
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          alert('Sessão expirada. Faça login novamente.')
+          handleScreenTransition('login')
+          return
+        }
+        
+        // Tentar obter mais detalhes do erro
+        let errorMessage = `Erro ao deletar conta (${response.status})`
+        try {
+          const errorText = await response.text()
+          console.error('❌ Resposta de erro do servidor:', errorText)
+          
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.message || errorData.error || errorMessage
+          } catch {
+            if (errorText) {
+              errorMessage = errorText
+            }
+          }
+        } catch (e) {
+          console.error('❌ Erro ao ler resposta:', e)
+        }
+        
+        if (response.status === 500) {
+          const tryLocalDelete = window.confirm(
+            '❌ Erro no servidor ao deletar conta.\n\n' +
+            'Possíveis causas:\n' +
+            '• Você possui serviços ativos ou pedidos pendentes\n' +
+            '• Há transações em processamento\n' +
+            '• Erro de conexão com o banco de dados\n\n' +
+            `Detalhes técnicos: ${errorMessage}\n\n` +
+            '⚠️ Deseja limpar seus dados locais e fazer logout?\n' +
+            '(Seus dados permanecerão no servidor até que o problema seja resolvido)'
+          )
+          
+          if (tryLocalDelete) {
+            // Limpar dados locais mesmo sem deletar do servidor
+            localStorage.removeItem('authToken')
+            localStorage.removeItem('userData')
+            localStorage.removeItem('loggedUser')
+            localStorage.removeItem('notificationsEnabled')
+            localStorage.removeItem(`wallet_${userId}`)
+            localStorage.removeItem(`walletBalance_${userId}`)
+            
+            setLoggedUser(null)
+            setWalletBalance(0)
+            setWalletData(null)
+            setHasWallet(false)
+            setWalletTransactions([])
+            
+            alert('✅ Dados locais limpos. Você foi desconectado.')
+            handleScreenTransition('landing')
+            setIsLoading(false)
+            return
+          }
+        } else {
+          alert(`Erro ao deletar conta: ${errorMessage}`)
+        }
+        
+        throw new Error(errorMessage)
+      }
+
+      console.log('✅ Conta deletada com sucesso')
+
+      // Limpar todos os dados do usuário
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('userData')
+      localStorage.removeItem('loggedUser')
+      localStorage.removeItem('notificationsEnabled')
+      localStorage.removeItem(`wallet_${userId}`)
+      localStorage.removeItem(`walletBalance_${userId}`)
+      
+      // Resetar estados
+      setLoggedUser(null)
+      setWalletBalance(0)
+      setWalletData(null)
+      setHasWallet(false)
+      setWalletTransactions([])
+      
+      alert('✅ Sua conta foi deletada com sucesso. Sentiremos sua falta!')
+      
+      // Redirecionar para tela inicial
+      handleScreenTransition('landing')
+      
+    } catch (error) {
+      console.error('❌ Erro ao deletar conta:', error)
+      alert('Erro ao deletar conta. Tente novamente.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -2369,8 +2714,29 @@ function App() {
               
               if (perfilResponse.ok) {
                 const perfilData = await perfilResponse.json()
+                console.log('📋 Dados do perfil recebidos:', perfilData)
+                
                 if (perfilData?.foto_perfil) {
                   user.foto = perfilData.foto_perfil
+                }
+                
+                // Salvar id_localizacao no usuário
+                if (perfilData?.id_localizacao) {
+                  user.id_localizacao = perfilData.id_localizacao
+                  console.log('🆔 ID da localização salvo:', perfilData.id_localizacao)
+                }
+                
+                // Salvar dados do perfil no profileData e localStorage
+                if (perfilData?.endereco || perfilData?.cpf || perfilData?.necessidade_especial) {
+                  const profileDataToSave = {
+                    endereco: perfilData.endereco || '',
+                    cpf: perfilData.cpf || '',
+                    necessidade: perfilData.necessidade_especial || '',
+                    foto: null
+                  }
+                  setProfileData(profileDataToSave)
+                  localStorage.setItem('profileData', JSON.stringify(profileDataToSave))
+                  console.log('💾 Dados do perfil salvos:', profileDataToSave)
                 }
               } else if (perfilResponse.status === 500) {
                 console.warn('⚠️ Erro 500 ao buscar perfil - servidor indisponível')
@@ -2384,6 +2750,7 @@ function App() {
           
           // Armazenar usuário no localStorage também
           localStorage.setItem('loggedUser', JSON.stringify(user))
+          localStorage.setItem('userType', user.tipo_conta) // Para uso no chat
           
           setLoggedUser(user)
           console.log('👤 Usuário logado:', user)
@@ -2548,9 +2915,10 @@ function App() {
         const data = await response.json()
         console.log('✅ Cadastro bem-sucedido:', data)
         
-        // Se a API retornar token diretamente no cadastro, usar
+        // Se a API retornar token, armazenar no localStorage
         if (data.token) {
           localStorage.setItem('authToken', data.token)
+          localStorage.setItem('userType', selectedAccountType || 'CONTRATANTE') // Para uso no chat
           console.log('🔑 Token do cadastro armazenado:', data.token)
           console.log('📝 Dados do usuário retornados no cadastro:', data.usuario)
           
@@ -2598,6 +2966,7 @@ function App() {
               // Armazenar token
               if (loginData.token) {
                 localStorage.setItem('authToken', loginData.token)
+                localStorage.setItem('userType', selectedAccountType || 'CONTRATANTE') // Para uso no chat
                 console.log('🔑 Token do login armazenado:', loginData.token)
               }
               
@@ -3182,17 +3551,43 @@ function App() {
   }
 
   const handleServiceRequest = () => {
-    handleScreenTransition('location-select')
+    // Ir direto para tela de criação de serviço (sem abrir mapa)
+    // Pré-definir o endereço de destino com o endereço e id_localizacao do usuário
+    const userAddress = profileData.endereco || loggedUser?.endereco || ''
+    const userLocationId = loggedUser?.id_localizacao
+    
+    if (userAddress) {
+      console.log('📍 Usando endereço do usuário como DESTINO:', userAddress)
+      console.log('🆔 ID da localização:', userLocationId)
+      
+      setSelectedLocation(userAddress)
+      setDeliveryLocation({
+        address: userAddress,
+        lat: -23.5505,
+        lng: -46.6333,
+        id_localizacao: userLocationId // Adicionar ID da localização
+      })
+    }
+    handleScreenTransition('service-create')
   }
 
   // Função para fazer logout
   const handleLogout = () => {
     console.log('🚪 Fazendo logout do usuário')
+    
+    // Limpar dados do usuário (mas não limpar carteira do localStorage)
     localStorage.removeItem('authToken')
     localStorage.removeItem('loggedUser')
+    localStorage.removeItem('userType')
+    
+    // Resetar estados
     setLoggedUser(null)
+    setWalletBalance(0)
+    setWalletData(null)
+    setHasWallet(false)
     setHasCheckedProfile(false)
     setShowCompleteProfileModal(false)
+    
     handleScreenTransition('login')
   }
 
@@ -3363,41 +3758,220 @@ function App() {
 
   // useEffect para preencher automaticamente o endereço de entrega com o endereço do perfil
   React.useEffect(() => {
-    if (currentScreen === 'service-create' && profileData.endereco) {
-      console.log('📍 Preenchendo endereço de entrega automaticamente com endereço do perfil')
-      console.log('🏠 Endereço do perfil:', profileData.endereco)
+    if (currentScreen === 'service-create') {
+      const userAddress = profileData.endereco || loggedUser?.endereco || ''
+      const userLocationId = loggedUser?.id_localizacao
       
-      // Usar o endereço do perfil como endereço de entrega padrão
-      setSelectedLocation(profileData.endereco)
-      
-      // Definir também o deliveryLocation com coordenadas padrão de São Paulo
-      // Essas coordenadas serão atualizadas quando o usuário confirmar ou alterar o endereço
-      if (!deliveryLocation || deliveryLocation.address !== profileData.endereco) {
+      if (userAddress) {
+        console.log('📍 Preenchendo endereço de entrega automaticamente')
+        console.log('🏠 Endereço:', userAddress)
+        console.log('🆔 ID da localização:', userLocationId)
+        
+        // Usar o endereço do perfil como endereço de entrega padrão
+        setSelectedLocation(userAddress)
+        
+        // Definir também o deliveryLocation com id_localizacao
         setDeliveryLocation({
-          address: profileData.endereco,
+          address: userAddress,
           lat: -23.5505, // Coordenadas padrão de São Paulo
-          lng: -46.6333
-        })
+          lng: -46.6333,
+          id_localizacao: userLocationId
+        } as any)
+      } else {
+        console.warn('⚠️ Endereço do usuário não encontrado')
       }
     }
-  }, [currentScreen, profileData.endereco])
+  }, [currentScreen, profileData.endereco, loggedUser?.id_localizacao])
 
-  // Funções para manipular notificações
-  const handleMarkAsRead = (id: string) => {
-    setNotifications(prev =>
-      prev.map(notif =>
-        notif.id === id ? { ...notif, read: true } : notif
-      )
-    )
+  // Função para buscar notificações da API
+  const fetchNotifications = async () => {
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        console.log('❌ Token não encontrado - não carregando notificações')
+        return
+      }
+
+      console.log('🔔 Buscando notificações da API...')
+      
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/notificacao', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Notificações recebidas:', data)
+        
+        // Mapear notificações da API para o formato do frontend
+        if (data.notificacoes && Array.isArray(data.notificacoes)) {
+          const mappedNotifications = data.notificacoes.map((notif: any) => ({
+            id: notif.id.toString(),
+            type: notif.tipo || 'info',
+            title: notif.titulo || 'Notificação',
+            message: notif.mensagem || '',
+            time: notif.data_criacao ? new Date(notif.data_criacao).toLocaleString('pt-BR') : 'Agora',
+            read: notif.lida || false
+          }))
+          
+          setNotifications(mappedNotifications)
+          console.log('📋 Total de notificações:', mappedNotifications.length)
+          console.log('🔴 Não lidas:', data.total_nao_lidas || 0)
+        }
+      } else if (response.status === 401 || response.status === 403) {
+        console.warn('⚠️ Token inválido ao buscar notificações')
+      } else {
+        console.error('❌ Erro ao buscar notificações:', response.status)
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar notificações:', error)
+    }
   }
 
-  const handleClearAllNotifications = () => {
-    setNotifications([])
+  // Funções para manipular notificações
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) return
+
+      console.log('📖 Marcando notificação como lida:', id)
+      
+      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/notificacao/${id}/lida`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
+      })
+
+      if (response.ok) {
+        console.log('✅ Notificação marcada como lida')
+        // Atualizar localmente
+        setNotifications(prev =>
+          prev.map(notif =>
+            notif.id === id ? { ...notif, read: true } : notif
+          )
+        )
+      } else {
+        console.error('❌ Erro ao marcar notificação como lida:', response.status)
+      }
+    } catch (error) {
+      console.error('❌ Erro ao marcar notificação como lida:', error)
+    }
+  }
+
+  const handleClearAllNotifications = async () => {
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) return
+
+      console.log('📖 Marcando todas as notificações como lidas...')
+      
+      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/notificacao/todas-lidas', {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
+      })
+
+      if (response.ok) {
+        console.log('✅ Todas as notificações marcadas como lidas')
+        // Atualizar localmente
+        setNotifications(prev =>
+          prev.map(notif => ({ ...notif, read: true }))
+        )
+      } else {
+        console.error('❌ Erro ao marcar todas como lidas:', response.status)
+      }
+    } catch (error) {
+      console.error('❌ Erro ao marcar todas como lidas:', error)
+    }
   }
 
   const handleToggleNotifications = () => {
     setIsNotificationOpen(prev => !prev)
   }
+
+  // Função para verificar status do serviço (se foi aceito por prestador)
+  const checkServiceStatus = async (serviceId: number) => {
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) return null
+
+      console.log('🔍 Verificando status do serviço:', serviceId)
+      
+      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/servico/${serviceId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('📋 Status do serviço:', data)
+        return data
+      } else {
+        console.error('❌ Erro ao verificar status:', response.status)
+        return null
+      }
+    } catch (error) {
+      console.error('❌ Erro ao verificar status do serviço:', error)
+      return null
+    }
+  }
+
+  // Função para iniciar polling do status do serviço
+  const startPollingServiceStatus = (serviceId: number) => {
+    console.log('⏳ Iniciando polling para serviço:', serviceId)
+    
+    // Limpar polling anterior se existir
+    if (pollingInterval) {
+      clearInterval(pollingInterval)
+    }
+
+    // Verificar a cada 5 segundos
+    const interval = setInterval(async () => {
+      const serviceData = await checkServiceStatus(serviceId)
+      
+      if (serviceData) {
+        // Verificar se tem prestador aceito
+        if (serviceData.id_prestador || serviceData.prestador_id || serviceData.status === 'ACEITO') {
+          console.log('✅ Prestador aceitou o serviço!')
+          console.log('👤 ID do prestador:', serviceData.id_prestador || serviceData.prestador_id)
+          
+          // Parar polling
+          clearInterval(interval)
+          setPollingInterval(null)
+          
+          // Buscar notificações atualizadas
+          fetchNotifications()
+          
+          // Redirecionar para pagamento
+          console.log('💳 Redirecionando para pagamento...')
+          handleScreenTransition('payment')
+        } else {
+          console.log('⏳ Aguardando prestador... Status:', serviceData.status)
+        }
+      }
+    }, 5000) // 5 segundos
+
+    setPollingInterval(interval)
+  }
+
+  // Limpar polling quando sair da tela
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval)
+      }
+    }
+  }, [pollingInterval])
 
   // Função para tocar som de notificação
   const playNotificationSound = () => {
@@ -3492,7 +4066,19 @@ function App() {
   }
 
 const handleLocationSelect = (address: string, lat: number, lng: number) => {
-  if (isSelectingOrigin) {
+  if (isSelectingStopPoint) {
+    // Selecionando uma parada intermediária
+    const newStop = {
+      address,
+      lat,
+      lng,
+      description: stopPointDescription
+    }
+    setStopPoints([...stopPoints, newStop])
+    console.log('Parada adicionada:', newStop)
+    setIsSelectingStopPoint(false)
+    setStopPointDescription('')
+  } else if (isSelectingOrigin) {
     // Selecionando origem (de onde buscar)
     setSelectedOriginLocation(address)
     setPickupLocation({ address, lat, lng })
@@ -3580,12 +4166,17 @@ const handleServiceCreate = async () => {
     setIsLoading(false)
     
     if (serviceCreated) {
-      console.log('✅ Serviço criado com sucesso! Redirecionando...')
+      console.log('✅ Serviço criado com sucesso!')
       // Definir serviço como ativo
       setActiveServiceId(createdServiceId)
       setServiceStartTime(new Date())
-      // Ir para tela de pagamento após criar o serviço
-      handleScreenTransition('payment')
+      
+      // Ir para tela de aguardando prestador
+      console.log('⏳ Aguardando prestador aceitar o serviço...')
+      handleScreenTransition('waiting-provider')
+      
+      // Iniciar polling para verificar se prestador aceitou
+      startPollingServiceStatus(createdServiceId)
     } else {
       console.error('❌ Falha ao criar serviço')
       alert('Não foi possível criar o serviço. Verifique os dados e tente novamente.')
@@ -4633,6 +5224,79 @@ const handleServiceCreate = async () => {
     )
   }
 
+  // Waiting Provider Screen
+  if (currentScreen === 'waiting-provider') {
+    return (
+      <div className={`min-h-screen ${themeClasses.bg} flex items-center justify-center transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        <div className="max-w-md w-full mx-4">
+          <div className={`${themeClasses.bgCard} rounded-2xl shadow-2xl p-8 text-center`}>
+            {/* Animação de loading */}
+            <div className="mb-6">
+              <div className="relative w-32 h-32 mx-auto">
+                <div className="absolute inset-0 border-8 border-green-200 rounded-full"></div>
+                <div className="absolute inset-0 border-8 border-green-500 rounded-full border-t-transparent animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <svg className="w-16 h-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Título */}
+            <h2 className={`text-2xl font-bold ${themeClasses.text} mb-3`}>
+              Procurando Prestador
+            </h2>
+            
+            {/* Descrição */}
+            <p className={`${themeClasses.textSecondary} mb-6`}>
+              Aguarde enquanto encontramos um prestador disponível para aceitar seu serviço...
+            </p>
+
+            {/* Informações do serviço */}
+            <div className={`${themeClasses.bgSecondary} rounded-lg p-4 mb-6 text-left`}>
+              <div className="flex items-center mb-2">
+                <FileText className="w-5 h-5 text-green-500 mr-2" />
+                <span className={`font-semibold ${themeClasses.text}`}>Seu Serviço</span>
+              </div>
+              <p className={`text-sm ${themeClasses.textSecondary} mb-2`}>
+                {serviceDescription || selectedServiceType}
+              </p>
+              <div className="flex justify-between items-center">
+                <span className={`text-sm ${themeClasses.textSecondary}`}>Valor estimado:</span>
+                <span className="text-lg font-bold text-green-600">
+                  R$ {servicePrice.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="flex items-center justify-center space-x-2 text-sm text-gray-500">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span>Verificando a cada 5 segundos...</span>
+            </div>
+
+            {/* Botão cancelar */}
+            <button
+              onClick={() => {
+                if (pollingInterval) {
+                  clearInterval(pollingInterval)
+                  setPollingInterval(null)
+                }
+                handleScreenTransition('home')
+              }}
+              className="mt-6 w-full py-3 border-2 border-gray-300 text-gray-600 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Payment Screen
   if (currentScreen === 'payment') {
     return (
@@ -4933,6 +5597,7 @@ const handleServiceCreate = async () => {
         selectedServiceType={selectedServiceType}
         pickupLocation={pickupLocation}
         deliveryLocation={deliveryLocation}
+        stopPoints={stopPoints}
         predefinedServices={predefinedServices}
         serviceCategories={serviceCategories}
         loadingCategories={loadingCategories}
@@ -4946,6 +5611,17 @@ const handleServiceCreate = async () => {
         onSelectDestination={() => {
           setIsSelectingOrigin(false)
           handleScreenTransition('location-select')
+        }}
+        onAddStopPoint={() => {
+          // Solicitar descrição da parada
+          const description = prompt('Descrição da parada (opcional):') || ''
+          setStopPointDescription(description)
+          setIsSelectingStopPoint(true)
+          handleScreenTransition('location-select')
+        }}
+        onRemoveStopPoint={(index: number) => {
+          const newStopPoints = stopPoints.filter((_, i) => i !== index)
+          setStopPoints(newStopPoints)
         }}
         onDescriptionChange={setServiceDescription}
         onServiceTypeChange={setSelectedServiceType}
@@ -5404,6 +6080,7 @@ const handleServiceCreate = async () => {
           onCreateWallet={() => setShowCreateWalletModal(true)}
           walletData={walletData}
           onRecharge={() => setShowRechargeModal(true)}
+          onWithdraw={() => setShowWithdrawModal(true)}
           transactions={walletTransactions}
           loadingTransactions={loadingTransactions}
           isDarkMode={isDarkMode}
@@ -5648,6 +6325,201 @@ const handleServiceCreate = async () => {
             </div>
           </div>
         )}
+
+        {/* Modal de Sucesso da Recarga */}
+        {showRechargeSuccessModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className={`${themeClasses.bgCard} rounded-2xl p-6 max-w-md w-full shadow-2xl text-center`}>
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4">
+                <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              
+              <h2 className={`text-2xl font-bold ${themeClasses.text} mb-3`}>
+                Carteira Recarregada com Sucesso!
+              </h2>
+              
+              <p className={`${themeClasses.textSecondary} mb-6`}>
+                Seu saldo foi atualizado e já está disponível para uso.
+              </p>
+
+              <button
+                onClick={() => setShowRechargeSuccessModal(false)}
+                className="w-full px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors"
+              >
+                Continuar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Erro da Recarga */}
+        {showRechargeErrorModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className={`${themeClasses.bgCard} rounded-2xl p-6 max-w-md w-full shadow-2xl text-center`}>
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-red-100 rounded-full mb-4">
+                <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              
+              <h2 className={`text-2xl font-bold ${themeClasses.text} mb-3`}>
+                Falha na Recarga
+              </h2>
+              
+              <p className={`${themeClasses.textSecondary} mb-6`}>
+                {rechargeErrorMessage || 'Não foi possível processar sua recarga. Tente novamente.'}
+              </p>
+
+              <button
+                onClick={() => {
+                  setShowRechargeErrorModal(false)
+                  setRechargeErrorMessage('')
+                }}
+                className="w-full px-6 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Saque */}
+        {showWithdrawModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className={`${themeClasses.bgCard} rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto`}>
+              <h2 className={`text-2xl font-bold ${themeClasses.text} mb-4`}>Sacar Dinheiro</h2>
+              
+              <p className={`${themeClasses.textSecondary} mb-6`}>
+                Informe o valor que deseja sacar e sua chave PIX. O dinheiro será transferido em até 1 hora útil.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
+                    Valor do Saque (R$) *
+                  </label>
+                  <input
+                    type="number"
+                    value={withdrawAmount || ''}
+                    onChange={(e) => setWithdrawAmount(parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0.01"
+                    max={walletBalance}
+                    className={`w-full px-4 py-3 ${themeClasses.input} rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg font-semibold`}
+                  />
+                  <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>
+                    Saldo disponível: R$ {walletBalance.toFixed(2)}
+                  </p>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
+                    Tipo de Chave PIX *
+                  </label>
+                  <select
+                    value={pixKeyType}
+                    onChange={(e) => setPixKeyType(e.target.value as 'email' | 'telefone' | 'cpf' | 'aleatoria')}
+                    className={`w-full px-4 py-3 ${themeClasses.input} rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                  >
+                    <option value="email">E-mail</option>
+                    <option value="telefone">Telefone</option>
+                    <option value="cpf">CPF</option>
+                    <option value="aleatoria">Chave Aleatória</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
+                    Chave PIX *
+                  </label>
+                  <input
+                    type="text"
+                    value={pixKey}
+                    onChange={(e) => {
+                      let value = e.target.value
+                      
+                      // Formatação automática baseada no tipo
+                      if (pixKeyType === 'telefone') {
+                        // Remove tudo exceto números
+                        const digits = value.replace(/\D/g, '')
+                        // Formata: (11) 98765-4321
+                        if (digits.length <= 11) {
+                          value = digits.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
+                            .replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3')
+                            .replace(/(\d{2})(\d{0,5})/, '($1) $2')
+                        }
+                      } else if (pixKeyType === 'cpf') {
+                        // Remove tudo exceto números
+                        const digits = value.replace(/\D/g, '')
+                        // Formata: 123.456.789-00
+                        if (digits.length <= 11) {
+                          value = digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+                            .replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, '$1.$2.$3-$4')
+                            .replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3')
+                            .replace(/(\d{3})(\d{0,3})/, '$1.$2')
+                        }
+                      }
+                      
+                      setPixKey(value)
+                    }}
+                    placeholder={
+                      pixKeyType === 'email' ? 'seu@email.com' :
+                      pixKeyType === 'telefone' ? '(11) 98765-4321' :
+                      pixKeyType === 'cpf' ? '123.456.789-00' :
+                      'sua-chave-aleatoria'
+                    }
+                    className={`w-full px-4 py-3 ${themeClasses.input} rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                  />
+                  <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>
+                    {pixKeyType === 'email' && 'Digite seu e-mail cadastrado no PIX'}
+                    {pixKeyType === 'telefone' && 'Digite seu telefone com DDD (apenas números)'}
+                    {pixKeyType === 'cpf' && 'Digite seu CPF (apenas números)'}
+                    {pixKeyType === 'aleatoria' && 'Digite sua chave aleatória (mínimo 10 caracteres)'}
+                  </p>
+                </div>
+
+                <div className={`${isDarkMode ? 'bg-yellow-900 bg-opacity-30 border-yellow-700' : 'bg-yellow-50 border-yellow-200'} border rounded-lg p-4`}>
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div className="flex-1">
+                      <p className={`text-sm font-medium ${isDarkMode ? 'text-yellow-300' : 'text-yellow-900'}`}>Modo Sandbox (Teste)</p>
+                      <p className={`text-xs ${isDarkMode ? 'text-yellow-400' : 'text-yellow-700'} mt-1`}>
+                        Este é um ambiente de testes. O saque será simulado e o saldo será deduzido da sua carteira.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowWithdrawModal(false)
+                    setWithdrawAmount(0)
+                    setPixKey('')
+                    setPixKeyType('email')
+                  }}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  disabled={loadingWithdraw}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleWithdraw}
+                  disabled={loadingWithdraw || withdrawAmount <= 0 || !pixKey || withdrawAmount > walletBalance}
+                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {loadingWithdraw ? 'Processando...' : 'Confirmar Saque'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     )
   }
@@ -5678,6 +6550,7 @@ const handleServiceCreate = async () => {
           setLoggedUser(null)
           handleScreenTransition('login')
         }}
+        onDeleteAccount={handleDeleteAccount}
         onUpdateProfile={handleUpdateProfile}
         onToggleNotifications={(enabled) => {
           setNotificationsEnabled(enabled)
@@ -6192,8 +7065,56 @@ const handleServiceCreate = async () => {
               <button
                 key={service.id}
                 onClick={() => {
-                  setSelectedEstablishmentType(service.id)
-                  handleScreenTransition('establishments-list')
+                  console.log('🎯 Card de serviço clicado:', service.name)
+                  
+                  // Pré-definir o tipo de serviço
+                  setSelectedServiceType(service.name)
+                  
+                  // Buscar a categoria correspondente ao serviço clicado
+                  const categoryMap: { [key: string]: string } = {
+                    'Farmácia': 'farmacia',
+                    'Mercado': 'mercado',
+                    'Restaurante': 'restaurante',
+                    'Posto de Combustível': 'posto',
+                    'Banco': 'banco',
+                    'Shopping': 'shopping',
+                    'Hospital': 'hospital',
+                    'Outros': 'outros'
+                  }
+                  
+                  const categoryKey = categoryMap[service.name]
+                  const matchedCategory = serviceCategories.find(cat => 
+                    cat.nome.toLowerCase().includes(categoryKey) || 
+                    categoryKey.includes(cat.nome.toLowerCase())
+                  )
+                  
+                  if (matchedCategory) {
+                    console.log('✅ Categoria pré-selecionada:', matchedCategory.nome)
+                    setSelectedCategoryId(matchedCategory.id)
+                  }
+                  
+                  // Limpar descrição para o usuário preencher
+                  setServiceDescription('')
+                  
+                  // Pré-definir o endereço de DESTINO (entregar em) com o endereço e id_localizacao do usuário
+                  const userAddress = profileData.endereco || loggedUser?.endereco || ''
+                  const userLocationId = loggedUser?.id_localizacao
+                  
+                  if (userAddress) {
+                    console.log('📍 Usando endereço do usuário como DESTINO:', userAddress)
+                    console.log('🆔 ID da localização:', userLocationId)
+                    
+                    setSelectedLocation(userAddress)
+                    setDeliveryLocation({
+                      address: userAddress,
+                      lat: -23.5505, // Coordenadas padrão de São Paulo
+                      lng: -46.6333,
+                      id_localizacao: userLocationId // Adicionar ID da localização
+                    })
+                  }
+                  
+                  // Ir direto para tela de criação (sem abrir mapa)
+                  handleScreenTransition('service-create')
                 }}
                 className={`p-6 md:p-8 rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1 text-center group border backdrop-blur-sm min-h-[200px] ${
                   isDarkMode 
@@ -6456,98 +7377,14 @@ const handleServiceCreate = async () => {
 
   if (currentScreen === 'account-type') {
     return (
-      <div className={`min-h-screen bg-gray-100 flex flex-col transition-all duration-300 ${
-        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
-      }`}>
-        <div className="bg-green-500 text-white p-4 md:p-6 text-center relative">
-          <button
-            onClick={() => handleScreenTransition('cadastro')}
-            className="absolute left-4 top-4 md:left-6 md:top-6 text-white hover:text-gray-200"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <h1 className="text-lg md:text-2xl font-bold px-4">Qual tipo de conta deseja criar?</h1>
-          <p className="text-green-100 mt-2 text-sm md:text-base px-4">Escolha a opção que mais combina com seu perfil.</p>
-        </div>
-
-        <div className="flex-1 flex flex-col justify-center p-4 md:p-8 space-y-4 md:space-y-6">
-          <div
-            onClick={() => setSelectedAccountType('CONTRATANTE')}
-            className={`bg-white rounded-lg p-4 md:p-6 shadow-md cursor-pointer transition-all hover:shadow-lg ${
-              selectedAccountType === 'CONTRATANTE' ? 'ring-2 ring-green-500 bg-green-50' : ''
-            }`}
-          >
-            <div className="flex flex-col md:flex-row items-center md:space-x-4 space-y-4 md:space-y-0">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                <svg viewBox="0 0 100 100" className="w-12 h-12">
-                  {/* Pessoa com camisa verde acenando */}
-                  <circle cx="50" cy="85" r="15" fill="#E8F5E8"/>
-                  <circle cx="50" cy="35" r="12" fill="#FFDBCB"/>
-                  <path d="M45 30 Q50 25 55 30" fill="#8B4513"/>
-                  <circle cx="47" cy="33" r="1" fill="#333"/>
-                  <circle cx="53" cy="33" r="1" fill="#333"/>
-                  <path d="M48 37 Q50 39 52 37" fill="none" stroke="#333" strokeWidth="1"/>
-                  <rect x="42" y="47" width="16" height="20" fill="#4CAF50"/>
-                  <rect x="35" y="52" width="8" height="12" fill="#FFDBCB"/>
-                  <rect x="57" y="52" width="8" height="12" fill="#FFDBCB"/>
-                  <circle cx="30" cy="45" r="3" fill="#FFDBCB"/>
-                  <rect x="42" y="67" width="6" height="15" fill="#333"/>
-                  <rect x="52" y="67" width="6" height="15" fill="#333"/>
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg md:text-xl font-bold text-gray-800 mb-2 text-center md:text-left">Contratante</h3>
-                <p className="text-sm md:text-base text-gray-600 text-center md:text-left">
-                  Quero contratar prestadores de serviço para minhas necessidades.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div
-            onClick={() => setSelectedAccountType('PRESTADOR')}
-            className={`bg-white rounded-lg p-4 md:p-6 shadow-md cursor-pointer transition-all hover:shadow-lg ${
-              selectedAccountType === 'PRESTADOR' ? 'ring-2 ring-green-500 bg-green-50' : ''
-            }`}
-          >
-            <div className="flex flex-col md:flex-row items-center md:space-x-4 space-y-4 md:space-y-0">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                <svg viewBox="0 0 100 100" className="w-12 h-12">
-                  {/* Pessoa com camisa verde acenando */}
-                  <circle cx="50" cy="85" r="15" fill="#E8F5E8"/>
-                  <circle cx="50" cy="35" r="12" fill="#FFDBCB"/>
-                  <path d="M45 30 Q50 25 55 30" fill="#8B4513"/>
-                  <circle cx="47" cy="33" r="1" fill="#333"/>
-                  <circle cx="53" cy="33" r="1" fill="#333"/>
-                  <path d="M48 37 Q50 39 52 37" fill="none" stroke="#333" strokeWidth="1"/>
-                  <rect x="42" y="47" width="16" height="20" fill="#4CAF50"/>
-                  <rect x="35" y="52" width="8" height="12" fill="#FFDBCB"/>
-                  <rect x="57" y="52" width="8" height="12" fill="#FFDBCB"/>
-                  <circle cx="30" cy="45" r="3" fill="#FFDBCB"/>
-                  <rect x="42" y="67" width="6" height="15" fill="#333"/>
-                  <rect x="52" y="67" width="6" height="15" fill="#333"/>
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-lg md:text-xl font-bold text-gray-800 mb-2 text-center md:text-left">Prestador de Serviço</h3>
-                <p className="text-sm md:text-base text-gray-600 text-center md:text-left">
-                  Quero oferecer meus serviços e encontrar clientes.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 md:p-8">
-          <button
-            onClick={handleAccountTypeSubmit}
-            disabled={!selectedAccountType || isLoading}
-            className="w-full bg-green-500 text-white py-3 md:py-4 rounded-full text-base md:text-lg font-semibold hover:bg-green-600 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-          >
-            {isLoading ? 'Processando...' : 'Entrar'}
-          </button>
-        </div>
-      </div>
+      <AccountTypeScreen
+        selectedAccountType={selectedAccountType}
+        setSelectedAccountType={setSelectedAccountType}
+        onBack={() => handleScreenTransition('cadastro')}
+        onSubmit={handleAccountTypeSubmit}
+        isLoading={isLoading}
+        isTransitioning={isTransitioning}
+      />
     )
   }
 
@@ -7222,239 +8059,10 @@ const handleServiceCreate = async () => {
   // Landing Page Screen
   if (currentScreen === 'landing') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 overflow-hidden relative">
-        {/* Grid pattern background */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(34,197,94,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(34,197,94,0.05)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
-        
-        {/* Gradient overlays */}
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-green-500/20 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[100px]"></div>
-
-        <div className="relative z-10 min-h-screen flex">
-          {/* Left side - Content */}
-          <div className="flex-1 flex flex-col justify-center px-8 md:px-16 lg:px-24">
-            {/* Logo with dots */}
-            <div className="mb-8 animate-fade-in-down">
-              <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-white">
-                  Facilita
-                </h1>
-                <div className="grid grid-cols-4 gap-1">
-                  {[...Array(12)].map((_, i) => (
-                    <div 
-                      key={i} 
-                      className="w-2 h-2 rounded-full bg-green-500"
-                      style={{
-                        animation: `pulse 2s ease-in-out infinite`,
-                        animationDelay: `${i * 0.1}s`
-                      }}
-                    ></div>
-                  ))}
-                </div>
-              </div>
-              <p className="text-gray-400 text-lg">Delivery & Services</p>
-            </div>
-
-            {/* Main heading */}
-            <div className="mb-8 animate-fade-in-up">
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4">
-                Serviços de Entrega
-              </h2>
-              <h3 className="text-4xl md:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">
-                Acessíveis para Todos
-              </h3>
-            </div>
-
-            {/* Description */}
-            <div className="mb-8 animate-fade-in-up delay-200">
-              <p className="text-gray-300 text-lg md:text-xl leading-relaxed mb-4">
-                Plataforma inclusiva de entregas e serviços pensada especialmente para <span className="text-green-400 font-semibold">pessoas com deficiência</span>, <span className="text-green-400 font-semibold">idosos</span> e todos que precisam de mais comodidade no dia a dia.
-              </p>
-              <p className="text-gray-400 text-base md:text-lg">
-                Facilitamos sua vida com entregas de farmácia, mercado, correios e muito mais, tudo no conforto da sua casa.
-              </p>
-            </div>
-
-            {/* Features badges */}
-            <div className="grid grid-cols-2 gap-4 mb-12 animate-fade-in-up delay-300">
-              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                  <Users className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="text-white font-semibold text-sm">Inclusivo</div>
-                  <div className="text-gray-400 text-xs">Para todos</div>
-                </div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                  <Home className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="text-white font-semibold text-sm">Conforto</div>
-                  <div className="text-gray-400 text-xs">Em casa</div>
-                </div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center">
-                  <Shield className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="text-white font-semibold text-sm">Seguro</div>
-                  <div className="text-gray-400 text-xs">Confiável</div>
-                </div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-3 flex items-center gap-3">
-                <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="text-white font-semibold text-sm">Rápido</div>
-                  <div className="text-gray-400 text-xs">Ágil</div>
-                </div>
-              </div>
-            </div>
-
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 animate-fade-in-up delay-400">
-              <button
-                onClick={() => handleScreenTransition('login')}
-                className="bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-lg font-bold text-lg shadow-lg hover:shadow-green-500/50 transform hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
-              >
-                <LogIn className="w-5 h-5" />
-                Entrar
-              </button>
-              
-              <button
-                onClick={() => handleScreenTransition('cadastro')}
-                className="bg-white/10 hover:bg-white/20 backdrop-blur-sm border-2 border-white/30 text-white px-8 py-4 rounded-lg font-bold text-lg shadow-lg transform hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
-              >
-                <UserPlus className="w-5 h-5" />
-                Cadastrar
-              </button>
-            </div>
-          </div>
-
-          {/* Right side - Preview mockup */}
-          <div className="hidden lg:flex flex-1 items-center justify-center p-8 animate-fade-in-right">
-            <div className="relative">
-              {/* Browser mockup */}
-              <div className="bg-gray-800/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden transform rotate-3 hover:rotate-0 transition-transform duration-500">
-                {/* Browser header */}
-                <div className="bg-gray-900/80 px-4 py-3 flex items-center gap-2 border-b border-white/10">
-                  <div className="flex gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                  </div>
-                  <div className="flex-1 bg-gray-800/50 rounded px-3 py-1 text-xs text-gray-400 ml-4">
-                    facilita.app
-                  </div>
-                </div>
-                
-                {/* Content preview */}
-                <div className="p-8 bg-gradient-to-br from-green-500/20 to-blue-500/20">
-                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 mb-4">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Package className="w-8 h-8 text-green-400" />
-                      <div className="h-4 bg-white/20 rounded w-32"></div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="h-3 bg-white/10 rounded w-full"></div>
-                      <div className="h-3 bg-white/10 rounded w-3/4"></div>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                      <Truck className="w-6 h-6 text-blue-400 mb-2" />
-                      <div className="h-2 bg-white/20 rounded w-16"></div>
-                    </div>
-                    <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-                      <Shield className="w-6 h-6 text-green-400 mb-2" />
-                      <div className="h-2 bg-white/20 rounded w-16"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Floating elements */}
-              <div className="absolute -top-8 -right-8 w-20 h-20 bg-green-500/30 rounded-full blur-xl animate-pulse"></div>
-              <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-blue-500/30 rounded-full blur-xl animate-pulse delay-1000"></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Animações CSS */}
-        <style>{`
-          @keyframes fade-in-down {
-            from {
-              opacity: 0;
-              transform: translateY(-20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-          
-          @keyframes fade-in-up {
-            from {
-              opacity: 0;
-              transform: translateY(20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-          
-          @keyframes fade-in-right {
-            from {
-              opacity: 0;
-              transform: translateX(40px);
-            }
-            to {
-              opacity: 1;
-              transform: translateX(0);
-            }
-          }
-          
-          .animate-fade-in-down {
-            animation: fade-in-down 0.8s ease-out;
-          }
-          
-          .animate-fade-in-up {
-            animation: fade-in-up 0.8s ease-out;
-          }
-          
-          .animate-fade-in-right {
-            animation: fade-in-right 1s ease-out;
-          }
-          
-          .delay-200 {
-            animation-delay: 0.2s;
-            opacity: 0;
-            animation-fill-mode: forwards;
-          }
-          
-          .delay-300 {
-            animation-delay: 0.3s;
-            opacity: 0;
-            animation-fill-mode: forwards;
-          }
-          
-          .delay-400 {
-            animation-delay: 0.4s;
-            opacity: 0;
-            animation-fill-mode: forwards;
-          }
-          
-          .delay-1000 {
-            animation-delay: 1s;
-          }
-        `}</style>
-      </div>
+      <LandingScreen
+        onLogin={() => handleScreenTransition('login')}
+        onSignup={() => handleScreenTransition('cadastro')}
+      />
     )
   }
 

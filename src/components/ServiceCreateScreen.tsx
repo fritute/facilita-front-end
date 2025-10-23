@@ -1,5 +1,5 @@
 import React from 'react'
-import { ArrowLeft, MapPin, Home } from 'lucide-react'
+import { ArrowLeft, MapPin } from 'lucide-react'
 
 interface ServiceCreateScreenProps {
   userAddress: string
@@ -9,6 +9,7 @@ interface ServiceCreateScreenProps {
   selectedServiceType: string
   pickupLocation: { address: string; lat: number; lng: number } | null
   deliveryLocation: { address: string; lat: number; lng: number } | null
+  stopPoints: Array<{ address: string; lat: number; lng: number; description: string }>
   predefinedServices: Array<{ id: string; name: string; icon: string }>
   serviceCategories: Array<any>
   loadingCategories: boolean
@@ -16,6 +17,8 @@ interface ServiceCreateScreenProps {
   onBack: () => void
   onSelectOrigin: () => void
   onSelectDestination: () => void
+  onAddStopPoint: () => void
+  onRemoveStopPoint: (index: number) => void
   onDescriptionChange: (value: string) => void
   onServiceTypeChange: (value: string) => void
   onCategorySelect: (categoryId: number) => void
@@ -32,6 +35,7 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
   selectedServiceType,
   pickupLocation,
   deliveryLocation,
+  stopPoints,
   predefinedServices,
   serviceCategories,
   loadingCategories,
@@ -39,6 +43,8 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
   onBack,
   onSelectOrigin,
   onSelectDestination,
+  onAddStopPoint,
+  onRemoveStopPoint,
   onDescriptionChange,
   onServiceTypeChange,
   onCategorySelect,
@@ -58,28 +64,37 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
       </div>
 
       <div className="max-w-4xl mx-auto p-4 md:p-6">
-        <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            Descreva o que você precisa e<br />
-            escolha como deseja receber
-          </h2>
-        </div>
-
-        {/* Endereço do usuário */}
+        {/* Localização Padrão do Usuário */}
         {userAddress && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div className="flex items-start">
-              <Home className="w-5 h-5 text-green-500 mr-3 mt-1" />
+          <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-lg p-4 mb-4 text-white">
+            <div className="flex items-center">
+              <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center mr-4">
+                <MapPin className="w-6 h-6 text-white" />
+              </div>
               <div className="flex-1">
-                <p className="font-semibold text-gray-800 mb-1">Seu endereço</p>
-                <p className="text-gray-600 text-sm">{userAddress}</p>
-                <p className="text-xs text-gray-500 mt-2">
-                  Este será usado como endereço de entrega padrão
-                </p>
+                <p className="text-sm font-medium opacity-90 mb-1">📍 Localização Padrão</p>
+                <p className="font-semibold text-lg">{userAddress}</p>
               </div>
             </div>
           </div>
         )}
+
+        {/* Serviço Selecionado */}
+        {selectedServiceType && (
+          <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-center">
+              <div className="bg-blue-500 text-white px-4 py-2 rounded-full font-semibold text-lg">
+                ✓ {selectedServiceType} Selecionado
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            Descreva o que você precisa
+          </h2>
+        </div>
 
         {/* Seleção de origem e destino */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -104,6 +119,48 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
               </button>
             </div>
             
+            
+            {/* Paradas intermediárias */}
+            {stopPoints.length > 0 && (
+              <div className="border-t pt-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Paradas no caminho:</p>
+                {stopPoints.map((stop, index) => (
+                  <div key={index} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-yellow-50 p-3 rounded-lg">
+                    <div className="flex items-center flex-1 min-w-0">
+                      <MapPin className="w-5 h-5 text-yellow-600 mr-2 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">Parada {index + 1}</p>
+                        <p className="text-gray-600 text-xs truncate">{stop.address}</p>
+                        {stop.description && (
+                          <p className="text-gray-500 text-xs mt-1">{stop.description}</p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onRemoveStopPoint(index)}
+                      className="bg-red-500 text-white px-3 py-1 rounded-lg text-xs hover:bg-red-600 transition-colors whitespace-nowrap flex-shrink-0"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Botão adicionar parada */}
+            <div className="border-t pt-4">
+              <button
+                onClick={onAddStopPoint}
+                className="w-full bg-yellow-100 text-yellow-700 px-4 py-3 rounded-lg text-sm font-semibold hover:bg-yellow-200 transition-colors flex items-center justify-center gap-2 border-2 border-dashed border-yellow-300"
+              >
+                <MapPin className="w-4 h-4" />
+                Adicionar Parada no Caminho
+              </button>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Adicione pontos de parada entre a origem e o destino
+              </p>
+            </div>
+
             <div className="border-t pt-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center flex-1 min-w-0">
@@ -136,13 +193,18 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
                 <span className="text-white text-sm">✏️</span>
               </div>
               <div className="flex-1">
-                <p className="font-medium mb-2">Preciso que alguém me acompanhe até o hospital</p>
+                <label className="font-medium mb-2 block text-gray-800">
+                  Descreva o que você precisa
+                </label>
                 <textarea
                   value={serviceDescription}
                   onChange={(e) => onDescriptionChange(e.target.value)}
-                  placeholder="Descreva detalhadamente o que você precisa..."
-                  className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="Exemplo: Preciso buscar 2 caixas de remédio na farmácia São João. São remédios controlados, então preciso que o entregador leve minha receita médica."
+                  className="w-full p-3 border border-gray-300 rounded-lg resize-none h-32 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                 />
+                <p className="text-xs text-gray-500 mt-2">
+                  💡 Dica: Seja específico sobre quantidades, itens, horários ou instruções especiais
+                </p>
               </div>
             </div>
           </div>

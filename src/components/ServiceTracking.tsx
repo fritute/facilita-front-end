@@ -477,6 +477,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
         onClose={() => setIsChatOpen(false)}
         driverName={entregador.nome}
         driverPhone={entregador.telefone}
+        serviceId={savedState?.serviceId ? parseInt(savedState.serviceId) : undefined}
       />
     </div>
   );

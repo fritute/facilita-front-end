@@ -1,12 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Phone, Video, Send, Mic, MicOff, VideoOff, ExternalLink } from 'lucide-react'
+import { X, Phone, Video, Send, Mic, MicOff, VideoOff, ExternalLink, Image as ImageIcon } from 'lucide-react'
 import videoCallService, { VideoCallRoom } from '../services/videoCallService'
 
 interface Message {
-  id: string
-  text: string
-  sender: 'user' | 'driver'
-  timestamp: Date
+  id: number
+  id_servico: number
+  id_contratante: number
+  id_prestador: number
+  mensagem: string
+  tipo: 'texto' | 'imagem'
+  url_anexo: string | null
+  enviado_por: 'contratante' | 'prestador'
+  lida: boolean
+  data_envio: string
+  contratante?: {
+    id: number
+    usuario: {
+      id: number
+      nome: string
+      foto_perfil: string | null
+    }
+  }
+  prestador?: {
+    id: number
+    usuario: {
+      id: number
+      nome: string
+      foto_perfil: string | null
+    }
+  }
 }
 
 interface ChatModalProps {
@@ -14,24 +36,16 @@ interface ChatModalProps {
   onClose: () => void
   driverName: string
   driverPhone: string
+  serviceId?: number // ID do serviço para buscar mensagens
 }
 
-const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driverPhone }) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Olá! Estou a caminho do local de coleta.',
-      sender: 'driver',
-      timestamp: new Date(Date.now() - 300000) // 5 minutos atrás
-    },
-    {
-      id: '2', 
-      text: 'Oi! Obrigado pelo contato. Estarei esperando.',
-      sender: 'user',
-      timestamp: new Date(Date.now() - 240000) // 4 minutos atrás
-    }
-  ])
+const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driverPhone, serviceId }) => {
+  const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false)
+  const [isSendingMessage, setIsSendingMessage] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isInCall, setIsInCall] = useState(false)
   const [isVideoCall, setIsVideoCall] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
@@ -49,6 +63,91 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Buscar mensagens quando o modal abrir
+  useEffect(() => {
+    if (isOpen && serviceId) {
+      fetchMessages()
+      // Polling a cada 5 segundos para buscar novas mensagens
+      const interval = setInterval(() => {
+        fetchMessages()
+      }, 5000)
+      
+      return () => clearInterval(interval)
+    }
+  }, [isOpen, serviceId])
+
+  // Função para buscar mensagens da API
+  const fetchMessages = async () => {
+    if (!serviceId) return
+    
+    try {
+      setIsLoadingMessages(true)
+      const token = localStorage.getItem('authToken')
+      
+      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/chat/${serviceId}/mensagens`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.mensagens) {
+          setMessages(data.mensagens)
+          // Marcar mensagens como lidas
+          await markMessagesAsRead()
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar mensagens:', error)
+    } finally {
+      setIsLoadingMessages(false)
+    }
+  }
+
+  // Função para marcar mensagens como lidas
+  const markMessagesAsRead = async () => {
+    if (!serviceId) return
+    
+    try {
+      const token = localStorage.getItem('authToken')
+      
+      await fetch(`https://servidor-facilita.onrender.com/v1/facilita/chat/${serviceId}/marcar-lidas`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+    } catch (error) {
+      console.error('Erro ao marcar mensagens como lidas:', error)
+    }
+  }
+
+  // Função para fazer upload de imagem
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB
+        alert('Imagem muito grande. Máximo 5MB')
+        return
+      }
+      setSelectedImage(file)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  // Função para remover imagem selecionada
+  const removeSelectedImage = () => {
+    setSelectedImage(null)
+    setImagePreview(null)
+  }
 
   // Conectar stream ao vídeo quando disponível
   useEffect(() => {
@@ -77,27 +176,55 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
     }
   }, [localStream])
 
-  const sendMessage = () => {
-    if (newMessage.trim()) {
-      const message: Message = {
-        id: Date.now().toString(),
-        text: newMessage,
-        sender: 'user',
-        timestamp: new Date()
-      }
-      setMessages([...messages, message])
-      setNewMessage('')
+  const sendMessage = async () => {
+    if (!serviceId || (!newMessage.trim() && !selectedImage)) return
+    
+    try {
+      setIsSendingMessage(true)
+      const token = localStorage.getItem('authToken')
       
-      // Simular resposta automática do motorista
-      setTimeout(() => {
-        const driverResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          text: 'Recebido! Qualquer coisa me avise.',
-          sender: 'driver',
-          timestamp: new Date()
+      let imageUrl = null
+      
+      // Se houver imagem, fazer upload primeiro (implementar conforme sua API)
+      if (selectedImage) {
+        // TODO: Implementar upload de imagem para seu servidor
+        // Por enquanto, usar base64 ou URL temporária
+        imageUrl = imagePreview
+      }
+      
+      const messageData = {
+        mensagem: newMessage.trim() || 'Imagem enviada',
+        tipo: selectedImage ? 'imagem' : 'texto',
+        url_anexo: imageUrl || ''
+      }
+
+      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/chat/${serviceId}/mensagem`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(messageData)
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.mensagem) {
+          // Adicionar mensagem à lista
+          setMessages(prev => [...prev, data.mensagem])
         }
-        setMessages(prev => [...prev, driverResponse])
-      }, 2000)
+        setNewMessage('')
+        removeSelectedImage()
+        // Atualizar lista de mensagens
+        await fetchMessages()
+      } else {
+        alert('Erro ao enviar mensagem')
+      }
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error)
+      alert('Erro ao enviar mensagem')
+    } finally {
+      setIsSendingMessage(false)
     }
   }
 
@@ -144,14 +271,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
       
       console.log('Videochamada iniciada:', room.url)
       
-      // Enviar link para o prestador via chat
-      const linkMessage: Message = {
-        id: Date.now().toString(),
-        text: `📹 Videochamada iniciada! Link: ${room.url}`,
-        sender: 'user',
-        timestamp: new Date()
-      }
-      setMessages(prev => [...prev, linkMessage])
+      // Link será compartilhado através do chat normal se necessário
       
     } catch (error) {
       console.error('Erro ao iniciar videochamada:', error)
@@ -185,11 +305,22 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
     }
   }
 
-  const formatTime = (date: Date) => {
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
     return date.toLocaleTimeString('pt-BR', { 
       hour: '2-digit', 
       minute: '2-digit' 
     })
+  }
+
+  // Determinar se a mensagem foi enviada pelo usuário atual
+  const isMyMessage = (message: Message) => {
+    const userType = localStorage.getItem('userType') // 'CONTRATANTE' ou 'PRESTADOR'
+    if (userType === 'CONTRATANTE') {
+      return message.enviado_por === 'contratante'
+    } else {
+      return message.enviado_por === 'prestador'
+    }
   }
 
   if (!isOpen) return null
@@ -310,46 +441,103 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
         {!isInCall && (
           <>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                      message.sender === 'user'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-gray-200 text-gray-800'
-                    }`}
-                  >
-                    <p className="text-sm">{message.text}</p>
-                    <p className={`text-xs mt-1 ${
-                      message.sender === 'user' ? 'text-green-100' : 'text-gray-500'
-                    }`}>
-                      {formatTime(message.timestamp)}
-                    </p>
-                  </div>
+              {isLoadingMessages && messages.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-gray-500">Carregando mensagens...</p>
                 </div>
-              ))}
+              ) : messages.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-gray-500">Nenhuma mensagem ainda. Inicie a conversa!</p>
+                </div>
+              ) : (
+                messages.map((message) => {
+                  const isMine = isMyMessage(message)
+                  return (
+                    <div
+                      key={message.id}
+                      className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                          isMine
+                            ? 'bg-green-500 text-white'
+                            : 'bg-gray-200 text-gray-800'
+                        }`}
+                      >
+                        {message.tipo === 'imagem' && message.url_anexo && (
+                          <img 
+                            src={message.url_anexo} 
+                            alt="Imagem enviada" 
+                            className="rounded-lg mb-2 max-w-full"
+                          />
+                        )}
+                        <p className="text-sm">{message.mensagem}</p>
+                        <div className="flex items-center justify-between mt-1">
+                          <p className={`text-xs ${
+                            isMine ? 'text-green-100' : 'text-gray-500'
+                          }`}>
+                            {formatTime(message.data_envio)}
+                          </p>
+                          {isMine && (
+                            <span className="text-xs ml-2">
+                              {message.lida ? '✓✓' : '✓'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* Image Preview */}
+            {imagePreview && (
+              <div className="px-4 py-2 border-t bg-gray-50">
+                <div className="relative inline-block">
+                  <img src={imagePreview} alt="Preview" className="h-20 rounded-lg" />
+                  <button
+                    onClick={removeSelectedImage}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Message Input */}
             <div className="p-4 border-t">
               <div className="flex space-x-2">
+                <label className="cursor-pointer flex items-center justify-center px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                  <ImageIcon className="w-5 h-5 text-gray-600" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                </label>
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  onKeyPress={(e) => e.key === 'Enter' && !isSendingMessage && sendMessage()}
                   placeholder="Digite sua mensagem..."
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  disabled={isSendingMessage}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-100"
                 />
                 <button
                   onClick={sendMessage}
-                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  disabled={isSendingMessage || (!newMessage.trim() && !selectedImage)}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
-                  <Send className="w-5 h-5" />
+                  {isSendingMessage ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>

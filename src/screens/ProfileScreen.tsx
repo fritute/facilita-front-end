@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ArrowLeft, Bell, User, Camera, Lock, LogOut, Edit2, Check, X } from 'lucide-react'
+import { ArrowLeft, Bell, User, Camera, Lock, LogOut, Edit2, Check, X, Trash2 } from 'lucide-react'
 
 interface ProfileScreenProps {
   userName: string
@@ -12,6 +12,7 @@ interface ProfileScreenProps {
   onPhotoChange: (file: File) => void
   onChangePassword: () => void
   onLogout: () => void
+  onDeleteAccount: () => void
   onUpdateProfile: (name: string, email: string) => Promise<void>
   onToggleNotifications: (enabled: boolean) => void
   isDarkMode?: boolean
@@ -29,6 +30,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onPhotoChange,
   onChangePassword,
   onLogout,
+  onDeleteAccount,
   onUpdateProfile,
   onToggleNotifications,
   isDarkMode = false,
@@ -323,6 +325,25 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </div>
             <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+
+          {/* Deletar Conta */}
+          <button 
+            onClick={onDeleteAccount}
+            className="w-full flex items-center justify-between py-3 px-4 bg-gray-50 hover:bg-gray-100 border-2 border-red-200 hover:border-red-300 rounded-lg transition-all duration-200 transform hover:scale-[1.01] hover:shadow-md"
+          >
+            <div className="flex items-center">
+              <div className="w-8 h-8 bg-red-50 rounded-full flex items-center justify-center mr-3">
+                <Trash2 className="w-4 h-4 text-red-600" />
+              </div>
+              <div className="text-left">
+                <span className="font-medium text-red-800 block">Deletar Conta</span>
+                <span className="text-xs text-red-600">Esta ação é irreversível</span>
+              </div>
+            </div>
+            <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
         </div>

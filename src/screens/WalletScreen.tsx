@@ -21,6 +21,7 @@ interface WalletScreenProps {
   onCreateWallet: () => void
   walletData: any
   onRecharge: () => void
+  onWithdraw: () => void
   transactions: any[]
   loadingTransactions: boolean
   isDarkMode?: boolean
@@ -39,6 +40,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
   onCreateWallet,
   walletData,
   onRecharge,
+  onWithdraw,
   transactions: apiTransactions,
   loadingTransactions,
   isDarkMode = false,
@@ -277,7 +279,10 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
           >
             Adicionar saldo
           </button>
-          <button className="bg-green-600 text-white text-sm py-2.5 px-6 rounded-full font-medium hover:bg-green-700 transition-colors shadow-md">
+          <button 
+            onClick={onWithdraw}
+            className="bg-green-600 text-white text-sm py-2.5 px-6 rounded-full font-medium hover:bg-green-700 transition-colors shadow-md"
+          >
             Sacar
           </button>
         </div>
