@@ -28,23 +28,34 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   onForgotPassword,
   onGoToSignup
 }) => {
+  // Garantir que não haja scroll na página
+  React.useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+    
+    return () => {
+      document.body.style.overflow = ''
+      document.documentElement.style.overflow = ''
+    }
+  }, [])
+
   return (
-    <div className="min-h-screen bg-black overflow-hidden relative flex items-center justify-center p-4">
+    <div className="h-screen w-screen bg-black overflow-hidden fixed top-0 left-0 flex items-center justify-center p-4">
       {/* Animated background */}
       <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-green-900/50 to-black animate-gradient-shift"></div>
       
       {/* Matrix-style grid */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(34,197,94,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(34,197,94,0.1)_1px,transparent_1px)] bg-[size:30px_30px] animate-pulse-slow"></div>
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(34,197,94,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(34,197,94,0.1)_1px,transparent_1px)] bg-[size:30px_30px] md:bg-[size:40px_40px] lg:bg-[size:50px_50px] xl:bg-[size:60px_60px] animate-pulse-slow"></div>
       
-      {/* Floating particles */}
-      <div className="absolute inset-0">
+      {/* Floating particles - limitado à área visível */}
+      <div className="absolute inset-0 overflow-hidden">
         {[...Array(20)].map((_, i) => (
           <div
             key={i}
-            className="absolute w-1 h-1 bg-green-400 rounded-full animate-float"
+            className="absolute w-1 h-1 md:w-1.5 md:h-1.5 lg:w-2 lg:h-2 bg-green-400 rounded-full animate-float"
             style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
+              left: `${10 + Math.random() * 80}%`,
+              top: `${10 + Math.random() * 80}%`,
               animationDelay: `${Math.random() * 5}s`,
               animationDuration: `${3 + Math.random() * 4}s`
             }}
@@ -52,25 +63,23 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
         ))}
       </div>
       
-      {/* Neon gradient overlays */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-radial from-green-500/30 via-green-400/10 to-transparent rounded-full blur-[100px] animate-pulse-glow"></div>
-      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-gradient-radial from-cyan-500/20 via-blue-400/10 to-transparent rounded-full blur-[80px] animate-pulse-glow-delayed"></div>
+      {/* Neon gradient overlays - limitados à área visível */}
+      <div className="absolute top-0 right-0 w-[300px] h-[300px] sm:w-[400px] sm:h-[400px] lg:w-[500px] lg:h-[500px] xl:w-[600px] xl:h-[600px] bg-gradient-radial from-green-500/30 via-green-400/10 to-transparent rounded-full blur-[80px] sm:blur-[100px] lg:blur-[120px] xl:blur-[140px] animate-pulse-glow -mr-[150px] -mt-[150px] sm:-mr-[200px] sm:-mt-[200px] lg:-mr-[250px] lg:-mt-[250px] xl:-mr-[300px] xl:-mt-[300px]"></div>
+      <div className="absolute bottom-0 left-0 w-[250px] h-[250px] sm:w-[350px] sm:h-[350px] lg:w-[450px] lg:h-[450px] xl:w-[550px] xl:h-[550px] bg-gradient-radial from-cyan-500/20 via-blue-400/10 to-transparent rounded-full blur-[60px] sm:blur-[80px] lg:blur-[100px] xl:blur-[120px] animate-pulse-glow-delayed -ml-[125px] -mb-[125px] sm:-ml-[175px] sm:-mb-[175px] lg:-ml-[225px] lg:-mb-[225px] xl:-ml-[275px] xl:-mb-[275px]"></div>
       
-      {/* Scanning lines */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-green-500/5 to-transparent h-2 animate-scan"></div>
-
-      <div className="relative z-10 bg-gradient-to-br from-white/5 via-green-500/5 to-white/5 backdrop-blur-2xl border border-green-400/30 rounded-3xl shadow-[0_0_50px_rgba(34,197,94,0.3)] w-full max-w-md p-8 animate-fade-in-up hover:shadow-[0_0_80px_rgba(34,197,94,0.5)] transition-all duration-500">
-        <div className="text-center mb-8">
+      {/* Container principal fixo sem rolagem */}
+      <div className="relative z-10 bg-gradient-to-br from-white/5 via-green-500/5 to-white/5 backdrop-blur-2xl border border-green-400/30 rounded-3xl shadow-[0_0_50px_rgba(34,197,94,0.3)] w-full max-w-md lg:max-w-lg xl:max-w-xl 2xl:max-w-2xl p-6 sm:p-8 lg:p-10 xl:p-12 animate-fade-in-up hover:shadow-[0_0_80px_rgba(34,197,94,0.5)] transition-all duration-500 mx-4">
+        <div className="text-center mb-6 sm:mb-8 lg:mb-10">
           {/* Logo futurístico */}
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-green-400 via-cyan-400 to-green-400 bg-clip-text text-transparent animate-text-glow">
+          <div className="flex items-center justify-center gap-2 sm:gap-3 lg:gap-4 mb-3 sm:mb-4 lg:mb-5">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold bg-gradient-to-r from-green-400 via-cyan-400 to-green-400 bg-clip-text text-transparent animate-text-glow">
               FACILITA
             </h1>
-            <div className="grid grid-cols-4 gap-1">
+            <div className="grid grid-cols-4 gap-1 lg:gap-1.5">
               {[...Array(16)].map((_, i) => (
                 <div 
                   key={i} 
-                  className="w-1 h-1 rounded-full bg-gradient-to-r from-green-400 to-cyan-400 shadow-[0_0_10px_rgba(34,197,94,0.8)]"
+                  className="w-1 h-1 lg:w-1.5 lg:h-1.5 xl:w-2 xl:h-2 rounded-full bg-gradient-to-r from-green-400 to-cyan-400 shadow-[0_0_10px_rgba(34,197,94,0.8)]"
                   style={{
                     animation: `matrix-pulse 1.5s ease-in-out infinite`,
                     animationDelay: `${i * 0.05}s`
@@ -81,9 +90,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
           
           {/* Linha de energia */}
-          <div className="w-full h-px bg-gradient-to-r from-transparent via-green-400 to-transparent mb-4 animate-energy-flow"></div>
-          <h2 className="text-2xl font-bold text-white mb-2 animate-text-flicker">ACESSO AUTORIZADO - SISTEMA FACILITA</h2>
-          <p className="text-green-300 font-mono text-sm tracking-wider animate-typing">Iniciando protocolo de autenticação...</p>
+          <div className="w-full h-px bg-gradient-to-r from-transparent via-green-400 to-transparent mb-3 sm:mb-4 lg:mb-5 animate-energy-flow"></div>
+          <h2 className="text-lg sm:text-2xl lg:text-3xl xl:text-4xl font-bold text-white mb-2 lg:mb-3 animate-text-flicker">ACESSO AUTORIZADO</h2>
+          <p className="text-green-300 font-mono text-xs sm:text-sm lg:text-base xl:text-lg tracking-wider animate-typing">Iniciando protocolo de autenticação...</p>
         </div>
 
         {loginError && (
@@ -92,39 +101,39 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
         )}
 
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 lg:space-y-7">
           <div>
-            <label className="block text-white text-sm font-medium mb-2">E-mail</label>
+            <label className="block text-white text-xs sm:text-sm lg:text-base font-medium mb-2">E-mail</label>
             <div className="relative group">
-              <Mail className="absolute left-3 top-3 w-5 h-5 text-green-400 group-focus-within:text-cyan-400 transition-colors duration-300" />
+              <Mail className="absolute left-3 top-2.5 sm:top-3 lg:top-3.5 w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-green-400 group-focus-within:text-cyan-400 transition-colors duration-300" />
               <input
                 type="email"
                 value={loginEmail}
                 onChange={(e) => onEmailChange(e.target.value)}
                 placeholder="usuario@facilita.net"
-                className="w-full pl-10 pr-4 py-3 bg-black/30 backdrop-blur-sm border border-green-400/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:shadow-[0_0_20px_rgba(34,197,94,0.3)] text-white placeholder-green-300/50 transition-all duration-300 font-mono"
+                className="w-full pl-9 sm:pl-10 lg:pl-12 pr-4 py-2.5 sm:py-3 lg:py-4 bg-black/30 backdrop-blur-sm border border-green-400/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:shadow-[0_0_20px_rgba(34,197,94,0.3)] text-white placeholder-green-300/50 transition-all duration-300 font-mono text-sm lg:text-base"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-green-400/10 to-cyan-400/10 rounded-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
             </div>
           </div>
 
           <div>
-            <label className="block text-white text-sm font-medium mb-2">Senha</label>
+            <label className="block text-white text-xs sm:text-sm lg:text-base font-medium mb-2">Senha</label>
             <div className="relative group">
-              <Lock className="absolute left-3 top-3 w-5 h-5 text-green-400 group-focus-within:text-cyan-400 transition-colors duration-300" />
+              <Lock className="absolute left-3 top-2.5 sm:top-3 lg:top-3.5 w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-green-400 group-focus-within:text-cyan-400 transition-colors duration-300" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={loginPassword}
                 onChange={(e) => onPasswordChange(e.target.value)}
                 placeholder="••••••••••••"
-                className="w-full pl-10 pr-12 py-3 bg-black/30 backdrop-blur-sm border border-green-400/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:shadow-[0_0_20px_rgba(34,197,94,0.3)] text-white placeholder-green-300/50 transition-all duration-300 font-mono"
+                className="w-full pl-9 sm:pl-10 lg:pl-12 pr-11 sm:pr-12 lg:pr-14 py-2.5 sm:py-3 lg:py-4 bg-black/30 backdrop-blur-sm border border-green-400/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:shadow-[0_0_20px_rgba(34,197,94,0.3)] text-white placeholder-green-300/50 transition-all duration-300 font-mono text-sm lg:text-base"
               />
               <button
                 type="button"
                 onClick={onTogglePassword}
-                className="absolute right-3 top-3 text-green-400 hover:text-cyan-400 transition-colors duration-200 hover:scale-110 transform"
+                className="absolute right-3 top-2.5 sm:top-3 lg:top-3.5 text-green-400 hover:text-cyan-400 transition-colors duration-200 hover:scale-110 transform"
               >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                {showPassword ? <EyeOff className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" /> : <Eye className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />}
               </button>
               <div className="absolute inset-0 bg-gradient-to-r from-green-400/10 to-cyan-400/10 rounded-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
             </div>
@@ -132,7 +141,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
           <button
             onClick={onForgotPassword}
-            className="text-sm text-green-400 hover:text-cyan-400 font-mono tracking-wider transition-all duration-200 hover:scale-105 transform"
+            className="text-xs sm:text-sm lg:text-base text-green-400 hover:text-cyan-400 font-mono tracking-wider transition-all duration-200 hover:scale-105 transform"
           >
             {'>'} RECUPERAR_ACESSO.exe
           </button>
@@ -140,17 +149,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           <button
             onClick={onLogin}
             disabled={isLoading}
-            className="w-full bg-gradient-to-r from-green-500 via-green-400 to-cyan-500 hover:from-green-400 hover:via-cyan-400 hover:to-green-500 text-black py-4 rounded-xl font-bold text-lg shadow-[0_0_30px_rgba(34,197,94,0.5)] hover:shadow-[0_0_50px_rgba(34,197,94,0.8)] transform hover:scale-105 transition-all duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 font-mono tracking-wider animate-button-glow"
+            className="w-full bg-gradient-to-r from-green-500 via-green-400 to-cyan-500 hover:from-green-400 hover:via-cyan-400 hover:to-green-500 text-black py-3 sm:py-4 lg:py-5 rounded-xl font-bold text-base sm:text-lg lg:text-xl shadow-[0_0_30px_rgba(34,197,94,0.5)] hover:shadow-[0_0_50px_rgba(34,197,94,0.8)] transform hover:scale-105 transition-all duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 lg:gap-3 font-mono tracking-wider animate-button-glow"
           >
-            <LogIn className="w-5 h-5" />
+            <LogIn className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
             {isLoading ? '>>> PROCESSANDO...' : '>>> INICIAR_SESSÃO'}
           </button>
 
           <div className="text-center">
-            <span className="text-gray-400 font-mono text-sm">NOVO_USUÁRIO? </span>
+            <span className="text-gray-400 font-mono text-xs sm:text-sm lg:text-base">NOVO_USUÁRIO? </span>
             <button
               onClick={onGoToSignup}
-              className="text-green-400 hover:text-cyan-400 font-mono font-semibold transition-all duration-200 hover:scale-105 transform tracking-wider"
+              className="text-green-400 hover:text-cyan-400 font-mono font-semibold transition-all duration-200 hover:scale-105 transform tracking-wider text-xs sm:text-sm lg:text-base"
             >
               {'>'} CRIAR_CONTA.exe
             </button>
@@ -158,19 +167,24 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
         </div>
       </div>
 
-      {/* Holographic elements */}
-      <div className="absolute top-10 right-10 w-32 h-32 border border-green-400/30 rounded-full animate-spin-slow">
-        <div className="absolute inset-4 border border-cyan-400/20 rounded-full animate-spin-reverse"></div>
-      </div>
-      <div className="absolute bottom-10 left-10 w-24 h-24 border border-green-400/30 rounded-full animate-pulse-ring">
-        <div className="absolute inset-2 border border-cyan-400/20 rounded-full animate-pulse-ring-delayed"></div>
-      </div>
-      
-      {/* Corner decorations */}
-      <div className="absolute top-0 left-0 w-20 h-20 border-l-2 border-t-2 border-green-400/50 animate-corner-glow"></div>
-      <div className="absolute top-0 right-0 w-20 h-20 border-r-2 border-t-2 border-green-400/50 animate-corner-glow"></div>
-      <div className="absolute bottom-0 left-0 w-20 h-20 border-l-2 border-b-2 border-green-400/50 animate-corner-glow"></div>
-      <div className="absolute bottom-0 right-0 w-20 h-20 border-r-2 border-b-2 border-green-400/50 animate-corner-glow"></div>
+      {/* Removidos elementos decorativos que poderiam causar rolagem */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          html, body, #root { 
+            overflow: hidden; 
+            height: 100%;
+            margin: 0;
+            padding: 0;
+          }
+          * {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+          }
+          *::-webkit-scrollbar {
+            display: none;  /* Chrome, Safari and Opera */
+          }
+        `
+      }} />
 
       {/* Animações CSS Futurísticas */}
       <style>{`

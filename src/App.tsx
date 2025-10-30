@@ -11,6 +11,7 @@ import ServiceCreateScreen from './components/ServiceCreateScreen'
 import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen } from './screens'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 import { API_ENDPOINTS } from './config/constants'
+import { handDetectionService } from './services/handDetectionService'
 //TELAS PARA TESTES E PARA MOVER
 type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet"
 
@@ -201,6 +202,7 @@ function App() {
   // Refs para intervalos da câmera (evita recriação a cada render)
   const activeDetectionInterval = useRef<NodeJS.Timeout | null>(null)
   const activeStreamCheck = useRef<NodeJS.Timeout | null>(null)
+  const librasVideoRef = useRef<HTMLVideoElement | null>(null)
   
   // Estados para notificações
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
@@ -2640,11 +2642,11 @@ function App() {
     }))
   }
 
-  // Funções para acessibilidade Libras - VERSÃO SIMPLIFICADA E SEGURA
+  // Funções para acessibilidade Libras - COM DETECÇÃO REAL DE MÃOS
   const startLibrasCamera = async () => {
     try {
       setLibrasLoading(true)
-      console.log('📹 Iniciando câmera de acessibilidade (versão segura)...')
+      console.log('📹 Iniciando câmera de acessibilidade com detecção real...')
       
       // Limpar recursos anteriores
       if (librasCameraStream) {
@@ -2652,28 +2654,64 @@ function App() {
         setLibrasCameraStream(null)
       }
       
-      // Usar configurações mais conservadoras
+      // Inicializar MediaPipe Hands
+      await handDetectionService.initialize()
+      
+      // Configurar callback para resultados
+      let callbackCount = 0
+      handDetectionService.setOnResults((results: any) => {
+        callbackCount++
+        
+        if (callbackCount % 30 === 0) {
+          console.log('Callback executado', callbackCount, 'vezes')
+        }
+        
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          // Detectar gesto
+          const gesture = handDetectionService.detectGesture(results.multiHandLandmarks[0])
+          
+          // Mapear gestos para ações
+          const gestureMessages: Record<string, string> = {
+            'OPEN_HAND': '✋ Mão aberta detectada!',
+            'CLOSED_FIST': '✊ Punho fechado detectado!',
+            'THUMBS_UP': '👍 Joinha detectado!',
+            'PEACE': '✌️ Sinal de paz detectado!',
+            'OK': '👌 Sinal de OK detectado!',
+            'POINTING': '☝️ Apontando detectado!',
+            'UNKNOWN': '🤔 Gesto não reconhecido'
+          }
+          
+          const message = gestureMessages[gesture.type] || '🤔 Gesto não reconhecido'
+          setLibrasDetectedText(`${message} (${Math.round(gesture.confidence * 100)}% confiança)`)
+          
+          console.log('Gesto detectado:', gesture)
+        } else {
+          setLibrasDetectedText('👋 Mostre suas mãos para a câmera...')
+        }
+      })
+      
+      // Obter stream da câmera
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
-          width: { ideal: 240, max: 320 }, // Resolução muito baixa
-          height: { ideal: 180, max: 240 },
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
           facingMode: 'user',
-          frameRate: { ideal: 10, max: 15 } // FPS muito baixo
+          frameRate: { ideal: 30, max: 30 }
         } 
       })
       
-      console.log('✅ Stream obtido com sucesso (versão segura)')
+      console.log('✅ Stream obtido com sucesso')
       setLibrasCameraStream(stream)
       setIsLibrasActive(true)
-      setLibrasDetectedText('🎥 Câmera ativada! Modo demonstração.')
+      setLibrasDetectedText('🎥 Câmera ativada! Mostre suas mãos...')
       setLibrasLoading(false)
       
-      // Iniciar simulação simples sem intervalos pesados
+      // Iniciar detecção após vídeo estar pronto
       setTimeout(() => {
-        if (stream.active && isLibrasActive) {
-          initSimpleHandDetection()
+        if (stream.active && librasVideoRef.current) {
+          startHandDetectionLoop()
         }
-      }, 2000)
+      }, 1000)
       
     } catch (error) {
       console.error('Erro ao acessar câmera:', error)
@@ -2683,51 +2721,44 @@ function App() {
     }
   }
 
-  // Função simplificada para simular detecção
-  const initSimpleHandDetection = () => {
-    try {
-      console.log('🔍 Iniciando simulação de detecção...')
-      
-      const sinais = [
-        '👋 Olá! Bem-vindo ao Facilita',
-        '👍 Tudo certo! Sistema funcionando',
-        '✋ Aguarde um momento...',
-        '👌 Perfeito! Acessibilidade ativa',
-        '❤️ Obrigado por usar nosso app!'
-      ]
-      
-      let currentIndex = 0
-      
-      // Simulação muito simples - apenas muda texto a cada 4 segundos
-      const showNextSignal = () => {
-        if (isLibrasActive && currentIndex < sinais.length) {
-          setLibrasDetectedText(sinais[currentIndex])
-          currentIndex++
-          
-          if (currentIndex < sinais.length) {
-            setTimeout(showNextSignal, 4000) // 4 segundos entre cada sinal
-          } else {
-            // Reiniciar ciclo
-            setTimeout(() => {
-              currentIndex = 0
-              if (isLibrasActive) showNextSignal()
-            }, 6000)
-          }
-        }
+  // Função para iniciar loop de detecção de mãos
+  const startHandDetectionLoop = () => {
+    let frameCount = 0
+    
+    const detectHands = async () => {
+      if (!isLibrasActive || !librasVideoRef.current) {
+        console.log('Loop parado')
+        return
       }
       
-      // Iniciar simulação
-      setTimeout(showNextSignal, 3000)
+      frameCount++
+      if (frameCount % 30 === 0) {
+        console.log('Processando frame', frameCount)
+      }
       
-    } catch (error) {
-      console.error('Erro na simulação:', error)
-      setLibrasDetectedText('⚠️ Erro na simulação de detecção')
+      try {
+        await handDetectionService.processFrame(librasVideoRef.current)
+      } catch (error) {
+        console.error('Erro ao processar frame:', error)
+      }
+      
+      // Continuar loop se ainda estiver ativo
+      if (isLibrasActive) {
+        requestAnimationFrame(detectHands)
+      }
     }
+    
+    console.log('Iniciando detecção de mãos')
+    console.log('Video element:', librasVideoRef.current)
+    detectHands()
   }
 
   const stopLibrasCamera = () => {
     try {
       console.log('🛑 Parando câmera de acessibilidade...')
+      
+      // Parar detecção de mãos
+      handDetectionService.close()
       
       // Parar stream da câmera de forma segura
       if (librasCameraStream) {
@@ -2756,6 +2787,14 @@ function App() {
       setLibrasCameraStream(null)
     }
   }
+
+  // useEffect para gerenciar o stream de vídeo sem causar re-renderizações
+  useEffect(() => {
+    if (librasVideoRef.current && librasCameraStream) {
+      librasVideoRef.current.srcObject = librasCameraStream
+      librasVideoRef.current.play().catch(console.error)
+    }
+  }, [librasCameraStream])
 
   const handleScreenTransition = (newScreen: Screen) => {
     setIsTransitioning(true)
@@ -8888,12 +8927,12 @@ const handleServiceCreate = async () => {
 
           {/* Modal de Câmera Libras */}
           {isLibrasActive && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full p-6 relative">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full p-4 sm:p-6 relative my-4">
                 {/* Botão fechar */}
                 <button
                   onClick={stopLibrasCamera}
-                  className="absolute top-4 right-4 p-2 bg-red-500 hover:bg-red-600 rounded-full text-white transition-colors"
+                  className="absolute top-4 right-4 p-2 bg-red-500 hover:bg-red-600 rounded-full text-white transition-colors z-50"
                 >
                   <VideoOff className="w-5 h-5" />
                 </button>
@@ -8910,105 +8949,42 @@ const handleServiceCreate = async () => {
                 </div>
 
                 {/* Área da câmera melhorada */}
-                <div className="relative bg-gray-900 rounded-xl overflow-hidden mb-4" style={{ height: '450px' }}>
+                <div className="relative bg-gray-900 rounded-xl overflow-hidden mb-4 h-[300px] sm:h-[400px] md:h-[450px]">
                   <video
-                    ref={(video) => {
-                      if (video && librasCameraStream) {
-                        video.srcObject = librasCameraStream
-                        video.play().catch(console.error)
-                        
-                        // Melhorar configurações de vídeo para detecção de mãos
-                        video.addEventListener('loadedmetadata', () => {
-                          // Configurar resolução otimizada para detecção
-                          const canvas = document.createElement('canvas')
-                          const ctx = canvas.getContext('2d')
-                          
-                          if (ctx) {
-                            canvas.width = 640
-                            canvas.height = 480
-                            
-                            // Simular detecção de mãos melhorada
-                            const detectHands = () => {
-                              if (video.readyState === 4) {
-                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-                                
-                                // Simular detecção de gestos específicos
-                                const gestures = ['OLA', 'OBRIGADO', 'SIM', 'NAO', 'AJUDA', 'EMAIL', 'SENHA', 'NOME']
-                                const randomGesture = gestures[Math.floor(Math.random() * gestures.length)]
-                                
-                                // Simular detecção após 3-5 segundos
-                                if (Math.random() > 0.95) {
-                                  setLibrasDetectedText(randomGesture)
-                                  
-                                  // Auto-preencher campos baseado no gesto
-                                  setTimeout(() => {
-                                    if (randomGesture === 'EMAIL') {
-                                      setLoginData(prev => ({...prev, login: 'usuario@exemplo.com'}))
-                                    } else if (randomGesture === 'SENHA') {
-                                      setLoginData(prev => ({...prev, senha: '123456'}))
-                                    } else if (randomGesture === 'NOME') {
-                                      setUserData(prev => ({...prev, nome: 'João Silva'}))
-                                    }
-                                  }, 1000)
-                                }
-                              }
-                              
-                              if (isLibrasActive) {
-                                requestAnimationFrame(detectHands)
-                              }
-                            }
-                            
-                            detectHands()
-                          }
-                        })
-                      }
-                    }}
+                    ref={librasVideoRef}
                     className="w-full h-full object-cover mirror"
                     autoPlay
                     playsInline
                     muted
                   />
                   
-                  {/* Guias visuais melhoradas para posicionamento das mãos */}
-                  <div className="absolute inset-0 pointer-events-none">
-                    {/* Área principal de detecção */}
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-60 border-2 border-green-400/60 rounded-2xl">
-                      {/* Cantos sem animação excessiva */}
+                  {/* Guias visuais simplificadas */}
+                  <div className="absolute inset-0 pointer-events-none z-10">
+                    {/* Área principal de detecção - responsiva */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-[320px] h-[60%] max-h-[240px] border-2 border-green-400/60 rounded-2xl">
+                      {/* Cantos */}
                       <div className="absolute -top-2 -left-2 w-6 h-6 border-t-4 border-l-4 border-green-400 rounded-tl-lg"></div>
                       <div className="absolute -top-2 -right-2 w-6 h-6 border-t-4 border-r-4 border-green-400 rounded-tr-lg"></div>
                       <div className="absolute -bottom-2 -left-2 w-6 h-6 border-b-4 border-l-4 border-green-400 rounded-bl-lg"></div>
                       <div className="absolute -bottom-2 -right-2 w-6 h-6 border-b-4 border-r-4 border-green-400 rounded-br-lg"></div>
-                      
-                      {/* Indicadores de mão esquerda e direita */}
-                      <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/50 rounded-lg px-2 py-1">
-                        <Hand className="w-4 h-4 text-green-400" />
-                        <span className="text-xs text-green-400 font-mono">MÃO ESQ.</span>
-                      </div>
-                      <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/50 rounded-lg px-2 py-1">
-                        <Hand className="w-4 h-4 text-green-400 scale-x-[-1]" />
-                        <span className="text-xs text-green-400 font-mono">MÃO DIR.</span>
-                      </div>
                     </div>
                     
-                    {/* Linha central para referência */}
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-40 bg-green-400/30"></div>
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-60 h-1 bg-green-400/30"></div>
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-center opacity-70">
-                      <Hand className="w-12 h-12 mx-auto mb-2 animate-pulse" />
-                      <p className="text-sm">Posicione suas mãos aqui</p>
+                    {/* Ícone central */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-center opacity-50">
+                      <Hand className="w-8 h-8 sm:w-12 sm:h-12 mx-auto animate-pulse" />
                     </div>
                   </div>
                   
                   {/* Overlay com feedback */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                    <div className="flex items-center justify-between">
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 sm:p-4 z-20">
+                    <div className="flex items-center justify-between text-xs sm:text-sm">
                       <div className="flex items-center gap-2 text-white">
                         <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                        <span className="text-sm font-medium">Detectando mãos...</span>
+                        <span className="font-medium">Detectando mãos...</span>
                       </div>
                       <div className="flex items-center gap-2 text-green-400">
                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                        <span className="text-sm font-medium">IA Ativa</span>
+                        <span className="font-medium">IA Ativa</span>
                       </div>
                     </div>
                   </div>
@@ -9040,17 +9016,21 @@ const handleServiceCreate = async () => {
                   <h4 className="text-sm font-semibold text-blue-400 mb-2">Como usar:</h4>
                   <ul className="text-sm text-gray-300 space-y-1">
                     <li>• Posicione suas mãos na frente da câmera</li>
-                    <li>• Faça os sinais em Libras claramente</li>
-                    <li>• O sistema reconhecerá e preencherá os campos automaticamente</li>
-                    <li>• Use o sinal de "OK" para confirmar</li>
+                    <li>• Mexa as mãos para ativar a detecção</li>
+                    <li>• Faça movimentos amplos e claros</li>
+                    <li>• Aguarde alguns segundos para o sistema processar</li>
                   </ul>
                 </div>
 
-                {/* Nota sobre API */}
-                <div className="mt-4 text-center">
-                  <p className="text-xs text-gray-500">
-                    💡 Em produção, integrado com MediaPipe Hands API do Google
-                  </p>
+                {/* Status da detecção */}
+                <div className="mt-4 p-3 bg-gray-700/50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Status:</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-sm text-green-400">Detectando movimento...</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -9157,14 +9137,16 @@ const handleServiceCreate = async () => {
         userName={loggedUser?.nome || 'Usuário'}
       />
 
-      {/* Sidebar de Notificações */}
-      <NotificationSidebar
-        isOpen={isNotificationOpen}
-        onClose={() => setIsNotificationOpen(false)}
-        notifications={notifications}
-        onMarkAsRead={handleMarkAsRead}
-        onClearAll={handleClearAllNotifications}
-      />
+      {/* Sidebar de Notificações - Não exibir em telas de login/cadastro */}
+      {currentScreen !== 'login' && currentScreen !== 'landing' && currentScreen !== 'cadastro' && currentScreen !== 'recovery' && (
+        <NotificationSidebar
+          isOpen={isNotificationOpen}
+          onClose={() => setIsNotificationOpen(false)}
+          notifications={notifications}
+          onMarkAsRead={handleMarkAsRead}
+          onClearAll={handleClearAllNotifications}
+        />
+      )}
 
       {/* Toast de Nova Notificação */}
       {showNotificationToast && (
