@@ -90,6 +90,7 @@ function App() {
   const [recoveryContact, setRecoveryContact] = useState('')
   const [verificationCode, setVerificationCode] = useState(['', '', '', '', ''])
   const [countdown, setCountdown] = useState(27)
+  const [recoveryToken, setRecoveryToken] = useState<string | null>(null) // Token temporário para recuperação de senha
   const [selectedAccountType, setSelectedAccountType] = useState<'CONTRATANTE' | 'PRESTADOR' | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoginLoading, setIsLoginLoading] = useState(false)
@@ -2045,6 +2046,15 @@ function App() {
     }
   }, [profileData])
 
+  // useEffect para carregar token temporário de recuperação ao iniciar
+  useEffect(() => {
+    const storedRecoveryToken = localStorage.getItem('recoveryToken')
+    if (storedRecoveryToken) {
+      setRecoveryToken(storedRecoveryToken)
+      console.log('🔑 Token temporário de recuperação carregado do localStorage')
+    }
+  }, [])
+
   // useEffect para buscar notificações quando usuário estiver logado
   useEffect(() => {
     if (loggedUser) {
@@ -3387,6 +3397,46 @@ function App() {
 
       if (response.ok) {
         // Código enviado com sucesso
+        const responseData = await response.json()
+        console.log('📥 Resposta completa da API de recuperação:', JSON.stringify(responseData, null, 2))
+        
+        // Capturar o token temporário se existir
+        let tokenFound = false
+        
+        if (responseData.token) {
+          console.log('🔑 Token temporário recebido:', responseData.token.substring(0, 20) + '...')
+          setRecoveryToken(responseData.token)
+          localStorage.setItem('recoveryToken', responseData.token)
+          tokenFound = true
+        } else {
+          console.warn('⚠️ API não retornou token temporário. Verificando outros campos...')
+          console.log('📋 Campos disponíveis:', Object.keys(responseData))
+          
+          // Verificar se o token está em outro campo
+          const possibleTokenFields = ['accessToken', 'access_token', 'auth_token', 'authToken', 'tempToken', 'temp_token', 'data.token', 'result.token']
+          for (const field of possibleTokenFields) {
+            const fieldValue = field.includes('.') 
+              ? field.split('.').reduce((obj, key) => obj?.[key], responseData)
+              : responseData[field]
+              
+            if (fieldValue) {
+              console.log(`🔑 Token encontrado no campo "${field}"`)
+              setRecoveryToken(fieldValue)
+              localStorage.setItem('recoveryToken', fieldValue)
+              tokenFound = true
+              break
+            }
+          }
+        }
+        
+        if (!tokenFound) {
+          console.error('❌ PROBLEMA: API não retornou token temporário!')
+          console.error('📋 Resposta completa:', responseData)
+          console.error('⚠️ O backend precisa retornar um token para que a verificação funcione')
+          console.error('⚠️ Sem o token, a verificação do código vai falhar com erro 401')
+        }
+        
+        setIsLoading(false)
         alert('Código enviado com sucesso! Verifique seu email/SMS.')
         handleScreenTransition('verification')
         // Iniciar countdown
@@ -3442,31 +3492,127 @@ function App() {
   }
 
   const handleVerification = async () => {
+    console.log('🔘 Botão "Verificar" foi clicado!')
     const code = verificationCode.join('')
+    console.log('🔢 Código digitado:', code)
     
     if (code.length !== 5 || !/^\d{5}$/.test(code)) {
-      setErrors({ verificationCode: 'Código inválido' })
+      console.log('❌ Código inválido (formato)')
+      setErrors({ verificationCode: 'Código inválido. Digite 5 dígitos.' })
+      setVerificationCode(['', '', '', '', ''])
+      // Focar no primeiro input
+      setTimeout(() => {
+        const firstInput = document.getElementById('code-0')
+        if (firstInput) firstInput.focus()
+      }, 100)
       return
     }
 
+    console.log('✅ Código válido (formato), iniciando verificação...')
     setErrors({})
     setIsLoading(true)
 
     try {
-      // Aqui você pode adicionar a lógica para verificar o código com o backend
-      // Por enquanto, vamos apenas redirecionar para redefinir senha
+      // Verificar o código com o backend
+      const isEmail = recoveryContact.includes('@')
+      const payload = {
+        codigo: code,
+        ...(isEmail 
+          ? { email: recoveryContact.trim() }
+          : { telefone: normalizePhoneNumber(recoveryContact) }
+        )
+      }
+
+      console.log('📤 Verificando código:', { ...payload, codigo: code })
+      console.log('🌐 URL:', API_ENDPOINTS.VERIFY_CODE)
+
+      // Obter o token temporário
+      const tempToken = recoveryToken || localStorage.getItem('recoveryToken')
+      console.log('🔑 Token temporário:', tempToken ? 'Presente' : 'Ausente')
       
-      // Simular verificação bem-sucedida
-      // Em produção, você deve validar o código com o backend primeiro
+      if (!tempToken) {
+        console.warn('⚠️ Token temporário não encontrado!')
+        console.warn('📋 Estado recoveryToken:', recoveryToken)
+        console.warn('📋 localStorage recoveryToken:', localStorage.getItem('recoveryToken'))
+        console.warn('⚠️ Tentando verificar código sem token (a API pode não precisar)')
+      } else {
+        console.log('✅ Token encontrado:', tempToken.substring(0, 20) + '...')
+      }
+
+      // Criar timeout de 30 segundos
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      }
+
+      // Adicionar token se existir
+      if (tempToken) {
+        headers['Authorization'] = `Bearer ${tempToken}`
+        console.log('🔑 Adicionando token ao header da verificação')
+      } else {
+        console.warn('⚠️ Verificando código sem token - pode resultar em erro 401')
+      }
       
-      // Redirecionar para tela de redefinir senha (você pode criar uma nova tela)
-      // Por enquanto, vamos voltar ao login
-      handleScreenTransition('login')
-      alert('Código verificado! Você pode redefinir sua senha.')
+      console.log('📋 Headers da requisição:', JSON.stringify(headers, null, 2))
+      console.log('📋 Payload da requisição:', JSON.stringify(payload, null, 2))
+
+      const response = await fetch(API_ENDPOINTS.VERIFY_CODE, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      })
+
+      clearTimeout(timeoutId)
+
+      console.log('📥 Status da resposta:', response.status)
+      console.log('📥 Headers:', Object.fromEntries(response.headers.entries()))
+
+      // Ler a resposta como texto primeiro para ver o que está vindo
+      const responseText = await response.text()
+      console.log('📥 Resposta (texto):', responseText)
+
+      if (response.ok) {
+        // Código correto, redirecionar para redefinir senha
+        console.log('✅ Código verificado com sucesso!')
+        handleScreenTransition('reset-password')
+      } else {
+        let errorData
+        try {
+          errorData = JSON.parse(responseText)
+        } catch {
+          errorData = { message: responseText || 'Código incorreto' }
+        }
+        console.error('❌ Erro na verificação:', errorData)
+        // Código errado, mostrar erro e limpar campos
+        setErrors({ verificationCode: errorData.message || 'Código incorreto. Tente novamente.' })
+        setVerificationCode(['', '', '', '', ''])
+        // Focar no primeiro input
+        setTimeout(() => {
+          const firstInput = document.getElementById('code-0')
+          if (firstInput) firstInput.focus()
+        }, 100)
+      }
       
-    } catch (error) {
-      console.error('Erro na verificação:', error)
-      alert('Erro ao verificar código.')
+    } catch (error: any) {
+      console.error('❌ Erro na verificação:', error)
+      
+      let errorMessage = 'Erro ao verificar código. Tente novamente.'
+      if (error.name === 'AbortError') {
+        errorMessage = 'Tempo esgotado. Verifique sua conexão e tente novamente.'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      setErrors({ verificationCode: errorMessage })
+      setVerificationCode(['', '', '', '', ''])
+      // Focar no primeiro input
+      setTimeout(() => {
+        const firstInput = document.getElementById('code-0')
+        if (firstInput) firstInput.focus()
+      }, 100)
     } finally {
       setIsLoading(false)
     }
@@ -3486,24 +3632,52 @@ function App() {
         )
       }
 
+      console.log('📤 Enviando redefinição de senha:', { ...payload, nova_senha: '***' })
+
+      // Obter o token temporário
+      const tempToken = recoveryToken || localStorage.getItem('recoveryToken')
+      console.log('🔑 Token temporário:', tempToken ? 'Presente' : 'Ausente')
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      }
+
+      // Adicionar token se existir
+      if (tempToken) {
+        headers['Authorization'] = `Bearer ${tempToken}`
+        console.log('🔑 Adicionando token ao header da redefinição de senha')
+      }
+
       const response = await fetch(API_ENDPOINTS.RESET_PASSWORD, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(payload)
       })
 
       if (response.ok) {
-        alert('Senha redefinida com sucesso!')
+        alert('✅ Senha redefinida com sucesso!')
+        // Limpar código, token temporário e voltar para login
+        setVerificationCode(['', '', '', '', ''])
+        setRecoveryToken(null)
+        localStorage.removeItem('recoveryToken')
         handleScreenTransition('login')
       } else {
         const errorData = await response.json()
-        alert(`Erro: ${errorData.message || 'Não foi possível redefinir a senha'}`)
+        const errorMessage = errorData.message || 'Não foi possível redefinir a senha'
+        
+        // Se o erro for relacionado ao código, voltar para verificação
+        if (errorMessage.toLowerCase().includes('código') || errorMessage.toLowerCase().includes('codigo')) {
+          alert(`❌ ${errorMessage}\n\nVoltando para inserir o código novamente.`)
+          setVerificationCode(['', '', '', '', ''])
+          setErrors({ verificationCode: errorMessage })
+          handleScreenTransition('verification')
+        } else {
+          alert(`❌ Erro: ${errorMessage}`)
+        }
       }
     } catch (error) {
-      console.error('Erro na requisição:', error)
-      alert('Erro de conexão. Verifique se o servidor está rodando.')
+      console.error('❌ Erro na requisição:', error)
+      alert('❌ Erro de conexão. Verifique sua internet e tente novamente.')
     }
   }
 
@@ -6054,13 +6228,17 @@ const handleServiceCreate = async () => {
     )
   }
 
-  // Orders Screen
+  // Reset Password Screen
   if (currentScreen === 'reset-password') {
     return (
       <div className={`min-h-screen ${themeClasses.bg} transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <ResetPasswordScreen onSuccess={() => handleScreenTransition('login')} />
+        <ResetPasswordScreen 
+          onResetPassword={handleResetPassword}
+          onBack={() => handleScreenTransition('verification')}
+          isDarkMode={isDarkMode}
+        />
       </div>
     );
   }
@@ -7833,10 +8011,10 @@ const handleServiceCreate = async () => {
 
   if (currentScreen === 'verification') {
     return (
-      <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
+      <div className={`min-h-screen ${themeClasses.bg} flex flex-col md:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
+        <div className={`w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1 ${themeClasses.bg}`}>
           <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
@@ -7849,7 +8027,7 @@ const handleServiceCreate = async () => {
           </div>
         </div>
         
-        <div className="w-full md:w-1/2 bg-gray-700 min-h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
+        <div className={`w-full md:w-1/2 ${themeClasses.bgSecondary} min-h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden`}>
           <img
             src="./Vector copy.png"
             alt="Decoração da tela de verificação de código"
@@ -7857,8 +8035,8 @@ const handleServiceCreate = async () => {
           />
           
           <div className="relative z-10 text-center">
-            <h2 className="text-xl md:text-2xl text-white font-bold mb-2">Recuperação de senha</h2>
-            <p className="text-sm md:text-base text-gray-400 mb-6 md:mb-8 px-4">
+            <h2 className={`text-xl md:text-2xl ${themeClasses.text} font-bold mb-2`}>Recuperação de senha</h2>
+            <p className={`text-sm md:text-base ${themeClasses.textSecondary} mb-6 md:mb-8 px-4`}>
               Informe o código de 5 dígitos que foi<br />
               enviado para o sms *********
             </p>
@@ -7869,37 +8047,58 @@ const handleServiceCreate = async () => {
                   key={index}
                   id={`code-${index}`}
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   maxLength={1}
                   value={digit}
                  onChange={(e) => {
                    handleCodeChange(index, e.target.value)
                    clearError('verificationCode')
                  }}
-                  className="w-10 h-10 md:w-12 md:h-12 bg-gray-600 text-white text-center text-lg md:text-xl rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className={`w-10 h-10 md:w-12 md:h-12 text-center text-lg md:text-xl rounded-lg focus:outline-none transition-all ${
+                    isDarkMode 
+                      ? 'bg-gray-600 text-white border-2 border-gray-500' 
+                      : 'bg-white text-gray-900 border-2 border-gray-300'
+                  } ${
+                    errors.verificationCode 
+                      ? 'border-red-500 ring-2 ring-red-500 animate-shake' 
+                      : 'focus:ring-2 focus:ring-green-500 focus:border-green-500'
+                  }`}
                 />
               ))}
             </div>
            {errors.verificationCode && (
-             <p className="text-red-500 text-sm mb-2 text-center">{errors.verificationCode}</p>
+             <p className="text-red-400 text-sm mb-2 text-center font-semibold animate-pulse">
+               ⚠️ {errors.verificationCode}
+             </p>
            )}
 
             <p className="text-red-400 text-sm mb-2">Código não foi enviado?</p>
-            <p className="text-gray-400 text-sm mb-6 md:mb-8">
+            <p className={`text-sm mb-6 md:mb-8 ${themeClasses.textSecondary}`}>
               Reenviar o código em {countdown} segundos.
             </p>
 
             <div className="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-4 px-4">
               <button
                 onClick={() => handleScreenTransition('recovery')}
-                className="flex-1 bg-transparent border border-green-500 text-green-500 py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-500 hover:text-white transition-colors"
+                disabled={isLoading}
+                className="flex-1 bg-transparent border border-green-500 text-green-500 py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-500 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Tentar outro método
               </button>
               <button
                 onClick={handleVerification}
-                className="flex-1 bg-green-500 text-white py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-600 transition-colors"
+                disabled={isLoading || verificationCode.join('').length !== 5}
+                className="flex-1 bg-green-500 text-white py-3 rounded-lg text-sm md:text-base font-semibold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Verificar
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    Verificando...
+                  </>
+                ) : (
+                  'Verificar'
+                )}
               </button>
             </div>
           </div>
@@ -7910,10 +8109,10 @@ const handleServiceCreate = async () => {
 
   if (currentScreen === 'recovery') {
     return (
-      <div className={`min-h-screen bg-gray-800 flex flex-col md:flex-row transition-all duration-300 ${
+      <div className={`min-h-screen ${themeClasses.bg} flex flex-col md:flex-row transition-all duration-300 ${
         isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
       }`}>
-        <div className="w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1">
+        <div className={`w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 relative order-2 md:order-1 ${themeClasses.bg}`}>
           <div className="absolute top-4 left-4 md:top-8 md:left-8">
             <FacilitaLogo />
           </div>
@@ -7926,7 +8125,7 @@ const handleServiceCreate = async () => {
           </div>
         </div>
         
-        <div className="w-full md:w-1/2 bg-gray-700 min-h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden">
+        <div className={`w-full md:w-1/2 ${themeClasses.bgSecondary} min-h-screen p-4 md:p-8 flex flex-col justify-center relative order-1 md:order-2 overflow-hidden`}>
           <img
             src="./Vector copy.png"
             alt="Decoração da tela de recuperação de senha"
@@ -7934,8 +8133,8 @@ const handleServiceCreate = async () => {
           />
           
           <div className="relative z-10">
-            <h2 className="text-xl md:text-2xl text-white font-bold mb-2">Recuperar senha</h2>
-            <p className="text-sm md:text-base text-gray-400 mb-4">
+            <h2 className={`text-xl md:text-2xl ${themeClasses.text} font-bold mb-2`}>Recuperar senha</h2>
+            <p className={`text-sm md:text-base ${themeClasses.textSecondary} mb-4`}>
               Digite seu e-mail ou telefone para<br />
               recuperar sua senha
             </p>
@@ -7950,7 +8149,7 @@ const handleServiceCreate = async () => {
 
             <div className="space-y-4 md:space-y-6">
               <div>
-                <label className="block text-gray-400 text-sm mb-2">E-mail ou Telefone</label>
+                <label className={`block ${themeClasses.textSecondary} text-sm mb-2`}>E-mail ou Telefone</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -7969,7 +8168,11 @@ const handleServiceCreate = async () => {
                      }
                    }}
                     placeholder="exemplo@email.com ou 11987654321"
-                    className="w-full bg-gray-600 text-white px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className={`w-full px-4 py-3 rounded-lg pr-10 text-sm md:text-base focus:outline-none focus:ring-2 focus:ring-green-500 border-2 ${
+                      isDarkMode 
+                        ? 'bg-gray-600 text-white border-gray-500 placeholder-gray-400' 
+                        : 'bg-white text-gray-900 border-gray-300 placeholder-gray-500'
+                    }`}
                   />
                   <Mail className="absolute right-3 top-3.5 h-5 w-5 text-gray-400" />
                 </div>
@@ -8000,7 +8203,7 @@ const handleServiceCreate = async () => {
                 Enviar código
               </button>
 
-              <p className="text-center text-gray-400 text-sm">
+              <p className={`text-center ${themeClasses.textSecondary} text-sm`}>
                 Lembrou da senha?{' '}
                 <button
                   onClick={() => handleScreenTransition('login')}

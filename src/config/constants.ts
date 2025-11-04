@@ -14,6 +14,7 @@ export const API_ENDPOINTS = {
   UPDATE_PROFILE: `${API_BASE_URL}/usuario/perfil`, // Endpoint para atualizar perfil do usuário logado
   CHANGE_PASSWORD: `${API_BASE_URL}/usuario/alterar-senha`,
   RECOVER_PASSWORD: `${API_BASE_URL}/usuario/recuperar-senha`,
+  VERIFY_CODE: `${API_BASE_URL}/usuario/verificar-codigo`,
   RESET_PASSWORD: `${API_BASE_URL}/usuario/redefinir-senha`,
   
   // Contratante

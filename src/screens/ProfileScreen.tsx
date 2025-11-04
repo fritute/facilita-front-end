@@ -148,8 +148,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </div>
 
             {/* User Info */}
-            <h2 className={`text-2xl font-bold ${themeClasses.text} mb-1`}>{userName}</h2>
-            <p className={themeClasses.textSecondary}>{userEmail}</p>
+            <h2 className={`text-2xl font-bold ${themeClasses.text} mb-1`}>{editedName}</h2>
+            <p className={themeClasses.textSecondary}>{editedEmail}</p>
           </div>
         </div>
 
@@ -188,7 +188,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 />
               ) : (
                 <div className={`p-3 ${themeClasses.bgSecondary} rounded-lg flex items-center justify-between`}>
-                  <p className={themeClasses.text}>{userName}</p>
+                  <p className={themeClasses.text}>{editedName}</p>
                   <button
                     onClick={() => setIsEditingName(true)}
                     className="text-gray-400 hover:text-green-500 transition-colors"
@@ -213,7 +213,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 />
               ) : (
                 <div className={`p-3 ${themeClasses.bgSecondary} rounded-lg flex items-center justify-between`}>
-                  <p className={themeClasses.text}>{userEmail}</p>
+                  <p className={themeClasses.text}>{editedEmail}</p>
                   <button
                     onClick={() => setIsEditingEmail(true)}
                     className="text-gray-400 hover:text-green-500 transition-colors"

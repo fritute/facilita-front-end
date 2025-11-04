@@ -253,27 +253,6 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
             )}
           </div>
 
-          {/* Serviços predefinidos (mantidos como fallback) */}
-          <div className="mb-6">
-            <h4 className="font-semibold mb-3 text-gray-700">Ou escolha um serviço rápido</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {predefinedServices.map((service) => (
-                <button
-                  key={service.id}
-                  onClick={() => onServiceTypeChange(service.id)}
-                  className={`p-4 border rounded-lg text-left transition-all ${
-                    selectedServiceType === service.id
-                      ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                      : 'border-gray-300 hover:border-green-300'
-                  }`}
-                >
-                  <div className="text-2xl mb-2">{service.icon}</div>
-                  <p className="font-medium text-sm">{service.name}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Botão confirmar */}
           <button
             onClick={onConfirmService}
