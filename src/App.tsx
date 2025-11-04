@@ -76,6 +76,7 @@ interface LoggedUser {
   telefone: string
   tipo_conta: 'CONTRATANTE' | 'PRESTADOR'
   foto?: string
+  endereco?: string // Endereço do usuário
 }
 
 function App() {
@@ -113,9 +114,9 @@ function App() {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
   const [pixCode, setPixCode] = useState<string>('')
   const [selectedAddress, setSelectedAddress] = useState<any>(null)
-  const [pickupLocation, setPickupLocation] = useState<{address: string, lat: number, lng: number} | null>(null)
-  const [deliveryLocation, setDeliveryLocation] = useState<{address: string, lat: number, lng: number} | null>(null)
-  const [stopPoints, setStopPoints] = useState<Array<{address: string, lat: number, lng: number, description: string}>>([])
+  const [pickupLocation, setPickupLocation] = useState<{address: string, lat: number, lng: number, id_localizacao?: number} | null>(null)
+  const [deliveryLocation, setDeliveryLocation] = useState<{address: string, lat: number, lng: number, id_localizacao?: number} | null>(null)
+  const [stopPoints, setStopPoints] = useState<Array<{address: string, lat: number, lng: number, description: string, id_localizacao?: number}>>([])
   const [isSelectingStopPoint, setIsSelectingStopPoint] = useState(false)
   const [stopPointDescription, setStopPointDescription] = useState('')
   const [servicePrice, setServicePrice] = useState<number>(0)
@@ -2961,15 +2962,30 @@ function App() {
         let errorMessage = 'Email ou senha incorretos'
         try {
           const errorData = await response.json()
-          console.error('❌ Erro do backend:', errorData)
+          console.error('❌ Erro do backend (Status ' + response.status + '):', errorData)
+          console.error('❌ Payload enviado:', { login: loginPayload.login, senha: '***' })
+          console.error('❌ URL do endpoint:', API_ENDPOINTS.LOGIN)
+          
           errorMessage = errorData.message || errorData.error || errorMessage
           
           // Se o erro for sobre campos faltando, mostrar detalhes
           if (errorData.details) {
-            console.error('Detalhes do erro:', errorData.details)
+            console.error('❌ Detalhes do erro:', errorData.details)
+          }
+          
+          // Erro 500 específico
+          if (response.status === 500) {
+            console.error('⚠️ ERRO 500: Problema no servidor backend')
+            console.error('⚠️ Verifique se:')
+            console.error('   1. O usuário existe no banco de dados')
+            console.error('   2. O backend está rodando corretamente')
+            console.error('   3. A conexão com o banco de dados está funcionando')
+            errorMessage = 'Erro no servidor. ' + errorMessage
           }
         } catch (e) {
-          console.error('❌ Não foi possível ler o erro do backend')
+          console.error('❌ Não foi possível ler o erro do backend:', e)
+          const responseText = await response.text()
+          console.error('❌ Resposta bruta:', responseText)
         }
         
         alert(`Erro no login: ${errorMessage}`)
@@ -3403,37 +3419,41 @@ function App() {
         // Capturar o token temporário se existir
         let tokenFound = false
         
-        if (responseData.token) {
-          console.log('🔑 Token temporário recebido:', responseData.token.substring(0, 20) + '...')
-          setRecoveryToken(responseData.token)
-          localStorage.setItem('recoveryToken', responseData.token)
-          tokenFound = true
-        } else {
-          console.warn('⚠️ API não retornou token temporário. Verificando outros campos...')
-          console.log('📋 Campos disponíveis:', Object.keys(responseData))
-          
-          // Verificar se o token está em outro campo
-          const possibleTokenFields = ['accessToken', 'access_token', 'auth_token', 'authToken', 'tempToken', 'temp_token', 'data.token', 'result.token']
-          for (const field of possibleTokenFields) {
-            const fieldValue = field.includes('.') 
-              ? field.split('.').reduce((obj, key) => obj?.[key], responseData)
-              : responseData[field]
-              
-            if (fieldValue) {
-              console.log(`🔑 Token encontrado no campo "${field}"`)
-              setRecoveryToken(fieldValue)
-              localStorage.setItem('recoveryToken', fieldValue)
-              tokenFound = true
-              break
-            }
+        // Verificar múltiplos campos possíveis para o token
+        const possibleTokenFields = [
+          'token',
+          'accessToken', 
+          'access_token', 
+          'auth_token', 
+          'authToken', 
+          'tempToken', 
+          'temp_token',
+          'data.token', 
+          'result.token',
+          'data.accessToken',
+          'result.accessToken'
+        ]
+        
+        for (const field of possibleTokenFields) {
+          const fieldValue = field.includes('.') 
+            ? field.split('.').reduce((obj, key) => obj?.[key], responseData)
+            : responseData[field]
+            
+          if (fieldValue && typeof fieldValue === 'string') {
+            console.log(`✅ Token temporário encontrado no campo "${field}":`, fieldValue.substring(0, 20) + '...')
+            setRecoveryToken(fieldValue)
+            localStorage.setItem('recoveryToken', fieldValue)
+            tokenFound = true
+            break
           }
         }
         
         if (!tokenFound) {
-          console.error('❌ PROBLEMA: API não retornou token temporário!')
-          console.error('📋 Resposta completa:', responseData)
-          console.error('⚠️ O backend precisa retornar um token para que a verificação funcione')
-          console.error('⚠️ Sem o token, a verificação do código vai falhar com erro 401')
+          console.warn('⚠️ ATENÇÃO: API não retornou token temporário!')
+          console.warn('📋 Resposta completa:', responseData)
+          console.warn('📋 Campos disponíveis:', Object.keys(responseData))
+          console.warn('⚠️ Tentando continuar sem token...')
+          console.warn('⚠️ Se a verificação falhar com erro 401, o backend precisa retornar um token')
         }
         
         setIsLoading(false)
@@ -3513,8 +3533,51 @@ function App() {
     setIsLoading(true)
 
     try {
-      // Verificar o código com o backend
       const isEmail = recoveryContact.includes('@')
+      
+      // NOVA ESTRATÉGIA: Buscar token do usuário usando email/telefone + código
+      console.log('🔍 Buscando token do usuário pelo email/telefone...')
+      
+      let userToken = recoveryToken || localStorage.getItem('recoveryToken')
+      
+      // Se não temos token, tentar obter fazendo "login" com o código como senha temporária
+      if (!userToken) {
+        console.log('🔑 Tentando obter token do usuário...')
+        
+        // Primeiro, verificar o código e obter o token na resposta
+        const verifyPayload = {
+          codigo: code,
+          ...(isEmail 
+            ? { email: recoveryContact.trim() }
+            : { telefone: normalizePhoneNumber(recoveryContact) }
+          )
+        }
+        
+        console.log('📤 Verificando código para obter token:', verifyPayload)
+        
+        // Tentar verificar sem token primeiro - se o backend retornar um token, usamos ele
+        const preVerifyResponse = await fetch(API_ENDPOINTS.VERIFY_CODE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(verifyPayload)
+        })
+        
+        if (preVerifyResponse.ok) {
+          const preVerifyData = await preVerifyResponse.json()
+          console.log('📥 Resposta da pré-verificação:', preVerifyData)
+          
+          // Procurar token na resposta
+          if (preVerifyData.token && typeof preVerifyData.token === 'string') {
+            const token = preVerifyData.token
+            userToken = token
+            setRecoveryToken(token)
+            localStorage.setItem('recoveryToken', token)
+            console.log('✅ Token do usuário obtido com sucesso!')
+          }
+        }
+      }
+      
+      // Verificar o código com o backend
       const payload = {
         codigo: code,
         ...(isEmail 
@@ -3525,19 +3588,7 @@ function App() {
 
       console.log('📤 Verificando código:', { ...payload, codigo: code })
       console.log('🌐 URL:', API_ENDPOINTS.VERIFY_CODE)
-
-      // Obter o token temporário
-      const tempToken = recoveryToken || localStorage.getItem('recoveryToken')
-      console.log('🔑 Token temporário:', tempToken ? 'Presente' : 'Ausente')
-      
-      if (!tempToken) {
-        console.warn('⚠️ Token temporário não encontrado!')
-        console.warn('📋 Estado recoveryToken:', recoveryToken)
-        console.warn('📋 localStorage recoveryToken:', localStorage.getItem('recoveryToken'))
-        console.warn('⚠️ Tentando verificar código sem token (a API pode não precisar)')
-      } else {
-        console.log('✅ Token encontrado:', tempToken.substring(0, 20) + '...')
-      }
+      console.log('🔑 Token do usuário:', userToken ? `Presente (${userToken.substring(0, 20)}...)` : 'Ausente')
 
       // Criar timeout de 30 segundos
       const controller = new AbortController()
@@ -3547,12 +3598,12 @@ function App() {
         'Content-Type': 'application/json',
       }
 
-      // Adicionar token se existir
-      if (tempToken) {
-        headers['Authorization'] = `Bearer ${tempToken}`
-        console.log('🔑 Adicionando token ao header da verificação')
+      // Adicionar token do usuário se existir
+      if (userToken) {
+        headers['Authorization'] = `Bearer ${userToken}`
+        console.log('🔑 Token do usuário adicionado ao header')
       } else {
-        console.warn('⚠️ Verificando código sem token - pode resultar em erro 401')
+        console.log('ℹ️ Verificando código sem token (backend deve aceitar apenas código + email)')
       }
       
       console.log('📋 Headers da requisição:', JSON.stringify(headers, null, 2))
@@ -3577,7 +3628,29 @@ function App() {
       if (response.ok) {
         // Código correto, redirecionar para redefinir senha
         console.log('✅ Código verificado com sucesso!')
+        
+        // Tentar extrair token da resposta se disponível
+        if (responseText) {
+          try {
+            const responseData = JSON.parse(responseText)
+            if (responseData.token && !userToken) {
+              console.log('✅ Token do usuário recebido na verificação:', responseData.token.substring(0, 20) + '...')
+              setRecoveryToken(responseData.token)
+              localStorage.setItem('recoveryToken', responseData.token)
+            }
+          } catch (e) {
+            console.log('ℹ️ Resposta não contém JSON ou token')
+          }
+        }
+        
         handleScreenTransition('reset-password')
+      } else if (response.status === 401) {
+        console.error('❌ Erro 401: Não autorizado')
+        console.error('💡 O backend requer um token do usuário para verificar o código')
+        console.error('💡 Tentando obter token através do email/telefone + código...')
+        
+        alert('❌ Erro de autenticação.\n\nNão foi possível obter o token do usuário.\n\nPor favor, tente novamente ou entre em contato com o suporte.')
+        handleScreenTransition('recovery')
       } else {
         let errorData
         try {
@@ -3634,18 +3707,20 @@ function App() {
 
       console.log('📤 Enviando redefinição de senha:', { ...payload, nova_senha: '***' })
 
-      // Obter o token temporário
-      const tempToken = recoveryToken || localStorage.getItem('recoveryToken')
-      console.log('🔑 Token temporário:', tempToken ? 'Presente' : 'Ausente')
+      // Obter o token do usuário (já deve ter sido obtido na verificação)
+      const userToken = recoveryToken || localStorage.getItem('recoveryToken')
+      console.log('🔑 Token do usuário:', userToken ? `Presente (${userToken.substring(0, 20)}...)` : 'Ausente')
 
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       }
 
-      // Adicionar token se existir
-      if (tempToken) {
-        headers['Authorization'] = `Bearer ${tempToken}`
-        console.log('🔑 Adicionando token ao header da redefinição de senha')
+      // Adicionar token do usuário (obrigatório para redefinir senha)
+      if (userToken) {
+        headers['Authorization'] = `Bearer ${userToken}`
+        console.log('🔑 Token do usuário adicionado ao header para redefinição')
+      } else {
+        console.warn('⚠️ Redefinindo senha sem token - pode falhar se o backend exigir autenticação')
       }
 
       const response = await fetch(API_ENDPOINTS.RESET_PASSWORD, {
@@ -3653,6 +3728,8 @@ function App() {
         headers,
         body: JSON.stringify(payload)
       })
+
+      console.log('📥 Status da resposta de redefinição:', response.status)
 
       if (response.ok) {
         alert('✅ Senha redefinida com sucesso!')
@@ -3662,8 +3739,10 @@ function App() {
         localStorage.removeItem('recoveryToken')
         handleScreenTransition('login')
       } else {
-        const errorData = await response.json()
-        const errorMessage = errorData.message || 'Não foi possível redefinir a senha'
+        const errorData = await response.json().catch(() => ({ message: 'Erro desconhecido' }))
+        const errorMessage = errorData.message || errorData.error || 'Não foi possível redefinir a senha'
+        
+        console.error('❌ Erro na redefinição:', errorData)
         
         // Se o erro for relacionado ao código, voltar para verificação
         if (errorMessage.toLowerCase().includes('código') || errorMessage.toLowerCase().includes('codigo')) {
@@ -4181,7 +4260,7 @@ function App() {
           lat: -23.5505, // Coordenadas padrão de São Paulo
           lng: -46.6333,
           id_localizacao: userLocationId
-        } as any)
+        })
       } else {
         console.warn('⚠️ Endereço do usuário não encontrado')
       }
@@ -7861,28 +7940,40 @@ const handleServiceCreate = async () => {
                     const value = e.target.value
                     setProfileData({...profileData, endereco: value})
                     
-                    // Buscar sugestões de endereço quando digitar mais de 3 caracteres
-                    if (value.length > 3) {
+                    // Buscar sugestões de endereço quando digitar CEP (8 dígitos)
+                    const cepOnly = value.replace(/\D/g, '')
+                    if (cepOnly.length === 8) {
                       setIsSearchingAddress(true)
                       setShowAddressSuggestions(true)
                       
                       try {
-                        // Usar API do Nominatim para buscar endereços no Brasil
+                        // Usar ViaCEP - API brasileira sem problemas de CORS
                         const response = await fetch(
-                          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}&countrycodes=br&limit=5&addressdetails=1`,
-                          {
-                            headers: {
-                              'User-Agent': 'FacilitaApp/1.0'
-                            }
-                          }
+                          `https://viacep.com.br/ws/${cepOnly}/json/`
                         )
                         
                         if (response.ok) {
                           const data = await response.json()
-                          setAddressSuggestions(data)
+                          if (!data.erro) {
+                            // Formatar endereço completo
+                            const fullAddress = `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}, ${data.cep}`
+                            setAddressSuggestions([{
+                              display_name: fullAddress,
+                              address: {
+                                road: data.logradouro,
+                                suburb: data.bairro,
+                                city: data.localidade,
+                                state: data.uf,
+                                postcode: data.cep
+                              }
+                            }])
+                          } else {
+                            setAddressSuggestions([])
+                          }
                         }
                       } catch (error) {
-                        console.error('Erro ao buscar endereços:', error)
+                        console.error('Erro ao buscar endereço:', error)
+                        setAddressSuggestions([])
                       } finally {
                         setIsSearchingAddress(false)
                       }
@@ -7900,7 +7991,7 @@ const handleServiceCreate = async () => {
                       setShowAddressSuggestions(true)
                     }
                   }}
-                  placeholder="Digite seu endereço"
+                  placeholder="Digite o CEP (ex: 12345-678)"
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 
