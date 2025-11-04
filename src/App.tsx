@@ -8,12 +8,12 @@ import CompleteProfileModal from './components/CompleteProfileModal'
 import LoadingSpinner from './components/LoadingSpinner'
 import NotificationSidebar from './components/NotificationSidebar'
 import ServiceCreateScreen from './components/ServiceCreateScreen'
-import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen } from './screens'
+import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen, ResetPasswordScreen } from './screens'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 import { API_ENDPOINTS } from './config/constants'
 import { handDetectionService } from './services/handDetectionService'
 //TELAS PARA TESTES E PARA MOVER
-type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet"
+type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
 
 // Adicione esta interface antes da função App
 interface ServiceTrackingProps {
@@ -6055,6 +6055,16 @@ const handleServiceCreate = async () => {
   }
 
   // Orders Screen
+  if (currentScreen === 'reset-password') {
+    return (
+      <div className={`min-h-screen ${themeClasses.bg} transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        <ResetPasswordScreen onSuccess={() => handleScreenTransition('login')} />
+      </div>
+    );
+  }
+
   if (currentScreen === 'orders') {
     // Usar apenas pedidos reais do usuário logado
     const rawOrders = userOrders;
