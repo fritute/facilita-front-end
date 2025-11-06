@@ -204,6 +204,17 @@ function App() {
   const [librasDetectedText, setLibrasDetectedText] = useState('')
   const [librasLoading, setLibrasLoading] = useState(false)
   
+  // Estados para opções de acessibilidade
+  const [showAccessibilityMenu, setShowAccessibilityMenu] = useState(false)
+  const [largeFontEnabled, setLargeFontEnabled] = useState(() => {
+    const saved = localStorage.getItem('largeFontEnabled')
+    return saved ? JSON.parse(saved) : false
+  })
+  const [voiceReaderEnabled, setVoiceReaderEnabled] = useState(() => {
+    const saved = localStorage.getItem('voiceReaderEnabled')
+    return saved ? JSON.parse(saved) : false
+  })
+  
   // Refs para intervalos da câmera (evita recriação a cada render)
   const activeDetectionInterval = useRef<NodeJS.Timeout | null>(null)
   const activeStreamCheck = useRef<NodeJS.Timeout | null>(null)
@@ -2656,11 +2667,56 @@ function App() {
     }))
   }
 
+  // Função para alternar letras grandes
+  const toggleLargeFont = () => {
+    const newValue = !largeFontEnabled
+    setLargeFontEnabled(newValue)
+    localStorage.setItem('largeFontEnabled', JSON.stringify(newValue))
+    
+    if (newValue) {
+      document.documentElement.style.fontSize = '120%'
+    } else {
+      document.documentElement.style.fontSize = '100%'
+    }
+  }
+  
+  // Função para alternar leitor de voz
+  const toggleVoiceReader = () => {
+    const newValue = !voiceReaderEnabled
+    setVoiceReaderEnabled(newValue)
+    localStorage.setItem('voiceReaderEnabled', JSON.stringify(newValue))
+    
+    if (newValue) {
+      // Ativar leitor de voz
+      const utterance = new SpeechSynthesisUtterance('Leitor de voz ativado')
+      utterance.lang = 'pt-BR'
+      window.speechSynthesis.speak(utterance)
+    } else {
+      // Desativar leitor de voz
+      window.speechSynthesis.cancel()
+    }
+  }
+  
+  // Função para ler texto em voz alta
+  const speakText = (text: string) => {
+    if (voiceReaderEnabled && text) {
+      window.speechSynthesis.cancel()
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.lang = 'pt-BR'
+      utterance.rate = 0.9
+      window.speechSynthesis.speak(utterance)
+    }
+  }
+  
   // Funções para acessibilidade Libras - COM DETECÇÃO REAL DE MÃOS
   const startLibrasCamera = async () => {
     try {
       setLibrasLoading(true)
-      console.log('📹 Iniciando câmera de acessibilidade com detecção real...')
+      console.log('📹 Iniciando câmera de acessibilidade...')
+      
+      // Inicializar VLibras
+      const { vlibrasService } = await import('./services/vlibrasService')
+      vlibrasService.initialize()
       
       // Limpar recursos anteriores
       if (librasCameraStream) {
@@ -2671,37 +2727,15 @@ function App() {
       // Inicializar MediaPipe Hands
       await handDetectionService.initialize()
       
-      // Configurar callback para resultados
-      let callbackCount = 0
       handDetectionService.setOnResults((results: any) => {
-        callbackCount++
-        
-        if (callbackCount % 30 === 0) {
-          console.log('Callback executado', callbackCount, 'vezes')
+        let text = ''
+        if (results.detected && results.letter) {
+          text = `👋 ${results.letter} | `
+        } else if (results.detected) {
+          text = '✋ Mão detectada | '
         }
-        
-        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-          // Detectar gesto
-          const gesture = handDetectionService.detectGesture(results.multiHandLandmarks[0])
-          
-          // Mapear gestos para ações
-          const gestureMessages: Record<string, string> = {
-            'OPEN_HAND': '✋ Mão aberta detectada!',
-            'CLOSED_FIST': '✊ Punho fechado detectado!',
-            'THUMBS_UP': '👍 Joinha detectado!',
-            'PEACE': '✌️ Sinal de paz detectado!',
-            'OK': '👌 Sinal de OK detectado!',
-            'POINTING': '☝️ Apontando detectado!',
-            'UNKNOWN': '🤔 Gesto não reconhecido'
-          }
-          
-          const message = gestureMessages[gesture.type] || '🤔 Gesto não reconhecido'
-          setLibrasDetectedText(`${message} (${Math.round(gesture.confidence * 100)}% confiança)`)
-          
-          console.log('Gesto detectado:', gesture)
-        } else {
-          setLibrasDetectedText('👋 Mostre suas mãos para a câmera...')
-        }
+        text += `Palavra: ${results.word || '...'} | Frase: ${results.sentence || '...'}`
+        setLibrasDetectedText(text)
       })
       
       // Obter stream da câmera
@@ -2723,6 +2757,7 @@ function App() {
       // Iniciar detecção após vídeo estar pronto
       setTimeout(() => {
         if (stream.active && librasVideoRef.current) {
+          console.log('🎬 Iniciando detecção...')
           startHandDetectionLoop()
         }
       }, 1000)
@@ -2737,17 +2772,9 @@ function App() {
 
   // Função para iniciar loop de detecção de mãos
   const startHandDetectionLoop = () => {
-    let frameCount = 0
-    
     const detectHands = async () => {
       if (!isLibrasActive || !librasVideoRef.current) {
-        console.log('Loop parado')
         return
-      }
-      
-      frameCount++
-      if (frameCount % 30 === 0) {
-        console.log('Processando frame', frameCount)
       }
       
       try {
@@ -2756,14 +2783,11 @@ function App() {
         console.error('Erro ao processar frame:', error)
       }
       
-      // Continuar loop se ainda estiver ativo
       if (isLibrasActive) {
         requestAnimationFrame(detectHands)
       }
     }
     
-    console.log('Iniciando detecção de mãos')
-    console.log('Video element:', librasVideoRef.current)
     detectHands()
   }
 
@@ -2809,6 +2833,26 @@ function App() {
       librasVideoRef.current.play().catch(console.error)
     }
   }, [librasCameraStream])
+  
+  // useEffect para aplicar fonte grande ao carregar
+  useEffect(() => {
+    if (largeFontEnabled) {
+      document.documentElement.style.fontSize = '120%'
+    }
+  }, [])
+  
+  // useEffect para fechar menu ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (showAccessibilityMenu && !target.closest('.accessibility-menu')) {
+        setShowAccessibilityMenu(false)
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showAccessibilityMenu])
 
   const handleScreenTransition = (newScreen: Screen) => {
     setIsTransitioning(true)
@@ -9109,25 +9153,161 @@ const handleServiceCreate = async () => {
           {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
 
-        {/* Botão de Acessibilidade Libras */}
-        <button
-          onClick={isLibrasActive ? stopLibrasCamera : startLibrasCamera}
-          disabled={librasLoading}
-          className={`absolute top-4 right-20 p-3 rounded-full transition-all duration-300 hover:scale-110 z-20 ${
-            isLibrasActive 
-              ? 'bg-red-500/20 backdrop-blur-sm border border-red-400/30 text-red-600 animate-pulse' 
-              : 'bg-blue-500/20 backdrop-blur-sm border border-blue-400/30 text-blue-600 hover:bg-blue-500/30'
-          } ${librasLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-          title="Acessibilidade em Libras"
-        >
-          {librasLoading ? (
-            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          ) : isLibrasActive ? (
-            <VideoOff className="w-5 h-5" />
-          ) : (
-            <Hand className="w-5 h-5" />
+        {/* Menu de Acessibilidade */}
+        <div className="absolute top-4 right-20 z-20 accessibility-menu">
+          <button
+            onClick={() => setShowAccessibilityMenu(!showAccessibilityMenu)}
+            className={`p-3 rounded-full transition-all duration-300 hover:scale-110 backdrop-blur-sm border ${
+              isDarkMode 
+                ? 'bg-purple-500/20 border-purple-400/30 text-purple-400 hover:bg-purple-500/30' 
+                : 'bg-purple-500/20 border-purple-400/30 text-purple-600 hover:bg-purple-500/30'
+            }`}
+            title="Opções de Acessibilidade"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+          </button>
+          
+          {/* Dropdown Menu */}
+          {showAccessibilityMenu && (
+            <div className={`absolute top-14 right-0 w-64 rounded-xl shadow-2xl border overflow-hidden animate-slideDown ${
+              isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+            }`}>
+              <div className={`p-3 border-b ${
+                isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <h3 className={`font-semibold text-sm ${
+                  isDarkMode ? 'text-white' : 'text-gray-800'
+                }`}>Opções de Acessibilidade</h3>
+              </div>
+              
+              <div className="p-2">
+                {/* Letras Grandes */}
+                <button
+                  onClick={() => {
+                    toggleLargeFont()
+                    speakText(largeFontEnabled ? 'Letras grandes desativadas' : 'Letras grandes ativadas')
+                  }}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+                    isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      largeFontEnabled 
+                        ? 'bg-green-500 text-white' 
+                        : isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                      </svg>
+                    </div>
+                    <div className="text-left">
+                      <p className={`font-medium text-sm ${
+                        isDarkMode ? 'text-white' : 'text-gray-800'
+                      }`}>Letras Grandes</p>
+                      <p className={`text-xs ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`}>Aumentar tamanho do texto</p>
+                    </div>
+                  </div>
+                  <div className={`w-12 h-6 rounded-full transition-colors ${
+                    largeFontEnabled ? 'bg-green-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'
+                  }`}>
+                    <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${
+                      largeFontEnabled ? 'translate-x-6' : 'translate-x-1'
+                    } mt-0.5`}></div>
+                  </div>
+                </button>
+                
+                {/* Leitor de Voz */}
+                <button
+                  onClick={() => {
+                    toggleVoiceReader()
+                  }}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+                    isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      voiceReaderEnabled 
+                        ? 'bg-blue-500 text-white' 
+                        : isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                      </svg>
+                    </div>
+                    <div className="text-left">
+                      <p className={`font-medium text-sm ${
+                        isDarkMode ? 'text-white' : 'text-gray-800'
+                      }`}>Leitor de Voz</p>
+                      <p className={`text-xs ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`}>Narração de textos</p>
+                    </div>
+                  </div>
+                  <div className={`w-12 h-6 rounded-full transition-colors ${
+                    voiceReaderEnabled ? 'bg-blue-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'
+                  }`}>
+                    <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${
+                      voiceReaderEnabled ? 'translate-x-6' : 'translate-x-1'
+                    } mt-0.5`}></div>
+                  </div>
+                </button>
+                
+                {/* Libras */}
+                <button
+                  onClick={() => {
+                    if (isLibrasActive) {
+                      stopLibrasCamera()
+                    } else {
+                      startLibrasCamera()
+                    }
+                    setShowAccessibilityMenu(false)
+                  }}
+                  disabled={librasLoading}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+                    isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
+                  } ${librasLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      isLibrasActive 
+                        ? 'bg-red-500 text-white animate-pulse' 
+                        : isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      {librasLoading ? (
+                        <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                      ) : isLibrasActive ? (
+                        <VideoOff className="w-5 h-5" />
+                      ) : (
+                        <Hand className="w-5 h-5" />
+                      )}
+                    </div>
+                    <div className="text-left">
+                      <p className={`font-medium text-sm ${
+                        isDarkMode ? 'text-white' : 'text-gray-800'
+                      }`}>Libras</p>
+                      <p className={`text-xs ${
+                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      }`}>{isLibrasActive ? 'Câmera ativa' : 'Detecção de sinais'}</p>
+                    </div>
+                  </div>
+                  <div className={`w-12 h-6 rounded-full transition-colors ${
+                    isLibrasActive ? 'bg-red-500' : isDarkMode ? 'bg-gray-600' : 'bg-gray-300'
+                  }`}>
+                    <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${
+                      isLibrasActive ? 'translate-x-6' : 'translate-x-1'
+                    } mt-0.5`}></div>
+                  </div>
+                </button>
+              </div>
+            </div>
           )}
-        </button>
+        </div>
         
         <div className="relative z-10 w-full max-w-md xl:max-w-lg 2xl:max-w-xl mx-auto">
           <div className="text-center mb-8 animate-fade-in-down">
@@ -9363,12 +9543,50 @@ const handleServiceCreate = async () => {
                         <Hand className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-green-400 mb-1">Sinal detectado:</p>
+                        <p className="text-sm font-medium text-green-400 mb-1">Tradução:</p>
                         <p className="text-white text-lg">{librasDetectedText}</p>
                       </div>
                     </div>
                   </div>
                 )}
+
+                <div className="grid grid-cols-5 gap-2 mb-3">
+                  {['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'].map(letter => (
+                    <button
+                      key={letter}
+                      onClick={() => handDetectionService.addLetter(letter)}
+                      className="bg-blue-500 hover:bg-blue-600 text-white py-2 rounded font-bold transition-colors"
+                    >
+                      {letter}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={() => handDetectionService.addLetter(' ')}
+                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition-colors"
+                  >
+                    Espaço
+                  </button>
+                  <button
+                    onClick={() => handDetectionService.finishWord()}
+                    className="flex-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg transition-colors"
+                  >
+                    → Frase
+                  </button>
+                  <button
+                    onClick={() => handDetectionService.clearWord()}
+                    className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-lg transition-colors"
+                  >
+                    Limpar
+                  </button>
+                  <button
+                    onClick={() => handDetectionService.clearSentence()}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
 
                 {/* Instruções */}
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">

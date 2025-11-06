@@ -13,7 +13,13 @@
   "dependencies": {
     "@azure/storage-blob": "^12.28.0",
     "@daily-co/daily-js": "^0.84.0",
+    "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/drawing_utils": "^0.3.1675466124",
+    "@mediapipe/hands": "^0.4.1675469240",
     "@supabase/supabase-js": "^2.57.4",
+    "@tensorflow-models/hand-pose-detection": "^2.0.1",
+    "@tensorflow-models/handpose": "^0.1.0",
+    "@tensorflow/tfjs": "^4.22.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.344.0",
     "qrcode": "^1.5.4",
