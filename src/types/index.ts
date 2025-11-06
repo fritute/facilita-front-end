@@ -72,6 +72,21 @@ export interface Establishment {
   lng: number
 }
 
+export interface Driver {
+  id: number
+  nome: string
+  veiculo: string
+  placa: string
+  avaliacao: number
+  foto: string
+  tempoChegada: string
+  distancia: string
+  telefone: string
+  totalCorridas: number
+  anoExperiencia: number
+  categoria: 'ECONOMICO' | 'CONFORTO' | 'PREMIUM'
+}
+
 export type ScreenType = 
   | 'login' 
   | 'signup' 
@@ -87,3 +102,4 @@ export type ScreenType =
   | 'establishments-list'
   | 'location-picker'
   | 'payment'
+  | 'waiting-driver'

@@ -12,6 +12,9 @@ import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScre
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 import { API_ENDPOINTS } from './config/constants'
 import { handDetectionService } from './services/handDetectionService'
+import { searchDriver, type Driver, type DriverSearchOptions } from './services/driverSearch.service'
+import { buscarPrestadorDisponivel, verificarServicoAceito, type PrestadorFormatado } from './services/prestadorSearch.service'
+import { aceitarServicoAutomaticamente, setMockMode } from './services/mockPrestadorAccept.service'
 //TELAS PARA TESTES E PARA MOVER
 type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
 
@@ -3245,40 +3248,101 @@ function App() {
   }
 
   // Função para iniciar busca de motorista em background
-  const startBackgroundDriverSearch = (serviceData: any) => {
-    console.log('🔍 Iniciando busca de motorista em background...')
+  const startBackgroundDriverSearch = async (serviceData: any) => {
+    console.log('🔍 Iniciando busca de prestador em background...')
+    console.log('📦 Dados do serviço:', serviceData)
+    
     setIsSearchingDriverBackground(true)
     setBackgroundSearchStartTime(new Date())
     setSearchTimeElapsed(0)
     
-    // Simular busca de motorista (em produção seria uma chamada real à API)
+    // Atualizar tempo decorrido a cada segundo
     const searchInterval = setInterval(() => {
       setSearchTimeElapsed(prev => prev + 1)
     }, 1000)
 
-    // Simular encontrar motorista após 8-15 segundos
-    const findDriverTimeout = setTimeout(() => {
-      const mockDriver = {
-        id: Math.floor(Math.random() * 1000),
-        nome: 'João Silva',
-        veiculo: 'Honda Civic Prata',
-        placa: 'ABC-1234',
-        avaliacao: 4.8,
-        foto: '/driver-avatar.png',
-        tempoChegada: '5-8 min',
-        distancia: '1.2 km'
-      }
+    try {
+      const token = localStorage.getItem('authToken')
       
-      console.log('✅ Motorista encontrado:', mockDriver)
-      setFoundDriver(mockDriver)
-      setShowDriverFoundModal(true)
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
+
+      // Se temos um ID de serviço, usar polling para verificar aceitação
+      if (serviceData?.id || activeServiceId) {
+        const servicoId = serviceData?.id || activeServiceId
+        console.log('🔄 Iniciando polling para serviço:', servicoId)
+        
+        // Iniciar verificação de serviço aceito
+        verificarServicoAceito(
+          Number(servicoId),
+          token,
+          (prestador: PrestadorFormatado) => {
+            console.log('✅ Prestador encontrado e aceitou o serviço:', prestador)
+            
+            // Converter para formato esperado pelo modal
+            const driverData = {
+              id: prestador.id,
+              nome: prestador.nome,
+              veiculo: prestador.veiculo,
+              placa: prestador.placa,
+              avaliacao: prestador.avaliacao,
+              foto: prestador.foto,
+              tempoChegada: prestador.tempoChegada,
+              distancia: prestador.distancia,
+              telefone: prestador.telefone,
+              totalCorridas: prestador.totalCorridas,
+              anoExperiencia: prestador.anoExperiencia,
+              categoria: prestador.categoria
+            }
+            
+            setFoundDriver(driverData)
+            setShowDriverFoundModal(true)
+            setIsSearchingDriverBackground(false)
+            clearInterval(searchInterval)
+          },
+          60 // 60 tentativas = 2 minutos
+        ).catch((error) => {
+          console.error('❌ Erro no polling:', error)
+          setIsSearchingDriverBackground(false)
+          clearInterval(searchInterval)
+          alert('Não foi possível encontrar um prestador disponível no momento. Tente novamente.')
+        })
+      } else {
+        // Fallback: buscar prestador disponível diretamente (modo mock)
+        console.log('⚠️ Sem ID de serviço, usando busca direta')
+        
+        const prestador = await buscarPrestadorDisponivel(token)
+        
+        console.log('✅ Prestador encontrado:', prestador)
+        
+        const driverData = {
+          id: prestador.id,
+          nome: prestador.nome,
+          veiculo: prestador.veiculo,
+          placa: prestador.placa,
+          avaliacao: prestador.avaliacao,
+          foto: prestador.foto,
+          tempoChegada: prestador.tempoChegada,
+          distancia: prestador.distancia,
+          telefone: prestador.telefone,
+          totalCorridas: prestador.totalCorridas,
+          anoExperiencia: prestador.anoExperiencia,
+          categoria: prestador.categoria
+        }
+        
+        setFoundDriver(driverData)
+        setShowDriverFoundModal(true)
+        setIsSearchingDriverBackground(false)
+        clearInterval(searchInterval)
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar prestador:', error)
       setIsSearchingDriverBackground(false)
       clearInterval(searchInterval)
-    }, Math.random() * 7000 + 8000) // 8-15 segundos
-
-    return () => {
-      clearTimeout(findDriverTimeout)
-      clearInterval(searchInterval)
+      
+      // Mostrar mensagem de erro ao usuário
+      alert('Não foi possível encontrar um prestador disponível no momento. Tente novamente.')
     }
   }
 
@@ -4494,9 +4558,12 @@ function App() {
       })
 
       if (response.ok) {
-        const data = await response.json()
-        console.log('📋 Status do serviço:', data)
-        return data
+        const result = await response.json()
+        console.log('📋 Status do serviço:', result)
+        // API retorna {status_code, data: {...}}
+        const serviceData = result.data || result
+        console.log('📦 Dados do serviço extraídos:', serviceData)
+        return serviceData
       } else {
         console.error('❌ Erro ao verificar status:', response.status)
         return null
@@ -4516,31 +4583,71 @@ function App() {
       clearInterval(pollingInterval)
     }
 
-    // Verificar a cada 5 segundos
+    // Verificar a cada 3 segundos
     const interval = setInterval(async () => {
       const serviceData = await checkServiceStatus(serviceId)
       
       if (serviceData) {
         // Verificar se tem prestador aceito
-        if (serviceData.id_prestador || serviceData.prestador_id || serviceData.status === 'ACEITO') {
+        if (serviceData.id_prestador || serviceData.prestador_id || serviceData.status === 'EM_ANDAMENTO') {
           console.log('✅ Prestador aceitou o serviço!')
-          console.log('👤 ID do prestador:', serviceData.id_prestador || serviceData.prestador_id)
+          const prestadorId = serviceData.id_prestador || serviceData.prestador_id
+          console.log('👤 ID do prestador:', prestadorId)
           
           // Parar polling
           clearInterval(interval)
           setPollingInterval(null)
           
-          // Buscar notificações atualizadas
-          fetchNotifications()
-          
-          // Redirecionar para pagamento
-          console.log('💳 Redirecionando para pagamento...')
-          handleScreenTransition('payment')
+          // Buscar dados do prestador e mostrar modal
+          try {
+            const token = localStorage.getItem('authToken')
+            if (token && prestadorId) {
+              const { buscarPrestadorPorId, formatarPrestador } = await import('./services/prestadorSearch.service')
+              const prestador = await buscarPrestadorPorId(prestadorId, token)
+              const prestadorFormatado = formatarPrestador(prestador)
+              
+              console.log('📋 Dados do prestador:', prestadorFormatado)
+              
+              // Converter para formato esperado pelo modal
+              const driverData = {
+                id: prestadorFormatado.id,
+                nome: prestadorFormatado.nome,
+                veiculo: prestadorFormatado.veiculo,
+                placa: prestadorFormatado.placa,
+                avaliacao: prestadorFormatado.avaliacao,
+                foto: prestadorFormatado.foto,
+                tempoChegada: prestadorFormatado.tempoChegada,
+                distancia: prestadorFormatado.distancia,
+                telefone: prestadorFormatado.telefone,
+                totalCorridas: prestadorFormatado.totalCorridas,
+                anoExperiencia: prestadorFormatado.anoExperiencia,
+                categoria: prestadorFormatado.categoria
+              }
+              
+              setFoundDriver(driverData)
+              setShowDriverFoundModal(true)
+              
+              // Buscar notificações atualizadas
+              fetchNotifications()
+              
+              // Tocar som de notificação
+              playNotificationSound()
+              showNewNotificationToast('Prestador encontrado e aceitou seu pedido!')
+            } else {
+              // Fallback: ir direto para pagamento
+              console.log('💳 Redirecionando para pagamento...')
+              handleScreenTransition('payment')
+            }
+          } catch (error) {
+            console.error('❌ Erro ao buscar dados do prestador:', error)
+            // Fallback: ir direto para pagamento
+            handleScreenTransition('payment')
+          }
         } else {
           console.log('⏳ Aguardando prestador... Status:', serviceData.status)
         }
       }
-    }, 5000) // 5 segundos
+    }, 3000) // 3 segundos
 
     setPollingInterval(interval)
   }
@@ -4761,6 +4868,18 @@ const handleServiceCreate = async () => {
         const serviceIdNumber = parseInt(createdServiceId.toString())
         if (!isNaN(serviceIdNumber)) {
           startPollingServiceStatus(serviceIdNumber)
+          
+          // 🤖 INICIAR ACEITAÇÃO MOCKADA AUTOMÁTICA
+          // Isso simula um prestador aceitando o serviço após alguns segundos
+          console.log('🤖 Iniciando sistema de aceitação mockada...')
+          aceitarServicoAutomaticamente(serviceIdNumber, true)
+            .then(() => {
+              console.log('✅ Sistema de aceitação mockada iniciado com sucesso')
+            })
+            .catch((error) => {
+              console.warn('⚠️ Erro no sistema de aceitação mockada:', error)
+              // Não bloquear o fluxo se o mock falhar
+            })
         }
       }
     } else {
@@ -9496,8 +9615,8 @@ const handleServiceCreate = async () => {
             <div className="bg-gray-50 rounded-xl p-4 mb-6">
               <div className="flex items-center space-x-4">
                 {/* Avatar */}
-                <div className="w-16 h-16 bg-gray-300 rounded-full flex items-center justify-center">
-                  <User className="w-8 h-8 text-gray-600" />
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
+                  <User className="w-8 h-8 text-white" />
                 </div>
                 
                 {/* Info */}
@@ -9506,10 +9625,21 @@ const handleServiceCreate = async () => {
                   <p className="text-gray-600 text-sm">{foundDriver.veiculo}</p>
                   <p className="text-gray-500 text-xs">Placa: {foundDriver.placa}</p>
                   
-                  {/* Rating */}
-                  <div className="flex items-center mt-1">
-                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                    <span className="text-sm text-gray-600 ml-1">{foundDriver.avaliacao}</span>
+                  {/* Rating e Categoria */}
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center">
+                      <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                      <span className="text-sm text-gray-600 ml-1">{foundDriver.avaliacao}</span>
+                    </div>
+                    {foundDriver.categoria && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        foundDriver.categoria === 'PREMIUM' ? 'bg-purple-100 text-purple-700' :
+                        foundDriver.categoria === 'CONFORTO' ? 'bg-blue-100 text-blue-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {foundDriver.categoria}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -9525,6 +9655,24 @@ const handleServiceCreate = async () => {
                   <p className="font-semibold text-gray-700">{foundDriver.distancia}</p>
                 </div>
               </div>
+              
+              {/* Experiência do motorista */}
+              {(foundDriver.totalCorridas || foundDriver.anoExperiencia) && (
+                <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-200">
+                  {foundDriver.totalCorridas && (
+                    <div className="text-center">
+                      <p className="text-xs text-gray-500">Corridas</p>
+                      <p className="font-semibold text-gray-700">{foundDriver.totalCorridas}</p>
+                    </div>
+                  )}
+                  {foundDriver.anoExperiencia && (
+                    <div className="text-center">
+                      <p className="text-xs text-gray-500">Experiência</p>
+                      <p className="font-semibold text-gray-700">{foundDriver.anoExperiencia} anos</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Botões de Ação */}
