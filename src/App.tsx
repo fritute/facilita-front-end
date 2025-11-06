@@ -8,7 +8,7 @@ import CompleteProfileModal from './components/CompleteProfileModal'
 import LoadingSpinner from './components/LoadingSpinner'
 import NotificationSidebar from './components/NotificationSidebar'
 import ServiceCreateScreen from './components/ServiceCreateScreen'
-import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen, ResetPasswordScreen } from './screens'
+import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen, ResetPasswordScreen, ServiceProviderScreen } from './screens'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 import { API_ENDPOINTS } from './config/constants'
 import { handDetectionService } from './services/handDetectionService'
@@ -2872,6 +2872,12 @@ function App() {
         
         console.log('✅ Resposta do login:', data)
         
+        // Verificar se é prestador e bloquear acesso
+        if (data.usuario && data.usuario.tipo_conta === 'PRESTADOR') {
+          alert('❌ Acesso Negado\n\nEste site é exclusivo para CONTRATANTES.\n\nPrestadores de serviço devem utilizar o aplicativo móvel (celular).\n\nBaixe o app na Play Store ou App Store.')
+          return
+        }
+        
         // Armazenar token no localStorage
         if (data.token) {
           localStorage.setItem('authToken', data.token)
@@ -3147,7 +3153,8 @@ function App() {
           if (selectedAccountType === 'CONTRATANTE') {
             handleScreenTransition('profile-setup')
           } else {
-            handleScreenTransition('home')
+            // Prestador: mostrar tela informando que é só mobile
+            handleScreenTransition('service-provider')
           }
         } else {
           // Se não retornar token, fazer login automático
@@ -3347,10 +3354,29 @@ function App() {
   }
 
   // Função para aceitar o motorista encontrado
-  const acceptFoundDriver = () => {
-    console.log('✅ Motorista aceito, indo para pagamento')
+  const acceptFoundDriver = async () => {
+    console.log('✅ Motorista aceito, processando pagamento automático')
     setShowDriverFoundModal(false)
-    handleScreenTransition('payment')
+    
+    // Pagar automaticamente com carteira digital
+    if (createdServiceId) {
+      const serviceIdNumber = parseInt(createdServiceId.toString())
+      if (!isNaN(serviceIdNumber)) {
+        const paymentSuccess = await payServiceWithWallet(serviceIdNumber)
+        
+        if (paymentSuccess) {
+          // Pagamento bem-sucedido, ir para tracking
+          handleScreenTransition('service-tracking')
+        } else {
+          // Falha no pagamento, voltar para tela de pagamento manual
+          handleScreenTransition('payment')
+        }
+      } else {
+        handleScreenTransition('payment')
+      }
+    } else {
+      handleScreenTransition('payment')
+    }
   }
 
   // Função para rejeitar e continuar procurando
@@ -3363,44 +3389,7 @@ function App() {
   }
 
   const handleServiceProviderSubmit = async () => {
-    setIsLoading(true)
-
-    const registerData: RegisterData = {
-      nome: userData.nome,
-      senha_hash: userData.senha,
-      email: userData.email,
-      telefone: userData.telefone.replace(/\D/g, ''),
-      tipo_conta: 'PRESTADOR'
-    }
-
-    try {
-      const response = await fetch(API_ENDPOINTS.REGISTER, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(registerData)
-      })
-
-      if (response.ok) {
-        handleScreenTransition('success')
-        setTimeout(() => {
-          handleScreenTransition('login')
-        }, 2000)
-      } else {
-        const errorData = await response.json()
-        alert(`Erro no cadastro: ${errorData.message || 'Erro desconhecido'}`)
-      }
-    } catch (error) {
-      console.error('Erro na requisição:', error)
-      if (error instanceof Error && error.message === 'Failed to fetch') {
-        alert('Erro de conexão: Não foi possível conectar ao servidor. Verifique se o backend está rodando')
-      } else {
-        alert('Erro de conexão. Verifique se o servidor está rodando.')
-      }
-    } finally {
-      setIsLoading(false)
-    }
+    handleScreenTransition('login')
   }
 
   // Função para normalizar número de telefone
@@ -4859,29 +4848,9 @@ const handleServiceCreate = async () => {
       setActiveServiceId(createdServiceId)
       setServiceStartTime(new Date())
       
-      // Ir para tela de aguardando prestador
-      console.log('⏳ Aguardando prestador aceitar o serviço...')
-      handleScreenTransition('waiting-provider')
-      
-      // Iniciar polling para verificar se prestador aceitou
-      if (createdServiceId) {
-        const serviceIdNumber = parseInt(createdServiceId.toString())
-        if (!isNaN(serviceIdNumber)) {
-          startPollingServiceStatus(serviceIdNumber)
-          
-          // 🤖 INICIAR ACEITAÇÃO MOCKADA AUTOMÁTICA
-          // Isso simula um prestador aceitando o serviço após alguns segundos
-          console.log('🤖 Iniciando sistema de aceitação mockada...')
-          aceitarServicoAutomaticamente(serviceIdNumber, true)
-            .then(() => {
-              console.log('✅ Sistema de aceitação mockada iniciado com sucesso')
-            })
-            .catch((error) => {
-              console.warn('⚠️ Erro no sistema de aceitação mockada:', error)
-              // Não bloquear o fluxo se o mock falhar
-            })
-        }
-      }
+      // Ir direto para pagamento
+      console.log('💳 Indo para tela de pagamento...')
+      handleScreenTransition('payment')
     } else {
       console.error('❌ Falha ao criar serviço')
       alert('Não foi possível criar o serviço. Verifique os dados e tente novamente.')
@@ -8167,42 +8136,9 @@ const handleServiceCreate = async () => {
 
   if (currentScreen === 'service-provider') {
     return (
-      <div className={`min-h-screen bg-gray-100 flex flex-col transition-all duration-300 ${
-        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
-      }`}>
-        <div className="bg-green-500 text-white p-4 md:p-6 text-center relative">
-          <button
-            onClick={() => handleScreenTransition('account-type')}
-            className="absolute left-4 top-4 md:left-6 md:top-6 text-white hover:text-gray-200"
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <h1 className="text-lg md:text-xl font-bold">Tipo de conta</h1>
-        </div>
-
-        <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 text-center">
-          <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-4">Prestador de Serviço</h2>
-          <p className="text-sm md:text-base text-gray-600 mb-2 px-4">
-            Este aplicativo de delivery foi desenvolvido exclusivamente para uso em dispositivos
-          </p>
-          <p className="text-sm md:text-base text-gray-600 mb-2 px-4">móveis (celulares).</p>
-          <p className="text-sm md:text-base text-gray-600 mb-8 px-4">
-            Por favor, acesse pelo seu{' '}
-            <span className="text-green-500 font-semibold">smartphone</span>{' '}
-            para continuar utilizando.
-          </p>
-
-          <UserIcon />
-
-          <button
-            onClick={handleServiceProviderSubmit}
-            disabled={isLoading}
-            className="bg-green-500 text-white px-8 md:px-12 py-3 rounded-full font-semibold hover:bg-green-600 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-          >
-            {isLoading ? 'Cadastrando...' : 'Voltar'}
-          </button>
-        </div>
-      </div>
+      <ServiceProviderScreen
+        onBack={() => handleScreenTransition('login')}
+      />
     )
   }
 
