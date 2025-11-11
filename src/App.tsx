@@ -3399,28 +3399,12 @@ function App() {
 
   // Função para aceitar o motorista encontrado
   const acceptFoundDriver = async () => {
-    console.log('✅ Motorista aceito, processando pagamento automático')
+    console.log('✅ Motorista aceito pelo usuário, indo para tela de pagamento')
     setShowDriverFoundModal(false)
     
-    // Pagar automaticamente com carteira digital
-    if (createdServiceId) {
-      const serviceIdNumber = parseInt(createdServiceId.toString())
-      if (!isNaN(serviceIdNumber)) {
-        const paymentSuccess = await payServiceWithWallet(serviceIdNumber)
-        
-        if (paymentSuccess) {
-          // Pagamento bem-sucedido, ir para tracking
-          handleScreenTransition('service-tracking')
-        } else {
-          // Falha no pagamento, voltar para tela de pagamento manual
-          handleScreenTransition('payment')
-        }
-      } else {
-        handleScreenTransition('payment')
-      }
-    } else {
-      handleScreenTransition('payment')
-    }
+    // Ir para tela de pagamento
+    console.log('💳 Redirecionando para tela de pagamento...')
+    handleScreenTransition('payment')
   }
 
   // Função para rejeitar e continuar procurando
@@ -4878,9 +4862,9 @@ const handleServiceCreate = async () => {
     setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng })
   }
   
-  // NOVO FLUXO: Criar serviço no banco primeiro
+  // NOVO FLUXO: Criar serviço no banco primeiro, depois aguardar motorista
   setIsLoading(true)
-  console.log('🔨 Criando serviço no banco antes do pagamento...')
+  console.log('🔨 Criando serviço no banco...')
   
   try {
     const serviceCreated = await createService()
@@ -4892,9 +4876,12 @@ const handleServiceCreate = async () => {
       setActiveServiceId(createdServiceId)
       setServiceStartTime(new Date())
       
-      // Ir direto para pagamento
-      console.log('💳 Indo para tela de pagamento...')
-      handleScreenTransition('payment')
+      // Ir para tela de espera do motorista
+      console.log('⏳ Aguardando motorista aceitar o serviço...')
+      handleScreenTransition('waiting-driver')
+      
+      // Iniciar busca de motorista em background
+      startBackgroundDriverSearch({ id: createdServiceId })
     } else {
       console.error('❌ Falha ao criar serviço')
       alert('Não foi possível criar o serviço. Verifique os dados e tente novamente.')
@@ -5832,9 +5819,9 @@ const handleServiceCreate = async () => {
     const paymentSuccess = await payServiceWithWallet(serviceId)
     
     if (paymentSuccess) {
-      console.log('✅ Pagamento bem-sucedido, redirecionando...')
-      // Redirecionar para tela de confirmação
-      handleScreenTransition('service-confirmed')
+      console.log('✅ Pagamento bem-sucedido, redirecionando para tracking...')
+      // Redirecionar para tela de tracking do serviço
+      handleScreenTransition('service-tracking')
     } else {
       console.error('❌ Pagamento falhou')
     }
