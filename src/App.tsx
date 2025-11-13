@@ -158,11 +158,9 @@ function App() {
   const [changePasswordError, setChangePasswordError] = useState('')
   const [changePasswordSuccess, setChangePasswordSuccess] = useState('')
   
-  // Estados para busca de motorista em background
-  const [isSearchingDriverBackground, setIsSearchingDriverBackground] = useState(false)
-  const [foundDriver, setFoundDriver] = useState<any>(null)
-  const [showDriverFoundModal, setShowDriverFoundModal] = useState(false)
-  const [backgroundSearchStartTime, setBackgroundSearchStartTime] = useState<Date | null>(null)
+  // Estados para busca de prestador
+  const [isSearchingProvider, setIsSearchingProvider] = useState(false)
+  const [searchStartTime, setSearchStartTime] = useState<Date | null>(null)
   const [searchTimeElapsed, setSearchTimeElapsed] = useState(0)
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
@@ -651,13 +649,10 @@ function App() {
     // Finalizar serviço ativo no gerenciador
     ServiceTrackingManager.completeActiveService()
     
-    // Limpar estado local
-    setActiveServiceId(null)
-    setServiceStartTime(null)
-    
-    // Redirecionar para avaliação
+    // Redirecionar para pagamento
+    showInfo('Serviço Concluído', 'Por favor, realize o pagamento')
     setTimeout(() => {
-      handleScreenTransition('service-rating')
+      handleScreenTransition('payment')
     }, 500)
   }
 
@@ -673,15 +668,14 @@ function App() {
   }
 
   
-  const [entregadorData, setEntregadorData] = useState({
-    id: 2, // ID do prestador
-    nome: 'José Silva',
-    telefone: '(11) 98704-6715',
-    veiculo: 'Moto Honda CG 160',
-    placa: 'ABC1D23',
-    rating: 4.9,
-    tempoEstimado: '15',
-    distancia: '2.5 km'
+  const [entregadorData, setEntregadorData] = useState<EntregadorData>({
+    nome: '',
+    telefone: '',
+    veiculo: '',
+    placa: '',
+    rating: 0,
+    tempoEstimado: '',
+    distancia: ''
   })
 
   const [loginData, setLoginData] = useState({
@@ -1800,6 +1794,16 @@ function App() {
       }
 
       console.log('✅ Novo saldo:', newBalance)
+      
+      // Limpar estados do serviço
+      setActiveServiceId(null)
+      setServiceStartTime(null)
+      
+      // Redirecionar para avaliação após pagamento
+      setTimeout(() => {
+        handleScreenTransition('service-rating')
+      }, 1500)
+      
       return true
 
     } catch (error) {
@@ -3272,122 +3276,109 @@ function App() {
     }
   }
 
-  // Função para iniciar busca de motorista em background
-  const startBackgroundDriverSearch = async (serviceData: any) => {
-    console.log('🔍 Iniciando busca de prestador em background...')
-    console.log('📦 Dados do serviço:', serviceData)
+  // Função para iniciar busca de prestador
+  const startProviderSearch = async (serviceId: string) => {
+    console.log('🔍 Iniciando busca de prestador para serviço:', serviceId)
     
-    setIsSearchingDriverBackground(true)
-    setBackgroundSearchStartTime(new Date())
+    setIsSearchingProvider(true)
+    setSearchStartTime(new Date())
     setSearchTimeElapsed(0)
     
-    // Atualizar tempo decorrido a cada segundo
     const searchInterval = setInterval(() => {
       setSearchTimeElapsed(prev => prev + 1)
     }, 1000)
 
-    try {
-      const token = localStorage.getItem('authToken')
-      
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado')
-      }
+    const token = localStorage.getItem('authToken')
+    if (!token) {
+      clearInterval(searchInterval)
+      setIsSearchingProvider(false)
+      showError('Erro', 'Token não encontrado')
+      return
+    }
 
-      // Se temos um ID de serviço, usar polling para verificar aceitação
-      if (serviceData?.id || activeServiceId) {
-        const servicoId = serviceData?.id || activeServiceId
-        console.log('🔄 Iniciando polling para serviço:', servicoId)
+    let attempts = 0
+    const maxAttempts = 60
+    
+    const checkServiceStatus = async () => {
+      try {
+        const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/servico/${serviceId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
         
-        // Iniciar verificação de serviço aceito
-        verificarServicoAceito(
-          Number(servicoId),
-          token,
-          (prestador: PrestadorFormatado) => {
-            console.log('✅ Prestador encontrado e aceitou o serviço:', prestador)
+        if (response.ok) {
+          const data = await response.json()
+          const service = data.data || data
+          
+          // Atualizar valor do serviço sempre que buscar
+          if (service.valor && servicePrice === 0) {
+            setServicePrice(parseFloat(service.valor))
+          }
+          
+          // Verificar se o serviço pertence ao contratante logado
+          const contratanteId = loggedUser?.id_contratante
+          if (contratanteId && service.id_contratante !== contratanteId) {
+            console.log('⚠️ Serviço não pertence ao contratante logado')
+            return
+          }
+          
+          if (service.status === 'EM_ANDAMENTO' && service.id_prestador) {
+            console.log('✅ Prestador aceitou!', service)
+            clearInterval(searchInterval)
+            clearInterval(pollingInterval)
+            setIsSearchingProvider(false)
             
-            // Converter para formato esperado pelo modal
-            const driverData = {
-              id: prestador.id,
-              nome: prestador.nome,
-              veiculo: prestador.veiculo,
-              placa: prestador.placa,
-              avaliacao: prestador.avaliacao,
-              foto: prestador.foto,
-              tempoChegada: prestador.tempoChegada,
-              distancia: prestador.distancia,
-              telefone: prestador.telefone,
-              totalCorridas: prestador.totalCorridas,
-              anoExperiencia: prestador.anoExperiencia,
-              categoria: prestador.categoria
+            // Extrair dados do prestador da resposta (já vem completo)
+            const prestador = service.prestador
+            const usuario = prestador?.usuario
+            
+            // Atualizar entregadorData com dados reais da API
+            setEntregadorData({
+              id: prestador?.id,
+              nome: usuario?.nome || 'Prestador',
+              telefone: usuario?.telefone || '',
+              veiculo: prestador?.veiculo || 'Veículo',
+              placa: prestador?.placa || 'N/A',
+              rating: prestador?.avaliacao_media || 5.0,
+              tempoEstimado: service.tempo_estimado || '15 min',
+              distancia: '2.5 km'
+            })
+            
+            // Atualizar valor do serviço com o valor do backend
+            if (service.valor) {
+              setServicePrice(parseFloat(service.valor))
             }
             
-            setFoundDriver(driverData)
-            setShowDriverFoundModal(true)
-            setIsSearchingDriverBackground(false)
-            clearInterval(searchInterval)
-          },
-          60 // 60 tentativas = 2 minutos
-        ).catch((error) => {
-          console.error('❌ Erro no polling:', error)
-          setIsSearchingDriverBackground(false)
-          clearInterval(searchInterval)
-          alert('Não foi possível encontrar um prestador disponível no momento. Tente novamente.')
-        })
-      } else {
-        // Fallback: buscar prestador disponível diretamente (modo mock)
-        console.log('⚠️ Sem ID de serviço, usando busca direta')
-        
-        const prestador = await buscarPrestadorDisponivel(token)
-        
-        console.log('✅ Prestador encontrado:', prestador)
-        
-        const driverData = {
-          id: prestador.id,
-          nome: prestador.nome,
-          veiculo: prestador.veiculo,
-          placa: prestador.placa,
-          avaliacao: prestador.avaliacao,
-          foto: prestador.foto,
-          tempoChegada: prestador.tempoChegada,
-          distancia: prestador.distancia,
-          telefone: prestador.telefone,
-          totalCorridas: prestador.totalCorridas,
-          anoExperiencia: prestador.anoExperiencia,
-          categoria: prestador.categoria
+            // Garantir que temos os locais de origem e destino
+            if (pickupLocation && deliveryLocation) {
+              setSelectedDestination(deliveryLocation)
+              setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng })
+            }
+            
+            showSuccess('Prestador Encontrado!', `${usuario?.nome} aceitou sua corrida!`)
+            setServiceStartTime(new Date())
+            
+            // Forçar transição para tracking
+            setTimeout(() => {
+              handleScreenTransition('service-tracking')
+            }, 500)
+            return
+          }
         }
         
-        setFoundDriver(driverData)
-        setShowDriverFoundModal(true)
-        setIsSearchingDriverBackground(false)
-        clearInterval(searchInterval)
+        attempts++
+        if (attempts >= maxAttempts) {
+          clearInterval(searchInterval)
+          clearInterval(pollingInterval)
+          setIsSearchingProvider(false)
+          showError('Tempo Esgotado', 'Nenhum prestador aceitou o serviço.')
+        }
+      } catch (error) {
+        console.error('❌ Erro ao verificar status:', error)
       }
-    } catch (error) {
-      console.error('❌ Erro ao buscar prestador:', error)
-      setIsSearchingDriverBackground(false)
-      clearInterval(searchInterval)
-      
-      // Mostrar mensagem de erro ao usuário
-      alert('Não foi possível encontrar um prestador disponível no momento. Tente novamente.')
     }
-  }
-
-  // Função para aceitar o motorista encontrado
-  const acceptFoundDriver = async () => {
-    console.log('✅ Motorista aceito pelo usuário, indo para tela de pagamento')
-    setShowDriverFoundModal(false)
     
-    // Ir para tela de pagamento
-    console.log('💳 Redirecionando para tela de pagamento...')
-    handleScreenTransition('payment')
-  }
-
-  // Função para rejeitar e continuar procurando
-  const rejectFoundDriver = () => {
-    console.log('❌ Motorista rejeitado, continuando busca')
-    setFoundDriver(null)
-    setShowDriverFoundModal(false)
-    // Reiniciar busca
-    startBackgroundDriverSearch(null)
+    checkServiceStatus()
+    const pollingInterval = setInterval(checkServiceStatus, 3000)
   }
 
   const handleServiceProviderSubmit = async () => {
@@ -4794,14 +4785,13 @@ const handleServiceCreate = async () => {
       console.log('✅ Serviço criado com sucesso!')
       // Definir serviço como ativo
       setActiveServiceId(createdServiceId)
-      setServiceStartTime(new Date())
       
-      // Ir para tela de espera do motorista
-      console.log('⏳ Aguardando motorista aceitar o serviço...')
-      handleScreenTransition('waiting-driver')
+      // Ir para tela de espera do prestador
+      console.log('⏳ Aguardando prestador aceitar o serviço...')
+      handleScreenTransition('waiting-provider')
       
-      // Iniciar busca de motorista em background
-      startBackgroundDriverSearch({ id: createdServiceId })
+      // Iniciar busca de prestador
+      startProviderSearch(createdServiceId!)
     } else {
       console.error('❌ Falha ao criar serviço')
       alert('Não foi possível criar o serviço. Verifique os dados e tente novamente.')
@@ -6202,22 +6192,24 @@ const handleServiceCreate = async () => {
   )
 }
 
-  // Waiting Driver Screen - Agora inicia busca em background e permite navegação
-  if (currentScreen === 'waiting-driver') {
-    // Iniciar busca em background se ainda não iniciou
-    React.useEffect(() => {
-      if (!isSearchingDriverBackground && !foundDriver) {
-        startBackgroundDriverSearch(null)
-      }
-    }, [])
+  // Waiting Provider Screen - Aguardando prestador aceitar
+  if (currentScreen === 'waiting-provider') {
 
     return (
       <div className={`min-h-screen bg-gray-100 flex items-center justify-center transition-all duration-300 ${
         isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
       }`}>
+        {/* Botão Voltar */}
+        <button
+          onClick={() => handleScreenTransition('home')}
+          className="absolute top-4 left-4 p-2 rounded-full bg-white shadow-md hover:bg-gray-100 transition-colors"
+        >
+          <ArrowLeft className="w-6 h-6 text-gray-700" />
+        </button>
+        
         <div className="text-center p-8 max-w-md mx-auto">
-          <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-            <Search className="w-10 h-10 text-white" />
+          <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+            <Search className="w-12 h-12 text-white" />
           </div>
           
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Procurando motorista...</h2>
@@ -9658,128 +9650,8 @@ const handleServiceCreate = async () => {
       )}
 
       {/* Modal Flutuante - Motorista Encontrado */}
-      {showDriverFoundModal && foundDriver && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-slide-up">
-            {/* Header */}
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">Motorista Encontrado!</h3>
-              <p className="text-gray-600 text-sm">Encontramos um motorista disponível para você</p>
-            </div>
-
-            {/* Informações do Motorista */}
-            <div className="bg-gray-50 rounded-xl p-4 mb-6">
-              <div className="flex items-center space-x-4">
-                {/* Avatar */}
-                <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
-                  <User className="w-8 h-8 text-white" />
-                </div>
-                
-                {/* Info */}
-                <div className="flex-1">
-                  <h4 className="font-semibold text-gray-800 text-lg">{foundDriver.nome}</h4>
-                  <p className="text-gray-600 text-sm">{foundDriver.veiculo}</p>
-                  <p className="text-gray-500 text-xs">Placa: {foundDriver.placa}</p>
-                  
-                  {/* Rating e Categoria */}
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="flex items-center">
-                      <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                      <span className="text-sm text-gray-600 ml-1">{foundDriver.avaliacao}</span>
-                    </div>
-                    {foundDriver.categoria && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        foundDriver.categoria === 'PREMIUM' ? 'bg-purple-100 text-purple-700' :
-                        foundDriver.categoria === 'CONFORTO' ? 'bg-blue-100 text-blue-700' :
-                        'bg-green-100 text-green-700'
-                      }`}>
-                        {foundDriver.categoria}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Detalhes adicionais */}
-              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-200">
-                <div className="text-center">
-                  <p className="text-xs text-gray-500">Tempo de chegada</p>
-                  <p className="font-semibold text-green-600">{foundDriver.tempoChegada}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-gray-500">Distância</p>
-                  <p className="font-semibold text-gray-700">{foundDriver.distancia}</p>
-                </div>
-              </div>
-              
-              {/* Experiência do motorista */}
-              {(foundDriver.totalCorridas || foundDriver.anoExperiencia) && (
-                <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-200">
-                  {foundDriver.totalCorridas && (
-                    <div className="text-center">
-                      <p className="text-xs text-gray-500">Corridas</p>
-                      <p className="font-semibold text-gray-700">{foundDriver.totalCorridas}</p>
-                    </div>
-                  )}
-                  {foundDriver.anoExperiencia && (
-                    <div className="text-center">
-                      <p className="text-xs text-gray-500">Experiência</p>
-                      <p className="font-semibold text-gray-700">{foundDriver.anoExperiencia} anos</p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Botões de Ação */}
-            <div className="space-y-3">
-              <button
-                onClick={acceptFoundDriver}
-                className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl hover:from-green-600 hover:to-green-700 transform hover:scale-[1.02] transition-all duration-300"
-              >
-                Aceitar e Pagar
-              </button>
-              
-              <button
-                onClick={rejectFoundDriver}
-                className="w-full bg-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-300 transition-colors"
-              >
-                Procurar Outro
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Indicador de Busca em Background */}
-      {isSearchingDriverBackground && !['waiting-driver', 'payment'].includes(currentScreen) && (
-        <div className="fixed bottom-4 right-4 z-40">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-4 max-w-sm animate-slide-up">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <Search className="w-5 h-5 text-green-600 animate-pulse" />
-              </div>
-              <div className="flex-1">
-                <p className="font-medium text-gray-800 text-sm">Procurando motorista...</p>
-                <p className="text-xs text-gray-500">{searchTimeElapsed}s decorridos</p>
-              </div>
-              <button
-                onClick={() => handleScreenTransition('waiting-driver')}
-                className={`transition-colors ${
-                  isDarkMode 
-                    ? 'text-green-600 hover:text-green-700' 
-                    : 'text-blue-600 hover:text-blue-700'
-                }`}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
+      {/* Modais e indicadores removidos - fluxo simplificado */}
+      {/* Prestador aceita pelo celular -> vai direto para pagamento
               </button>
             </div>
           </div>
