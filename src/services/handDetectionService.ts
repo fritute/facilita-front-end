@@ -1,5 +1,6 @@
 import { Hands, Results } from '@mediapipe/hands'
 import { vlibrasService } from './vlibrasService'
+import { notificationService } from './notificationService'
 
 export class HandDetectionService {
   private hands: Hands | null = null
@@ -28,7 +29,7 @@ export class HandDetectionService {
       
       console.log('✅ MediaPipe Hands carregado!')
     } catch (error) {
-      console.error('❌ Erro:', error)
+      notificationService.showError('Detecção de gestos', 'Não foi possível inicializar o sistema de detecção de gestos.')
     }
   }
 

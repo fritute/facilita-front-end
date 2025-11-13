@@ -15,6 +15,7 @@ import { handDetectionService } from './services/handDetectionService'
 import { searchDriver, type Driver, type DriverSearchOptions } from './services/driverSearch.service'
 import { buscarPrestadorDisponivel, verificarServicoAceito, type PrestadorFormatado } from './services/prestadorSearch.service'
 import { aceitarServicoAutomaticamente, setMockMode } from './services/mockPrestadorAccept.service'
+import { useNotifications } from './hooks/useNotifications'
 //TELAS PARA TESTES E PARA MOVER
 type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
 
@@ -85,6 +86,9 @@ interface LoggedUser {
 function App() {
 //PARA MUDAR A TELA PARA TESTES
   const [currentScreen, setCurrentScreen] = useState<Screen>('landing')
+  
+  // Hook de notificações
+  const { notifications, showError, showWarning, showSuccess, showInfo, markAsRead, clearAll } = useNotifications()
 
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
@@ -220,17 +224,9 @@ function App() {
   const activeStreamCheck = useRef<NodeJS.Timeout | null>(null)
   const librasVideoRef = useRef<HTMLVideoElement | null>(null)
   
-  // Estados para notificações
+  // Estados para notificações (apenas o que não está no hook)
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
-  const [notifications, setNotifications] = useState<Array<{
-    id: string
-    type: 'success' | 'info' | 'warning' | 'error'
-    title: string
-    message: string
-    time: string
-    read: boolean
-  }>>([])
-  
+
   // Estado para polling do status do serviço
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null)
 
@@ -731,7 +727,7 @@ function App() {
       }
       return null
     } catch (error) {
-      console.error('Erro ao buscar CEP:', error)
+      showError('Erro de CEP', 'Não foi possível buscar as informações do CEP. Verifique se o CEP está correto.')
       return null
     }
   }
@@ -802,7 +798,7 @@ function App() {
       
       setNearbyPlaces(places)
     } catch (error) {
-      console.error('Erro ao buscar lugares próximos:', error)
+      showWarning('Busca de estabelecimentos', 'Não foi possível buscar estabelecimentos próximos. Mostrando dados locais.')
       // Fallback para dados mock se a API falhar
       setNearbyPlaces(getEstablishmentsByType(category))
     } finally {
@@ -828,12 +824,12 @@ function App() {
             
             setUserLocation({ lat, lng, address })
           } catch (error) {
-            console.error('Erro ao buscar endereço:', error)
+            showWarning('Localização', 'Não foi possível obter o endereço completo. Usando coordenadas.')
             setUserLocation({ lat, lng, address: `${lat.toFixed(4)}, ${lng.toFixed(4)}` })
           }
         },
         (error) => {
-          console.error('Erro ao obter localização:', error)
+          showWarning('Localização', 'Não foi possível obter sua localização. Usando localização padrão de São Paulo.')
           // Localização padrão (São Paulo)
           setUserLocation({
             lat: -23.5505,
@@ -978,12 +974,10 @@ function App() {
         
         setServiceCategories(categories)
       } else {
-        console.error('❌ Erro ao buscar categorias:', response.status)
-        const errorText = await response.text()
-        console.error('❌ Detalhes do erro:', errorText)
+        showError('Erro de categorias', 'Não foi possível carregar as categorias de serviço. Tente novamente mais tarde.')
       }
     } catch (error) {
-      console.error('❌ Erro na requisição de categorias:', error)
+      showError('Erro de conexão', 'Falha ao conectar com o servidor para buscar categorias.')
     } finally {
       setLoadingCategories(false)
     }
@@ -1052,8 +1046,7 @@ function App() {
         alert(`Erro ao criar serviço: ${errorData.message || 'Erro desconhecido'}`)
       }
     } catch (error) {
-      console.error('Erro ao criar serviço:', error)
-      alert('Erro ao criar serviço. Tente novamente.')
+      showError('Erro ao criar serviço', 'Não foi possível criar o serviço. Verifique sua conexão e tente novamente.')
     }
   }
 
@@ -1064,7 +1057,7 @@ function App() {
       setQrCodeUrl(qrCodeDataUrl)
       setPixCode(pixString)
     } catch (error) {
-      console.error('Error generating QR code:', error)
+      showError('Erro no pagamento', 'Não foi possível gerar o código de pagamento. Tente novamente.')
     }
   }
 
@@ -1101,12 +1094,12 @@ function App() {
         
         return data
       } else {
-        console.error('Erro ao gerar pagamento PagBank')
+        showWarning('Pagamento', 'Sistema de pagamento temporáriamente indisponível. Usando método alternativo.')
         // Fallback para o método antigo
         await generateQRCode('facilita@pagbank.com', amount)
       }
     } catch (error) {
-      console.error('Erro na requisição PagBank:', error)
+      showWarning('Pagamento', 'Falha na conexão com o sistema de pagamento. Usando método alternativo.')
       // Fallback para o método antigo
       await generateQRCode('facilita@pagbank.com', amount)
     }
@@ -1273,8 +1266,7 @@ function App() {
         alert('Erro ao criar carteira. Tente novamente.')
       }
     } catch (error) {
-      console.error('❌ Erro ao criar carteira:', error)
-      alert('Erro ao criar carteira. Verifique sua conexão.')
+      showError('Erro na carteira', 'Não foi possível criar sua carteira digital. Verifique sua conexão e tente novamente.')
     } finally {
       setLoadingWallet(false)
     }
@@ -1368,8 +1360,7 @@ function App() {
       console.log('✅ Recarga gerada com sucesso (modo sandbox)')
       
     } catch (error) {
-      console.error('❌ Erro ao gerar recarga:', error)
-      alert('Erro ao gerar recarga. Tente novamente.')
+      showError('Erro na recarga', 'Não foi possível gerar o código de recarga. Tente novamente.')
     } finally {
       setLoadingRecharge(false)
     }
@@ -1414,9 +1405,7 @@ function App() {
       })
 
       if (!transactionResponse.ok) {
-        console.error('❌ Erro ao criar transação:', transactionResponse.status)
-        const errorText = await transactionResponse.text().catch(() => '')
-        console.error('Detalhes do erro:', errorText)
+        showWarning('Transação', 'Houve um problema ao registrar a transação, mas o pagamento foi processado.')
         // Continuar mesmo se falhar - modo sandbox
       } else {
         const transactionData = await transactionResponse.json()
@@ -1459,23 +1448,9 @@ function App() {
       // 5. Mostrar notificação
       const notificationMessage = `💰 Recarga confirmada! R$ ${rechargeAmount.toFixed(2)} creditado na sua carteira.`
       setNotificationToastMessage(notificationMessage)
-      setShowNotificationToast(true)
       
-      // Adicionar notificação à lista
-      const newNotification = {
-        id: Date.now().toString(),
-        type: 'success' as const,
-        title: 'Recarga Confirmada',
-        message: `R$ ${rechargeAmount.toFixed(2)} foi creditado na sua carteira`,
-        time: 'Agora',
-        read: false
-      }
-      setNotifications(prev => [newNotification, ...prev])
-      
-      // Ocultar toast após 5 segundos
-      setTimeout(() => {
-        setShowNotificationToast(false)
-      }, 5000)
+      // Mostrar notificação de sucesso
+      showSuccess('Recarga Confirmada', `R$ ${rechargeAmount.toFixed(2)} foi creditado na sua carteira`)
       
       // 6. Fechar modal de recarga e mostrar modal de sucesso
       setShowRechargeModal(false)
@@ -1613,8 +1588,7 @@ function App() {
       
       // 4. Mostrar notificação
       const notificationMessage = `💸 Saque confirmado! R$ ${withdrawAmount.toFixed(2)} enviado para sua chave PIX.`
-      setNotificationToastMessage(notificationMessage)
-      setShowNotificationToast(true)
+      useNotification('success', notificationMessage)
       
       const newNotification = {
         id: Date.now().toString(),
@@ -1627,7 +1601,7 @@ function App() {
       setNotifications(prev => [newNotification, ...prev])
       
       setTimeout(() => {
-        setShowNotificationToast(false)
+        useNotification('success', '')
       }, 5000)
       
       // 5. Fechar modal e limpar estados
@@ -4492,67 +4466,13 @@ function App() {
     }
   }
 
-  // Funções para manipular notificações
-  const handleMarkAsRead = async (id: string) => {
-    try {
-      const token = localStorage.getItem('authToken')
-      if (!token) return
-
-      console.log('📖 Marcando notificação como lida:', id)
-      
-      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/notificacao/${id}/lida`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({})
-      })
-
-      if (response.ok) {
-        console.log('✅ Notificação marcada como lida')
-        // Atualizar localmente
-        setNotifications(prev =>
-          prev.map(notif =>
-            notif.id === id ? { ...notif, read: true } : notif
-          )
-        )
-      } else {
-        console.error('❌ Erro ao marcar notificação como lida:', response.status)
-      }
-    } catch (error) {
-      console.error('❌ Erro ao marcar notificação como lida:', error)
-    }
+  // Funções para manipular notificações (agora usando o novo sistema)
+  const handleMarkAsRead = (id: string) => {
+    markAsRead(id)
   }
 
-  const handleClearAllNotifications = async () => {
-    try {
-      const token = localStorage.getItem('authToken')
-      if (!token) return
-
-      console.log('📖 Marcando todas as notificações como lidas...')
-      
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/notificacao/todas-lidas', {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({})
-      })
-
-      if (response.ok) {
-        console.log('✅ Todas as notificações marcadas como lidas')
-        // Atualizar localmente
-        setNotifications(prev =>
-          prev.map(notif => ({ ...notif, read: true }))
-        )
-      } else {
-        console.error('❌ Erro ao marcar todas como lidas:', response.status)
-      }
-    } catch (error) {
-      console.error('❌ Erro ao marcar todas como lidas:', error)
-    }
+  const handleClearAllNotifications = () => {
+    clearAll()
   }
 
   const handleToggleNotifications = () => {

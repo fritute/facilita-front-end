@@ -1,6 +1,7 @@
 // Serviço de busca de prestadores integrado com a API real
 
 import { API_BASE_URL } from '../config/constants'
+import { notificationService } from './notificationService'
 
 export interface Prestador {
   id: number
@@ -83,7 +84,7 @@ export const buscarPrestadores = async (token: string): Promise<Prestador[]> => 
     const data = await response.json()
     return data.data || data.prestadores || []
   } catch (error) {
-    console.error('Erro ao buscar prestadores:', error)
+    notificationService.showError('Erro de conexão', 'Não foi possível buscar prestadores disponíveis. Verifique sua conexão.')
     throw error
   }
 }
@@ -111,7 +112,7 @@ export const buscarPrestadorPorId = async (
     const data = await response.json()
     return data.data || data.prestador
   } catch (error) {
-    console.error('Erro ao buscar prestador:', error)
+    notificationService.showError('Prestador não encontrado', 'Não foi possível encontrar as informações do prestador.')
     throw error
   }
 }
@@ -186,7 +187,7 @@ export const buscarPrestadoresDisponiveis = async (
     const prestadores = await buscarPrestadores(token)
     return prestadores.map(formatarPrestador)
   } catch (error) {
-    console.error('Erro ao buscar prestadores disponíveis:', error)
+    notificationService.showError('Busca de prestadores', 'Falha ao buscar prestadores disponíveis. Tente novamente.')
     throw error
   }
 }
@@ -251,7 +252,7 @@ export const aceitarServico = async (
     const data = await response.json()
     return data.data
   } catch (error) {
-    console.error('Erro ao aceitar serviço:', error)
+    notificationService.showError('Erro no serviço', 'Não foi possível aceitar o serviço. Tente novamente.')
     throw error
   }
 }
@@ -278,7 +279,7 @@ export const buscarServicosPendentes = async (
     const data = await response.json()
     return data.data || data.servicos || []
   } catch (error) {
-    console.error('Erro ao buscar serviços pendentes:', error)
+    notificationService.showError('Serviços pendentes', 'Não foi possível carregar os serviços pendentes.')
     throw error
   }
 }
@@ -333,7 +334,7 @@ export const buscarServicoPorId = async (
     const data = await response.json()
     return data.data || data.servico
   } catch (error) {
-    console.error('Erro ao buscar serviço:', error)
+    notificationService.showError('Serviço não encontrado', 'Não foi possível encontrar as informações do serviço.')
     throw error
   }
 }
@@ -370,7 +371,7 @@ export const verificarServicoAceito = async (
         throw new Error('Tempo limite excedido para encontrar prestador')
       }
     } catch (error) {
-      console.error('Erro ao verificar serviço:', error)
+      notificationService.showError('Verificação de serviço', 'Erro ao verificar status do serviço.')
       throw error
     }
   }

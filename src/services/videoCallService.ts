@@ -1,4 +1,5 @@
 import DailyIframe from '@daily-co/daily-js';
+import { notificationService } from './notificationService';
 
 export interface VideoCallRoom {
   url: string;
@@ -36,7 +37,7 @@ class VideoCallService {
       });
 
       if (!response.ok) {
-        console.error('Erro na API Daily.co:', response.status, response.statusText);
+        notificationService.showWarning('Videochamada', 'Usando sala temporária para videochamada.');
         // Fallback: criar sala temporária
         const roomId = `facilita-${Date.now()}`;
         return {
@@ -50,7 +51,7 @@ class VideoCallService {
       const room = await response.json();
       return room;
     } catch (error) {
-      console.error('Erro ao criar sala:', error);
+      notificationService.showWarning('Videochamada', 'Criando sala temporária para videochamada.');
       // Fallback: sala temporária
       const roomId = `facilita-${Date.now()}`;
       return {
@@ -86,7 +87,7 @@ class VideoCallService {
 
       return this.callObject;
     } catch (error) {
-      console.error('Erro ao entrar na sala:', error);
+      notificationService.showError('Videochamada', 'Não foi possível entrar na videochamada. Verifique sua conexão.');
       throw error;
     }
   }
@@ -105,8 +106,8 @@ class VideoCallService {
       .on('participant-left', (event: any) => {
         console.log('👋 Participante saiu:', event.participant);
       })
-      .on('error', (event: any) => {
-        console.error('❌ Erro na videochamada:', event);
+      .on('error', () => {
+        notificationService.showError('Videochamada', 'Ocorreu um erro durante a videochamada.');
       })
       .on('left-meeting', (event: any) => {
         console.log('🚪 Saiu da videochamada:', event);

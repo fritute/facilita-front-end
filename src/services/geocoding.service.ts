@@ -1,5 +1,7 @@
 // Serviço de Geocoding usando OpenStreetMap Nominatim
 
+import { notificationService } from './notificationService'
+
 export interface GeocodingResult {
   display_name: string
   lat: string
@@ -72,7 +74,7 @@ class GeocodingService {
         address: result.display_name
       }
     } catch (error) {
-      console.error('Erro ao buscar CEP:', error)
+      notificationService.showError('Erro de CEP', 'Não foi possível buscar o endereço do CEP informado.')
       return null
     }
   }
@@ -116,7 +118,7 @@ class GeocodingService {
         address: result.display_name
       }))
     } catch (error) {
-      console.error('Erro ao buscar endereço:', error)
+      notificationService.showError('Busca de endereço', 'Não foi possível buscar endereços. Verifique sua conexão.')
       return []
     }
   }
@@ -151,7 +153,7 @@ class GeocodingService {
       const data: GeocodingResult = await response.json()
       return data.display_name
     } catch (error) {
-      console.error('Erro ao buscar endereço reverso:', error)
+      notificationService.showWarning('Localização', 'Não foi possível obter o endereço da localização.')
       return null
     }
   }

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { X, Phone, Video, Send, Mic, MicOff, VideoOff, ExternalLink, Image as ImageIcon } from 'lucide-react'
 import videoCallService, { VideoCallRoom } from '../services/videoCallService'
+import { notificationService } from '../services/notificationService'
 
 interface Message {
   id: number
@@ -101,7 +102,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
         }
       }
     } catch (error) {
-      console.error('Erro ao buscar mensagens:', error)
+      notificationService.showError('Chat', 'Não foi possível carregar as mensagens do chat.')
     } finally {
       setIsLoadingMessages(false)
     }
@@ -122,7 +123,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
         }
       })
     } catch (error) {
-      console.error('Erro ao marcar mensagens como lidas:', error)
+      // Erro silencioso para marcar como lidas
     }
   }
 
@@ -221,8 +222,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
         alert('Erro ao enviar mensagem')
       }
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error)
-      alert('Erro ao enviar mensagem')
+      notificationService.showError('Chat', 'Não foi possível enviar a mensagem. Tente novamente.')
     } finally {
       setIsSendingMessage(false)
     }
@@ -248,8 +248,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
       
       console.log('Chamada de voz iniciada:', room.url)
     } catch (error) {
-      console.error('Erro ao iniciar chamada de voz:', error)
-      alert('Erro ao iniciar chamada. Tente novamente.')
+      notificationService.showError('Chamada de voz', 'Não foi possível iniciar a chamada de voz. Tente novamente.')
       setIsCreatingRoom(false)
     }
   }
@@ -274,8 +273,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
       // Link será compartilhado através do chat normal se necessário
       
     } catch (error) {
-      console.error('Erro ao iniciar videochamada:', error)
-      alert('Erro ao iniciar videochamada. Tente novamente.')
+      notificationService.showError('Videochamada', 'Não foi possível iniciar a videochamada. Tente novamente.')
       setIsCreatingRoom(false)
     }
   }
@@ -301,7 +299,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
       
       console.log('Chamada encerrada')
     } catch (error) {
-      console.error('Erro ao encerrar chamada:', error)
+      // Erro silencioso ao encerrar chamada
     }
   }
 

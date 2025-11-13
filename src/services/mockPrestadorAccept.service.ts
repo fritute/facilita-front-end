@@ -1,6 +1,7 @@
 // Serviço para simular aceitação automática de serviços por prestadores mockados
 
 import { API_BASE_URL } from '../config/constants'
+import { notificationService } from './notificationService'
 
 /**
  * Simula um prestador mockado aceitando automaticamente um serviço
@@ -44,7 +45,7 @@ export const simularAceitacaoAutomatica = async (
         console.log('✅ [MOCK] Serviço aceito com sucesso!', data)
         resolve()
       } catch (error) {
-        console.error('❌ [MOCK] Erro na requisição:', error)
+        notificationService.showError('Erro no serviço', 'Falha ao processar aceitação do serviço.')
         reject(error)
       }
     }, delay)
@@ -121,18 +122,17 @@ export const buscarTokenPrestadorMock = async (): Promise<string | null> => {
             }
           }
         } else {
-          const errorData = await response.json().catch(() => ({}))
-          console.log(`⚠️ [MOCK] Falha no login de ${prestador.email}:`, errorData.message || response.statusText)
+          notificationService.showError('Erro no login', 'Falha ao fazer login.')
         }
       } catch (error) {
-        console.log(`⚠️ [MOCK] Erro ao tentar login de ${prestador.email}:`, error)
+        notificationService.showError('Erro no login', 'Falha ao fazer login.')
       }
     }
 
-    console.warn('⚠️ [MOCK] Nenhum prestador mockado disponível')
+    notificationService.showWarning('Sistema mock', 'Nenhum prestador mockado disponível.')
     return null
   } catch (error) {
-    console.error('❌ [MOCK] Erro ao buscar token de prestador:', error)
+    notificationService.showError('Sistema mock', 'Falha ao configurar prestador automático.')
     return null
   }
 }
@@ -187,7 +187,7 @@ const criarPrestadorTemporario = async (): Promise<string | null> => {
     
     return null
   } catch (error) {
-    console.error('❌ [MOCK] Erro ao criar prestador temporário:', error)
+    notificationService.showWarning('Sistema mock', 'Não foi possível criar prestador temporário.')
     return null
   }
 }
@@ -224,7 +224,7 @@ export const iniciarAceitacaoMockada = async (
     
     console.log('✅ [MOCK] Sistema de aceitação automática concluído!')
   } catch (error) {
-    console.error('❌ [MOCK] Erro no sistema de aceitação automática:', error)
+    notificationService.showError('Sistema automático', 'Falha no sistema de aceitação automática de serviços.')
     throw error
   }
 }
