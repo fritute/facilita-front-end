@@ -16,6 +16,8 @@ import { searchDriver, type Driver, type DriverSearchOptions } from './services/
 import { buscarPrestadorDisponivel, verificarServicoAceito, type PrestadorFormatado } from './services/prestadorSearch.service'
 import { aceitarServicoAutomaticamente, setMockMode } from './services/mockPrestadorAccept.service'
 import { useNotifications } from './hooks/useNotifications'
+import { uploadImage } from './services/uploadImageToAzure'
+import { handleProfilePhotoUpload } from './utils/profilePhotoHandler'
 //TELAS PARA TESTES E PARA MOVER
 type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
 
@@ -1584,19 +1586,7 @@ function App() {
       const notificationMessage = `💸 Saque confirmado! R$ ${withdrawAmount.toFixed(2)} enviado para sua chave PIX.`
       useNotification('success', notificationMessage)
       
-      const newNotification = {
-        id: Date.now().toString(),
-        type: 'success' as const,
-        title: 'Saque Confirmado',
-        message: `R$ ${withdrawAmount.toFixed(2)} foi enviado para sua chave PIX`,
-        time: 'Agora',
-        read: false
-      }
-      setNotifications(prev => [newNotification, ...prev])
-      
-      setTimeout(() => {
-        useNotification('success', '')
-      }, 5000)
+      showSuccess('Saque Confirmado', `R$ ${withdrawAmount.toFixed(2)} foi enviado para sua chave PIX`)
       
       // 5. Fechar modal e limpar estados
       setShowWithdrawModal(false)
@@ -1704,15 +1694,7 @@ function App() {
           setNotificationToastMessage(notificationMessage)
           setShowNotificationToast(true)
           
-          const newNotification = {
-            id: Date.now().toString(),
-            type: 'success' as const,
-            title: 'Pagamento Confirmado (Sandbox)',
-            message: `Serviço pago com sucesso! R$ ${serviceValue.toFixed(2)} debitado`,
-            time: 'Agora',
-            read: false
-          }
-          setNotifications(prev => [newNotification, ...prev])
+          showSuccess('Pagamento Confirmado (Sandbox)', `Serviço pago com sucesso! R$ ${serviceValue.toFixed(2)} debitado`)
           
           setTimeout(() => {
             setShowNotificationToast(false)
@@ -1773,16 +1755,8 @@ function App() {
       setNotificationToastMessage(notificationMessage)
       setShowNotificationToast(true)
       
-      // Adicionar notificação à lista
-      const newNotification = {
-        id: Date.now().toString(),
-        type: 'success' as const,
-        title: 'Pagamento Confirmado',
-        message: `Serviço pago com sucesso! R$ ${serviceValue.toFixed(2)} debitado`,
-        time: 'Agora',
-        read: false
-      }
-      setNotifications(prev => [newNotification, ...prev])
+      // Adicionar notificação usando o hook
+      showSuccess('Pagamento Confirmado', `Serviço pago com sucesso! R$ ${serviceValue.toFixed(2)} debitado`)
       
       setTimeout(() => {
         setShowNotificationToast(false)
@@ -1881,12 +1855,8 @@ function App() {
         if (hasNewNotifications) {
           console.log('🔔 Novas notificações recebidas:', mockNotifications)
           
-          // Adicionar notificações ao estado
-          setNotifications(prev => {
-            const existingIds = prev.map(n => n.id)
-            const newNotifications = mockNotifications.filter(n => !existingIds.includes(n.id))
-            return [...newNotifications, ...prev]
-          })
+          // Notificações são gerenciadas pelo hook useNotifications
+          // Não precisa adicionar manualmente
 
           // Mostrar toast para a primeira notificação nova
           const firstNew = mockNotifications.find(n => !n.read)
@@ -1945,40 +1915,42 @@ function App() {
         console.log('📸 Foto recuperada:', user.foto ? 'Sim' : 'Não')
         console.log('📸 Tamanho da foto recuperada:', user.foto?.length || 0, 'caracteres')
         
-        // Se não tem foto, buscar do perfil
-        if (!user.foto) {
-          fetch(API_ENDPOINTS.PROFILE, {
-            headers: {
-              'Authorization': `Bearer ${storedToken}`,
-              'Content-Type': 'application/json'
+        // SEMPRE buscar foto do perfil ao recuperar usuário
+        fetch(API_ENDPOINTS.PROFILE, {
+          headers: {
+            'Authorization': `Bearer ${storedToken}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        .then(async res => {
+          if (!res.ok) {
+            // Tratar erros específicos
+            if (res.status === 500) {
+              console.warn('⚠️ Erro 500 ao buscar perfil - servidor indisponível')
+              return null
+            } else if (res.status === 401 || res.status === 403) {
+              console.warn('⚠️ Token inválido ou expirado')
+              return null
             }
-          })
-          .then(async res => {
-            if (!res.ok) {
-              // Tratar erros específicos
-              if (res.status === 500) {
-                console.warn('⚠️ Erro 500 ao buscar perfil - servidor indisponível')
-                return null
-              } else if (res.status === 401 || res.status === 403) {
-                console.warn('⚠️ Token inválido ou expirado')
-                return null
-              }
-              throw new Error(`Erro ${res.status}: ${res.statusText}`)
-            }
-            return res.json()
-          })
-          .then(perfilData => {
-            if (perfilData?.foto_perfil) {
-              const updatedUser = { ...user, foto: perfilData.foto_perfil }
-              setLoggedUser(updatedUser)
-              localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
-            }
-          })
-          .catch(err => {
-            // Erro silencioso - não atrapalha o fluxo do usuário
-            console.warn('⚠️ Não foi possível carregar foto do perfil:', err.message)
-          })
-        }
+            throw new Error(`Erro ${res.status}: ${res.statusText}`)
+          }
+          return res.json()
+        })
+        .then(perfilData => {
+          if (perfilData?.foto_perfil) {
+            console.log('✅ Foto recuperada do backend:', perfilData.foto_perfil.substring(0, 50) + '...')
+            const updatedUser = { ...user, foto: perfilData.foto_perfil }
+            setLoggedUser(updatedUser)
+            localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
+            console.log('💾 Usuário atualizado com foto no localStorage')
+          } else {
+            console.log('⚠️ Nenhuma foto encontrada no perfil')
+          }
+        })
+        .catch(err => {
+          // Erro silencioso - não atrapalha o fluxo do usuário
+          console.warn('⚠️ Não foi possível carregar foto do perfil:', err.message)
+        })
         
         // Redirecionar para Home se usuário está logado e não há serviço ativo
         if (currentScreen === 'login') {
@@ -2934,9 +2906,11 @@ function App() {
               if (perfilResponse.ok) {
                 const perfilData = await perfilResponse.json()
                 console.log('📋 Dados do perfil recebidos:', perfilData)
+                console.log('📸 Foto do perfil:', perfilData?.foto_perfil ? 'Presente' : 'Ausente')
                 
                 if (perfilData?.foto_perfil) {
                   user.foto = perfilData.foto_perfil
+                  console.log('✅ Foto carregada do backend:', perfilData.foto_perfil.substring(0, 50) + '...')
                 }
                 
                 // Salvar id_localizacao no usuário
@@ -2957,6 +2931,10 @@ function App() {
                   localStorage.setItem('profileData', JSON.stringify(profileDataToSave))
                   console.log('💾 Dados do perfil salvos:', profileDataToSave)
                 }
+                
+                // IMPORTANTE: Salvar usuário atualizado com foto no localStorage
+                localStorage.setItem('loggedUser', JSON.stringify(user))
+                console.log('💾 Usuário com foto salvo no localStorage')
               } else if (perfilResponse.status === 500) {
                 console.warn('⚠️ Erro 500 ao buscar perfil - servidor indisponível')
               } else if (perfilResponse.status === 401 || perfilResponse.status === 403) {
@@ -2967,8 +2945,7 @@ function App() {
             }
           }
           
-          // Armazenar usuário no localStorage também
-          localStorage.setItem('loggedUser', JSON.stringify(user))
+          // Armazenar usuário no localStorage (será atualizado com foto depois se necessário)
           localStorage.setItem('userType', user.tipo_conta) // Para uso no chat
           
           setLoggedUser(user)
@@ -3279,6 +3256,8 @@ function App() {
   // Função para iniciar busca de prestador
   const startProviderSearch = async (serviceId: string) => {
     console.log('🔍 Iniciando busca de prestador para serviço:', serviceId)
+    console.log('📍 Origem (pickupLocation):', pickupLocation)
+    console.log('📍 Destino (deliveryLocation):', deliveryLocation)
     
     setIsSearchingProvider(true)
     setSearchStartTime(new Date())
@@ -3298,6 +3277,7 @@ function App() {
 
     let attempts = 0
     const maxAttempts = 60
+    let localPollingInterval: NodeJS.Timeout | null = null
     
     const checkServiceStatus = async () => {
       try {
@@ -3314,26 +3294,26 @@ function App() {
             setServicePrice(parseFloat(service.valor))
           }
           
-          // Verificar se o serviço pertence ao contratante logado
-          const contratanteId = loggedUser?.id_contratante
-          if (contratanteId && service.id_contratante !== contratanteId) {
-            console.log('⚠️ Serviço não pertence ao contratante logado')
-            return
-          }
+          console.log('📋 Status do serviço:', service.status)
+          console.log('👤 ID Prestador:', service.id_prestador)
           
           if (service.status === 'EM_ANDAMENTO' && service.id_prestador) {
             console.log('✅ Prestador aceitou!', service)
             clearInterval(searchInterval)
-            clearInterval(pollingInterval)
+            if (localPollingInterval) clearInterval(localPollingInterval)
             setIsSearchingProvider(false)
             
-            // Extrair dados do prestador da resposta (já vem completo)
+            // Extrair dados do prestador da resposta
             const prestador = service.prestador
             const usuario = prestador?.usuario
             
+            console.log('✅ Prestador encontrado:', usuario?.nome)
+            console.log('📍 Origem salva:', pickupLocation)
+            console.log('📍 Destino salvo:', deliveryLocation)
+            
             // Atualizar entregadorData com dados reais da API
             setEntregadorData({
-              id: prestador?.id,
+              id: prestador?.id || service.id_prestador,
               nome: usuario?.nome || 'Prestador',
               telefone: usuario?.telefone || '',
               veiculo: prestador?.veiculo || 'Veículo',
@@ -3343,24 +3323,40 @@ function App() {
               distancia: '2.5 km'
             })
             
-            // Atualizar valor do serviço com o valor do backend
+            // Atualizar valor do serviço
             if (service.valor) {
               setServicePrice(parseFloat(service.valor))
             }
             
-            // Garantir que temos os locais de origem e destino
+            // CORREÇÃO: Usar coordenadas reais dos pontos selecionados
             if (pickupLocation && deliveryLocation) {
+              console.log('✅ Configurando locais REAIS para rastreamento')
+              console.log('📍 Origem (pickup):', pickupLocation)
+              console.log('📍 Destino (delivery):', deliveryLocation)
+              
               setSelectedDestination(deliveryLocation)
-              setDriverOrigin({ lat: pickupLocation.lat, lng: pickupLocation.lng })
+              
+              // USAR COORDENADAS REAIS da origem (não fictícias)
+              setDriverOrigin({ 
+                lat: pickupLocation.lat, 
+                lng: pickupLocation.lng 
+              })
+              
+              console.log('📍 Prestador iniciará em:', { lat: pickupLocation.lat, lng: pickupLocation.lng })
+              console.log('📍 Destino final:', { lat: deliveryLocation.lat, lng: deliveryLocation.lng })
+            } else {
+              console.warn('⚠️ Origem ou destino não definidos!')
+              console.warn('Origem:', pickupLocation)
+              console.warn('Destino:', deliveryLocation)
             }
             
-            showSuccess('Prestador Encontrado!', `${usuario?.nome} aceitou sua corrida!`)
+            showSuccess('Prestador Encontrado!', `${usuario?.nome || 'Prestador'} aceitou sua corrida!`)
             setServiceStartTime(new Date())
             
-            // Forçar transição para tracking
-            setTimeout(() => {
-              handleScreenTransition('service-tracking')
-            }, 500)
+            console.log('🔄 Redirecionando para tracking...')
+            
+            // Ir para tracking com os dados configurados
+            handleScreenTransition('service-tracking')
             return
           }
         }
@@ -3368,7 +3364,7 @@ function App() {
         attempts++
         if (attempts >= maxAttempts) {
           clearInterval(searchInterval)
-          clearInterval(pollingInterval)
+          if (localPollingInterval) clearInterval(localPollingInterval)
           setIsSearchingProvider(false)
           showError('Tempo Esgotado', 'Nenhum prestador aceitou o serviço.')
         }
@@ -3378,7 +3374,7 @@ function App() {
     }
     
     checkServiceStatus()
-    const pollingInterval = setInterval(checkServiceStatus, 3000)
+    localPollingInterval = setInterval(checkServiceStatus, 3000)
   }
 
   const handleServiceProviderSubmit = async () => {
@@ -4348,7 +4344,7 @@ function App() {
           }
         ]
         
-        setNotifications(exampleNotifications)
+        // Notificações de exemplo são gerenciadas pelo hook
         console.log('📋 Notificações de exemplo criadas:', exampleNotifications.length)
         return
       }
@@ -4389,7 +4385,7 @@ function App() {
             read: notif.lida || false
           }))
           
-          setNotifications(mappedNotifications)
+          // Notificações são gerenciadas pelo hook useNotifications
           console.log('📋 Total de notificações da API:', mappedNotifications.length)
           console.log('🔴 Não lidas:', data.total_nao_lidas || 0)
         } else {
@@ -4405,7 +4401,7 @@ function App() {
               read: false
             }
           ]
-          setNotifications(fallbackNotifications)
+          // Notificações de fallback são gerenciadas pelo hook
         }
       } else if (response.status === 401 || response.status === 403) {
         console.warn('⚠️ Token inválido ao buscar notificações - usando notificações de exemplo')
@@ -4420,7 +4416,7 @@ function App() {
             read: false
           }
         ]
-        setNotifications(authErrorNotifications)
+        // Notificações de erro de auth são gerenciadas pelo hook
       } else {
         console.error('❌ Erro ao buscar notificações:', response.status, response.statusText)
         const errorText = await response.text().catch(() => 'Erro desconhecido')
@@ -4437,7 +4433,7 @@ function App() {
             read: false
           }
         ]
-        setNotifications(errorNotifications)
+        // Notificações de erro são gerenciadas pelo hook
       }
     } catch (error) {
       console.error('❌ Erro inesperado ao buscar notificações:', error)
@@ -4453,7 +4449,7 @@ function App() {
           read: false
         }
       ]
-      setNotifications(networkErrorNotifications)
+      // Notificações de erro de rede são gerenciadas pelo hook
     }
   }
 
@@ -4749,6 +4745,13 @@ const handleServiceCreate = async () => {
     loggedUser: loggedUser?.email
   })
   
+  console.log('📍 ORIGEM:', pickupLocation)
+  console.log('📍 DESTINO:', deliveryLocation)
+  console.log('📍 Origem - Endereço:', pickupLocation.address)
+  console.log('📍 Origem - Lat/Lng:', pickupLocation.lat, pickupLocation.lng)
+  console.log('📍 Destino - Endereço:', deliveryLocation.address)
+  console.log('📍 Destino - Lat/Lng:', deliveryLocation.lat, deliveryLocation.lng)
+  
   // Calcular distância e preço entre origem e destino escolhidos
   const distance = calculateDistance(
     pickupLocation.lat,
@@ -4783,6 +4786,13 @@ const handleServiceCreate = async () => {
     
     if (serviceCreated) {
       console.log('✅ Serviço criado com sucesso!')
+      
+      if (!createdServiceId) {
+        console.error('❌ ID do serviço não foi retornado')
+        alert('Erro: ID do serviço não foi retornado. Tente novamente.')
+        return
+      }
+      
       // Definir serviço como ativo
       setActiveServiceId(createdServiceId)
       
@@ -4791,7 +4801,8 @@ const handleServiceCreate = async () => {
       handleScreenTransition('waiting-provider')
       
       // Iniciar busca de prestador
-      startProviderSearch(createdServiceId!)
+      console.log('🔍 Iniciando busca com serviceId:', createdServiceId)
+      startProviderSearch(createdServiceId)
     } else {
       console.error('❌ Falha ao criar serviço')
       alert('Não foi possível criar o serviço. Verifique os dados e tente novamente.')
@@ -7255,12 +7266,22 @@ const handleServiceCreate = async () => {
         profilePhoto={profilePhoto || loggedUser?.foto || null}
         notificationsEnabled={notificationsEnabled}
         onBack={() => handleScreenTransition('home')}
-        onPhotoChange={(file) => {
-          const reader = new FileReader()
-          reader.onload = (e) => {
-            setProfilePhoto(e.target?.result as string)
+        onPhotoChange={async (file) => {
+          const success = await handleProfilePhotoUpload(
+            file,
+            loggedUser,
+            setLoggedUser,
+            showSuccess,
+            showError
+          )
+          
+          if (success) {
+            const reader = new FileReader()
+            reader.onload = (e) => {
+              setProfilePhoto(e.target?.result as string)
+            }
+            reader.readAsDataURL(file)
           }
-          reader.readAsDataURL(file)
         }}
         onChangePassword={() => handleScreenTransition('change-password')}
         onLogout={() => {

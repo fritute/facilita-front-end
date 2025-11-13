@@ -168,7 +168,7 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm sm:text-base">Entregar em (Destino)</p>
                     <p className="text-gray-600 text-xs sm:text-sm truncate">
-                      {selectedLocation || 'Usando seu endereço'}
+                      {selectedLocation || (userAddress ? userAddress : 'Clique para selecionar')}
                     </p>
                   </div>
                 </div>
@@ -176,7 +176,7 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
                   onClick={onSelectDestination}
                   className="bg-green-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-600 transition-colors whitespace-nowrap flex-shrink-0"
                 >
-                  {selectedLocation ? 'Alterar' : 'Selecionar'}
+                  Alterar
                 </button>
               </div>
             </div>
@@ -231,7 +231,7 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
                   >
                     <div className="flex items-center mb-2">
                       <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                        <span className="text-xl">{category.icone || '📦'}</span>
+                        <span className="text-xl hidden">{category.icone || '📦'}</span>
                       </div>
                       <div className="flex-1">
                         <p className="font-semibold text-sm">{category.nome}</p>
@@ -241,7 +241,7 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
                       </div>
                     </div>
                     {category.descricao && (
-                      <p className="text-xs text-gray-600 mt-2">{category.descricao}</p>
+                      <p className="text-xs text-gray-600 mt-2 hidden">{category.descricao}</p>
                     )}
                   </button>
                 ))}
