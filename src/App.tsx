@@ -3281,13 +3281,24 @@ function App() {
     
     const checkServiceStatus = async () => {
       try {
+        console.log(`🔍 Verificando status do serviço ${serviceId} (tentativa ${attempts + 1}/${maxAttempts})`)
+        
         const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/servico/${serviceId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         
+        console.log('📥 Status da resposta:', response.status, response.ok)
+        
         if (response.ok) {
           const data = await response.json()
           const service = data.data || data
+          
+          console.log('📦 Dados recebidos da API:', {
+            id: service.id,
+            status: service.status,
+            id_prestador: service.id_prestador,
+            valor: service.valor
+          })
           
           // Atualizar valor do serviço sempre que buscar
           if (service.valor && servicePrice === 0) {
@@ -3296,12 +3307,31 @@ function App() {
           
           console.log('📋 Status do serviço:', service.status)
           console.log('👤 ID Prestador:', service.id_prestador)
+          console.log('🔍 Verificando se prestador aceitou...')
+          console.log('   - Status é EM_ANDAMENTO?', service.status === 'EM_ANDAMENTO')
+          console.log('   - Tem ID prestador?', !!service.id_prestador)
+          console.log('   - Prestador objeto:', service.prestador)
           
-          if (service.status === 'EM_ANDAMENTO' && service.id_prestador) {
-            console.log('✅ Prestador aceitou!', service)
+          // Verificar se prestador aceitou (pode estar em diferentes status)
+          const prestadorAceitou = (service.status === 'EM_ANDAMENTO' || service.status === 'ACEITO') && service.id_prestador
+          
+          if (prestadorAceitou) {
+            console.log('✅ Prestador aceitou o serviço!')
+            console.log('📋 Dados do serviço:', service)
+            console.log('👤 ID do prestador:', service.id_prestador)
+            console.log('📊 Status atual:', service.status)
+            
+            // IMPORTANTE: Limpar todos os intervalos PRIMEIRO
+            console.log('🗑️ Limpando intervalos...')
             clearInterval(searchInterval)
-            if (localPollingInterval) clearInterval(localPollingInterval)
+            if (localPollingInterval) {
+              clearInterval(localPollingInterval)
+              localPollingInterval = null
+            }
+            
+            // Parar busca ANTES de configurar dados
             setIsSearchingProvider(false)
+            console.log('✅ Busca de prestador finalizada')
             
             // Extrair dados do prestador da resposta
             const prestador = service.prestador
@@ -3354,9 +3384,30 @@ function App() {
             setServiceStartTime(new Date())
             
             console.log('🔄 Redirecionando para tracking...')
+            console.log('📺 Tela atual antes da transição:', currentScreen)
+            console.log('📺 isSearchingProvider antes:', isSearchingProvider)
+            console.log('📺 Dados do entregador configurados:', {
+              nome: usuario?.nome || 'Prestador',
+              id: prestador?.id || service.id_prestador
+            })
             
-            // Ir para tracking com os dados configurados
-            handleScreenTransition('service-tracking')
+            // Verificar se ainda estamos na tela de busca antes de fazer transição
+            if (currentScreen === 'waiting-provider') {
+              console.log('📺 Fazendo transição de waiting-provider para service-tracking')
+              handleScreenTransition('service-tracking')
+            } else {
+              console.log('⚠️ Tela atual não é waiting-provider:', currentScreen)
+              // Forçar transição mesmo assim
+              console.log('🔄 Forçando transição para service-tracking...')
+              setTimeout(() => {
+                handleScreenTransition('service-tracking')
+              }, 500)
+            }
+            
+            console.log('📺 handleScreenTransition chamado para service-tracking')
+            console.log('📺 isSearchingProvider após:', isSearchingProvider)
+            console.log('✅ Condição duplicada de waiting-provider removida')
+            
             return
           }
         }
@@ -6203,70 +6254,7 @@ const handleServiceCreate = async () => {
   )
 }
 
-  // Waiting Provider Screen - Aguardando prestador aceitar
-  if (currentScreen === 'waiting-provider') {
 
-    return (
-      <div className={`min-h-screen bg-gray-100 flex items-center justify-center transition-all duration-300 ${
-        isTransitioning ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
-      }`}>
-        {/* Botão Voltar */}
-        <button
-          onClick={() => handleScreenTransition('home')}
-          className="absolute top-4 left-4 p-2 rounded-full bg-white shadow-md hover:bg-gray-100 transition-colors"
-        >
-          <ArrowLeft className="w-6 h-6 text-gray-700" />
-        </button>
-        
-        <div className="text-center p-8 max-w-md mx-auto">
-          <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-            <Search className="w-12 h-12 text-white" />
-          </div>
-          
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Procurando motorista...</h2>
-          <p className="text-gray-600 mb-4">Aguarde enquanto encontramos o melhor prestador para você</p>
-          
-          {/* Tempo decorrido */}
-          <div className="bg-white rounded-lg p-4 mb-6 shadow-sm">
-            <p className="text-sm text-gray-500 mb-2">Tempo de busca</p>
-            <p className={`text-lg font-semibold ${
-              isDarkMode ? 'text-green-600' : 'text-blue-600'
-            }`}>{searchTimeElapsed}s</p>
-          </div>
-          
-          <div className="flex justify-center space-x-2 mb-8">
-            <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce"></div>
-            <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-            <div className="w-3 h-3 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-          </div>
-
-          {/* Botão para continuar navegando */}
-          <div className="space-y-3">
-            <button
-              onClick={() => {
-                console.log('📱 Usuário optou por navegar durante a busca')
-                handleScreenTransition('home')
-              }}
-              className={`w-full bg-white border-2 py-3 px-6 rounded-lg font-semibold transition-colors ${
-                isDarkMode 
-                  ? 'border-green-500 text-green-600 hover:bg-green-50' 
-                  : 'border-blue-500 text-blue-600 hover:bg-blue-50'
-              }`}
-            >
-              Continuar Navegando
-            </button>
-            
-            <button
-              onClick={() => handleScreenTransition('home')}
-              className="w-full bg-gray-200 text-gray-600 py-2 px-6 rounded-lg text-sm hover:bg-gray-300 transition-colors"
-            >
-              Cancelar Busca
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   // Service Create Screen
   if (currentScreen === 'service-create') {
@@ -7263,10 +7251,12 @@ const handleServiceCreate = async () => {
         userEmail={loggedUser?.email || ''}
         userPhone={loggedUser?.telefone || ''}
         userAddress=""
-        profilePhoto={profilePhoto || loggedUser?.foto || null}
+        profilePhoto={loggedUser?.foto || profilePhoto || null}
         notificationsEnabled={notificationsEnabled}
         onBack={() => handleScreenTransition('home')}
         onPhotoChange={async (file) => {
+          console.log('📸 onPhotoChange chamado com arquivo:', file.name)
+          
           const success = await handleProfilePhotoUpload(
             file,
             loggedUser,
@@ -7276,11 +7266,18 @@ const handleServiceCreate = async () => {
           )
           
           if (success) {
-            const reader = new FileReader()
-            reader.onload = (e) => {
-              setProfilePhoto(e.target?.result as string)
+            console.log('✅ Upload bem-sucedido! Foto já foi salva no loggedUser pelo handleProfilePhotoUpload')
+            // NÃO definir profilePhoto com base64 local!
+            // A URL do Azure já foi salva no loggedUser.foto pelo handleProfilePhotoUpload
+            
+            // Forçar re-render do ProfileScreen com a URL do Azure
+            const updatedUser = JSON.parse(localStorage.getItem('loggedUser') || '{}')
+            if (updatedUser.foto) {
+              console.log('🔄 Atualizando profilePhoto com URL do Azure:', updatedUser.foto.substring(0, 50) + '...')
+              setProfilePhoto(updatedUser.foto)
             }
-            reader.readAsDataURL(file)
+          } else {
+            console.error('❌ Upload falhou')
           }
         }}
         onChangePassword={() => handleScreenTransition('change-password')}

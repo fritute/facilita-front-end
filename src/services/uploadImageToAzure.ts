@@ -8,9 +8,19 @@ interface UploadParams {
 export async function uploadImageToAzure(uploadParams: UploadParams): Promise<string | boolean> {
   const { file, storageAccount, sasToken, containerName } = uploadParams
 
-  const blobName = `${Date.now()}-${file.name}`
+  console.log('🚀 Iniciando upload para Azure Blob Storage')
+  console.log('📁 Arquivo:', file.name, 'Tipo:', file.type, 'Tamanho:', (file.size / 1024).toFixed(2), 'KB')
+  console.log('🏢 Storage Account:', storageAccount)
+  console.log('📦 Container:', containerName)
+  console.log('🔑 SAS Token presente:', sasToken ? 'Sim' : 'Não')
+
+  const blobName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
   const baseUrl = `https://${storageAccount}.blob.core.windows.net/${containerName}/${blobName}`
   const uploadUrl = `${baseUrl}?${sasToken}`
+
+  console.log('🔗 Nome do blob:', blobName)
+  console.log('🔗 URL base:', baseUrl)
+  console.log('🔗 URL de upload:', uploadUrl.substring(0, 100) + '...')
 
   const options = {
     method: "PUT",
@@ -21,12 +31,39 @@ export async function uploadImageToAzure(uploadParams: UploadParams): Promise<st
     body: file,
   }
 
-  const response = await fetch(uploadUrl, options)
+  console.log('📤 Enviando arquivo para Azure...')
+  console.log('📜 Headers:', options.headers)
 
-  if (response.ok) {
-    return baseUrl
-  } else {
-    return response.ok
+  try {
+    const response = await fetch(uploadUrl, options)
+    
+    console.log('📥 Resposta do Azure:')
+    console.log('   Status:', response.status)
+    console.log('   Status Text:', response.statusText)
+    console.log('   OK:', response.ok)
+
+    if (response.ok) {
+      console.log('✅ Upload para Azure bem-sucedido!')
+      console.log('🔗 URL da imagem:', baseUrl)
+      return baseUrl
+    } else {
+      console.error('❌ Upload para Azure falhou:')
+      console.error('   Status:', response.status)
+      console.error('   Status Text:', response.statusText)
+      
+      // Tentar ler o corpo da resposta para mais detalhes
+      try {
+        const errorText = await response.text()
+        console.error('   Detalhes do erro:', errorText)
+      } catch (e) {
+        console.error('   Não foi possível ler detalhes do erro')
+      }
+      
+      return false
+    }
+  } catch (error) {
+    console.error('❌ Erro de rede ao fazer upload para Azure:', error)
+    return false
   }
 }
 
@@ -39,6 +76,13 @@ export const azureConfig = {
 
 // Função simplificada para upload direto
 export async function uploadImage(file: File): Promise<string | boolean> {
+  console.log('📸 uploadImage chamada com arquivo:', file.name)
+  console.log('🔧 Usando configuração:', {
+    storageAccount: azureConfig.storageAccount,
+    containerName: azureConfig.containerName,
+    sasTokenPresent: azureConfig.sasToken ? 'Sim' : 'Não'
+  })
+  
   return uploadImageToAzure({
     file,
     ...azureConfig
