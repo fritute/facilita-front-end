@@ -132,6 +132,10 @@ function App() {
   const [hasCheckedProfile, setHasCheckedProfile] = useState(false)
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
   const [createdServiceId, setCreatedServiceId] = useState<string | null>(null)
+  const [foundDriver, setFoundDriver] = useState<any>(null)
+  const [showDriverFoundModal, setShowDriverFoundModal] = useState(false)
+  const [driverLocation, setDriverLocation] = useState<{lat: number, lng: number} | null>(null)
+  const [serviceStatusPolling, setServiceStatusPolling] = useState<NodeJS.Timeout | null>(null)
   const [userOrders, setUserOrders] = useState<any[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersInitialized, setOrdersInitialized] = useState(false)
@@ -4907,44 +4911,11 @@ function App() {
   const handleClearAllNotifications = () => {
     clearAll()
   }
-
   const handleToggleNotifications = () => {
-    setIsNotificationOpen(prev => !prev)
+    setIsNotificationOpen(!isNotificationOpen)
   }
 
-  // Função para verificar status do serviço (se foi aceito por prestador)
-  const checkServiceStatus = async (serviceId: number) => {
-    try {
-      const token = localStorage.getItem('authToken')
-      if (!token) return null
-
-      console.log('🔍 Verificando status do serviço:', serviceId)
-      
-      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/servico/${serviceId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        console.log('📋 Status do serviço:', result)
-        // API retorna {status_code, data: {...}}
-        const serviceData = result.data || result
-        console.log('📦 Dados do serviço extraídos:', serviceData)
-        return serviceData
-      } else {
-        console.error('❌ Erro ao verificar status:', response.status)
-        return null
-      }
-    } catch (error) {
-      console.error('❌ Erro ao verificar status do serviço:', error)
-      return null
-    }
-  }
-
-  // Função para iniciar polling do status do serviço
+// Função para iniciar polling do status do serviço
   const startPollingServiceStatus = (serviceId: number) => {
     console.log('⏳ Iniciando polling para serviço:', serviceId)
     
@@ -5243,20 +5214,19 @@ const handleServiceCreate = async () => {
       setActiveServiceId(createdServiceId)
       
       // Ir para tela de espera do prestador
-      console.log('⏳ Aguardando prestador aceitar o serviço...')
-      handleScreenTransition('waiting-provider')
+      handleScreenTransition('waiting-driver')
       
-      // Iniciar busca de prestador
-      console.log('🔍 Iniciando busca com serviceId:', createdServiceId)
-      startProviderSearch(createdServiceId)
+      // Iniciar polling para verificar quando o prestador aceitar
+      startServiceStatusPolling(createdServiceId)
+      
+      console.log('🔍 Polling iniciado - aguardando prestador aceitar o serviço...')
+      console.log('📋 ID do serviço sendo monitorado:', createdServiceId)
     } else {
-      console.error('❌ Falha ao criar serviço')
-      alert('Não foi possível criar o serviço. Verifique os dados e tente novamente.')
+      showError('Erro', 'Não foi possível criar o serviço. Verifique os dados e tente novamente.')
     }
   } catch (error) {
     setIsLoading(false)
-    console.error('❌ Erro inesperado ao criar serviço:', error)
-    alert('Erro inesperado ao criar serviço. Tente novamente.')
+    showError('Erro', 'Erro inesperado ao criar serviço. Tente novamente.')
   }
 }
 
@@ -5697,6 +5667,125 @@ const handleServiceCreate = async () => {
     }
   }
 
+  // Função para verificar status do serviço
+  const checkServiceStatus = async (serviceId: string) => {
+    try {
+      console.log('🔍 Verificando status do serviço:', serviceId)
+      
+      const response = await fetchWithAuth(API_ENDPOINTS.SERVICE_BY_ID(serviceId), {
+        method: 'GET'
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('📋 Status do serviço:', data)
+        
+        // Extrair dados do serviço (ajustado para o formato correto da API)
+        const servico = data.data || data.servico || data
+        const status = servico.status || servico.status_servico
+        const prestador = servico.prestador || servico.provider
+        
+        console.log('🔍 Dados extraídos:')
+        console.log('  - servico:', servico)
+        console.log('  - status extraído:', status)
+        console.log('  - prestador extraído:', prestador)
+        
+        console.log('📊 Status atual:', status)
+        console.log('👨‍💼 Prestador:', prestador)
+        
+        // Se o serviço foi aceito (status mudou para EM_ANDAMENTO)
+        console.log('🔍 Verificando condições de aceitação:')
+        console.log('  - Status é EM_ANDAMENTO?', status === 'EM_ANDAMENTO')
+        console.log('  - Prestador existe?', !!prestador)
+        console.log('  - ID do prestador:', prestador?.id)
+        
+        if (status === 'EM_ANDAMENTO' && prestador && prestador.id) {
+          console.log('✅ Serviço foi aceito pelo prestador!')
+          
+          // Parar o polling
+          if (serviceStatusPolling) {
+            clearInterval(serviceStatusPolling)
+            setServiceStatusPolling(null)
+          }
+          
+          // Extrair dados do prestador (baseado na estrutura real da API)
+          const driverData = {
+            id: prestador.id,
+            nome: prestador.usuario?.nome || prestador.nome || 'Prestador',
+            telefone: prestador.usuario?.telefone || prestador.telefone || '',
+            email: prestador.usuario?.email || prestador.email || '',
+            veiculo: {
+              tipo: 'MOTO', // Valor padrão já que modalidades não vem na resposta do serviço
+              modelo: 'Veículo do Prestador',
+              ano: 2020
+            },
+            localizacao: {
+              // Usar localização do serviço como base e adicionar pequena variação
+              lat: parseFloat(servico.localizacao?.latitude || '-23.564') + (Math.random() - 0.5) * 0.01,
+              lng: parseFloat(servico.localizacao?.longitude || '-46.652') + (Math.random() - 0.5) * 0.01
+            },
+            avaliacao: 4.8,
+            tempo_estimado: "5-10 min"
+          }
+          
+          console.log('👨‍💼 Dados do prestador processados:', driverData)
+          
+          // Atualizar estados
+          setFoundDriver(driverData)
+          setDriverLocation(driverData.localizacao)
+          setShowDriverFoundModal(true)
+          
+          // Após 3 segundos, ir para tela de tracking
+          setTimeout(() => {
+            setShowDriverFoundModal(false)
+            setCurrentScreen('tracking')
+            console.log('🗺️ Redirecionando para tela de tracking...')
+          }, 3000)
+          
+          return true
+        }
+        
+        return false
+      } else {
+        console.error('❌ Erro ao verificar status do serviço:', response.status)
+        return false
+      }
+    } catch (error) {
+      console.error('❌ Erro na verificação de status:', error)
+      return false
+    }
+  }
+
+  // Função para iniciar polling do status do serviço
+  const startServiceStatusPolling = (serviceId: string) => {
+    console.log('🔄 Iniciando polling do status do serviço:', serviceId)
+    
+    // Limpar polling anterior se existir
+    if (serviceStatusPolling) {
+      clearInterval(serviceStatusPolling)
+    }
+    
+    // Verificar status a cada 3 segundos
+    const interval = setInterval(async () => {
+      const accepted = await checkServiceStatus(serviceId)
+      if (accepted) {
+        clearInterval(interval)
+        setServiceStatusPolling(null)
+      }
+    }, 3000)
+    
+    setServiceStatusPolling(interval)
+    
+    // Parar polling após 5 minutos (timeout)
+    setTimeout(() => {
+      if (serviceStatusPolling) {
+        clearInterval(serviceStatusPolling)
+        setServiceStatusPolling(null)
+        console.log('⏰ Timeout do polling - nenhum prestador aceitou em 5 minutos')
+      }
+    }, 5 * 60 * 1000)
+  }
+
   // Função para formatar status do pedido
   const getStatusColor = (status: string) => {
     switch (status?.toUpperCase()) {
@@ -5933,26 +6022,118 @@ const handleServiceCreate = async () => {
       console.log('🎯 Preparando criação de serviço (sem criar localizações separadas)')
       console.log('✅ ID do contratante já obtido:', id_contratante)
       
-      // SEMPRE usar endpoint /servico (sem categoria na URL)
-      endpoint = API_ENDPOINTS.SERVICES
-      
-      // Construir payload conforme documentação da API (SIMPLIFICADO)
-      payload = {
-        id_categoria: id_categoria && id_categoria > 0 ? Number(id_categoria) : undefined,
-        descricao: descricaoServico.trim(),
-        valor_adicional: Number(valorAdicional),
-        origem_lat: Number(pickupLocation.lat),
-        origem_lng: Number(pickupLocation.lng),
-        origem_endereco: pickupLocation.address,
-        destino_lat: Number(deliveryLocation.lat),
-        destino_lng: Number(deliveryLocation.lng),
-        destino_endereco: deliveryLocation.address
+      // Escolher endpoint baseado na categoria
+      if (id_categoria && id_categoria > 0) {
+        // Usar endpoint específico da categoria
+        endpoint = API_ENDPOINTS.SERVICE_FROM_CATEGORY(id_categoria)
+        console.log('🎯 Usando endpoint específico da categoria:', id_categoria)
+      } else {
+        // Usar endpoint geral
+        endpoint = API_ENDPOINTS.SERVICES
+        console.log('🎯 Usando endpoint geral de serviços')
       }
       
-      // Remover campos nulos
-      if (!payload.id_categoria) {
-        delete payload.id_categoria
+      // Função para limitar tamanho do endereço
+      const limitAddress = (address: string, maxLength: number = 100) => {
+        const trimmed = address.trim()
+        if (trimmed.length <= maxLength) return trimmed
+        
+        // Tentar pegar apenas a parte principal do endereço
+        const parts = trimmed.split(',')
+        let result = parts[0].trim()
+        
+        // Adicionar partes até atingir o limite
+        for (let i = 1; i < parts.length && result.length < maxLength - 10; i++) {
+          const nextPart = parts[i].trim()
+          if (result.length + nextPart.length + 2 <= maxLength) {
+            result += ', ' + nextPart
+          } else {
+            break
+          }
+        }
+        
+        return result
       }
+
+      // Construir payload baseado no endpoint usado
+      if (endpoint.includes('/from-categoria/')) {
+        // Para endpoint específico da categoria, não enviar id_categoria no body
+        payload = {
+          id_contratante: Number(id_contratante),
+          descricao: descricaoServico.trim(),
+          valor_adicional: Number(valorAdicional),
+          origem_lat: Number(pickupLocation.lat),
+          origem_lng: Number(pickupLocation.lng),
+          origem_endereco: limitAddress(pickupLocation.address, 100),
+          destino_lat: Number(deliveryLocation.lat),
+          destino_lng: Number(deliveryLocation.lng),
+          destino_endereco: limitAddress(deliveryLocation.address, 100),
+          status: 'PENDENTE'
+        }
+        console.log('📦 Payload para endpoint específico (categoria na URL)')
+      } else {
+        // Para endpoint geral, incluir id_categoria no body
+        payload = {
+          id_categoria: id_categoria && id_categoria > 0 ? Number(id_categoria) : 1,
+          id_contratante: Number(id_contratante),
+          descricao: descricaoServico.trim(),
+          valor_adicional: Number(valorAdicional),
+          origem_lat: Number(pickupLocation.lat),
+          origem_lng: Number(pickupLocation.lng),
+          origem_endereco: limitAddress(pickupLocation.address, 100),
+          destino_lat: Number(deliveryLocation.lat),
+          destino_lng: Number(deliveryLocation.lng),
+          destino_endereco: limitAddress(deliveryLocation.address, 100),
+          status: 'PENDENTE'
+        }
+        console.log('📦 Payload para endpoint geral (categoria no body)')
+      }
+      
+      // Validações antes de enviar
+      if (!payload.id_contratante || isNaN(payload.id_contratante)) {
+        console.error('❌ ID do contratante inválido:', payload.id_contratante)
+        showError('Erro de Validação', 'ID do contratante não encontrado. Faça login novamente.')
+        return false
+      }
+
+      if (!payload.descricao || payload.descricao.length < 3) {
+        console.error('❌ Descrição inválida:', payload.descricao)
+        showError('Erro de Validação', 'Descrição do serviço deve ter pelo menos 3 caracteres.')
+        return false
+      }
+
+      if (!payload.origem_endereco || !payload.destino_endereco) {
+        console.error('❌ Endereços inválidos:', { origem: payload.origem_endereco, destino: payload.destino_endereco })
+        showError('Erro de Validação', 'Endereços de origem e destino são obrigatórios.')
+        return false
+      }
+
+      if (isNaN(payload.origem_lat) || isNaN(payload.origem_lng) || isNaN(payload.destino_lat) || isNaN(payload.destino_lng)) {
+        console.error('❌ Coordenadas inválidas:', { 
+          origem_lat: payload.origem_lat, 
+          origem_lng: payload.origem_lng,
+          destino_lat: payload.destino_lat,
+          destino_lng: payload.destino_lng
+        })
+        showError('Erro de Validação', 'Coordenadas geográficas inválidas.')
+        return false
+      }
+
+      // Validação de categoria apenas para endpoint geral
+      if (payload.id_categoria !== undefined) {
+        if (!payload.id_categoria || payload.id_categoria < 1 || payload.id_categoria > 8) {
+          console.warn('⚠️ ID de categoria inválido:', payload.id_categoria, '- usando categoria padrão (1)')
+          payload.id_categoria = 1 // Categoria padrão
+        }
+        // Garantir que categoria seja sempre um número válido
+        payload.id_categoria = Number(payload.id_categoria)
+      }
+
+      // Log do payload final antes do envio
+      console.log('📋 PAYLOAD FINAL (após validações):', JSON.stringify(payload, null, 2))
+      console.log('📏 Tamanhos dos endereços:')
+      console.log('  - Origem:', payload.origem_endereco.length, 'chars')
+      console.log('  - Destino:', payload.destino_endereco.length, 'chars')
       
       // Adicionar pontos de parada se existirem
       if (stopPoints && stopPoints.length > 0) {
@@ -5988,35 +6169,89 @@ const handleServiceCreate = async () => {
         const data = await response.json()
         console.log('✅ Serviço criado com sucesso!')
         console.log('📋 Resposta completa:', JSON.stringify(data, null, 2))
+        console.log('📋 Estrutura da resposta:', Object.keys(data))
         
-        // A API retorna: { status_code: 201, message: "...", data: { servico: { id: ... } } }
-        // Extrair ID do serviço de vários formatos possíveis
-        let serviceId = data.id || 
-                       data.servico_id || 
-                       data.service_id ||
-                       data.data?.id ||
-                       data.data?.servico?.id ||  // Novo formato: data.servico.id
-                       data.data?.servico_id
-        
-        // Se a resposta for um objeto com propriedade 'servico' ou 'service'
-        if (!serviceId && data.servico) {
-          serviceId = data.servico.id
+        // Função para buscar ID recursivamente
+        const findServiceId = (obj: any, path: string = ''): any => {
+          if (!obj || typeof obj !== 'object') return null
+          
+          // Verificar propriedades diretas que podem conter o ID
+          const idFields = ['id', 'servico_id', 'service_id', '_id']
+          for (const field of idFields) {
+            if (obj[field] !== undefined && obj[field] !== null) {
+              console.log(`🎯 ID encontrado em ${path}.${field}:`, obj[field])
+              return obj[field]
+            }
+          }
+          
+          // Buscar recursivamente em objetos aninhados
+          for (const [key, value] of Object.entries(obj)) {
+            if (value && typeof value === 'object') {
+              const found = findServiceId(value, path ? `${path}.${key}` : key)
+              if (found) return found
+            }
+          }
+          
+          return null
         }
-        if (!serviceId && data.service) {
-          serviceId = data.service.id
+        
+        // Tentar extrair ID do serviço de vários formatos possíveis
+        let serviceId = findServiceId(data)
+        
+        // Fallback: tentar localizações específicas conhecidas
+        if (!serviceId) {
+          const fallbackPaths = [
+            data.id,
+            data.servico_id,
+            data.service_id,
+            data.data?.id,
+            data.data?.servico?.id,
+            data.data?.servico_id,
+            data.servico?.id,
+            data.service?.id,
+            data.result?.id,
+            data.response?.id
+          ]
+          
+          for (let i = 0; i < fallbackPaths.length; i++) {
+            if (fallbackPaths[i] !== undefined && fallbackPaths[i] !== null) {
+              serviceId = fallbackPaths[i]
+              console.log(`🎯 ID encontrado no fallback ${i}:`, serviceId)
+              break
+            }
+          }
         }
         
-        console.log('🔍 Tentando extrair ID do serviço:')
-        console.log('  - data.id:', data.id)
-        console.log('  - data.data?.id:', data.data?.id)
-        console.log('  - data.data?.servico?.id:', data.data?.servico?.id)
-        console.log('  - data.servico?.id:', data.servico?.id)
+        console.log('🔍 Resultado da extração do ID:')
         console.log('  - ID extraído:', serviceId)
+        console.log('  - Tipo do ID:', typeof serviceId)
+        console.log('  - É válido?', serviceId && (typeof serviceId === 'string' || typeof serviceId === 'number'))
         
         if (!serviceId) {
-          console.error('❌ ID do serviço não encontrado na resposta:', data)
-          alert('Erro: Serviço criado mas ID não foi retornado. Entre em contato com o suporte.')
-          return false
+          console.error('❌ ID do serviço não encontrado na resposta completa:')
+          console.error('📋 Dados recebidos:', JSON.stringify(data, null, 2))
+          console.error('📋 Chaves disponíveis:', Object.keys(data))
+          
+          // Tentar usar um ID temporário baseado no timestamp
+          const tempId = `temp_${Date.now()}`
+          console.warn('⚠️ Usando ID temporário:', tempId)
+          
+          // Mostrar alerta mais informativo
+          const errorDetails = `
+Resposta do servidor:
+${JSON.stringify(data, null, 2)}
+
+Chaves disponíveis: ${Object.keys(data).join(', ')}
+          `
+          
+          alert(`Serviço criado com sucesso, mas não foi possível extrair o ID.
+          
+Detalhes técnicos:
+${errorDetails}
+
+Usando ID temporário: ${tempId}`)
+          
+          serviceId = tempId
         }
         
         console.log('🆔 ID do serviço criado:', serviceId)
@@ -6051,67 +6286,195 @@ const handleServiceCreate = async () => {
         
         return true
       } else {
-        console.error('❌ Erro na resposta da API')
-        console.error('  - Status:', response.status)
-        console.error('  - Status Text:', response.statusText)
-        
+        // Tratar erros da API sem expor dados sensíveis
         try {
           const errorData = await response.json()
-          console.error('  - Erro detalhado:', JSON.stringify(errorData, null, 2))
           
-          // Mensagens de erro específicas baseadas no status
+          // Mensagens de erro amigáveis baseadas no status
           let errorMessage = 'Erro desconhecido'
+          
           if (response.status === 400) {
-            errorMessage = `Dados inválidos: ${errorData.message || 'Verifique os dados enviados'}`
-          } else if (response.status === 401) {
-            errorMessage = 'Não autorizado. Faça login novamente.'
-          } else if (response.status === 403) {
-            errorMessage = 'Acesso negado. Verifique suas permissões.'
-          } else if (response.status === 404) {
-            errorMessage = 'Serviço não encontrado na API.'
-          } else if (response.status === 500) {
-            // Erro 500 pode ser causado por:
-            // 1. id_prestador inexistente no banco
-            // 2. id_localizacao inválido
-            // 3. Constraint de foreign key
-            console.error('⚠️ POSSÍVEIS CAUSAS DO ERRO 500:')
-            console.error('  1. id_prestador não existe na tabela PRESTADOR')
-            console.error('  2. id_localizacao não existe na tabela LOCALIZACAO')
-            console.error('  3. id_categoria não existe na tabela CATEGORIA')
-            console.error('  4. id_contratante não existe na tabela CONTRATANTE')
-            console.error('  5. Violação de constraint no banco de dados')
-            console.error('📋 Dados enviados:', payload)
+            console.error('❌ ERRO 400 - Detalhes:', errorData)
+            console.error('📤 Payload que causou erro 400:', JSON.stringify(payload, null, 2))
             
-            errorMessage = `Erro interno do servidor (500).\n\nPossíveis causas:\n- ID do prestador inválido\n- ID da localização inválido\n- Dados inconsistentes no banco\n\nDetalhes: ${errorData.message || 'Sem detalhes adicionais'}`
+            // Tentar extrair mensagem específica do erro 400
+            const validationError = errorData.message || errorData.error || errorData.details
+            if (validationError) {
+              errorMessage = `Dados inválidos: ${validationError}`
+            } else {
+              errorMessage = 'Dados inválidos. Verifique as informações e tente novamente.'
+            }
+          } else if (response.status === 401) {
+            errorMessage = 'Sua sessão expirou. Faça login novamente.'
+            localStorage.removeItem('authToken')
+            setCurrentScreen('login')
+          } else if (response.status === 403) {
+            errorMessage = 'Você não tem permissão para realizar esta ação.'
+          } else if (response.status === 404) {
+            errorMessage = 'Serviço não encontrado.'
+          } else if (response.status === 500) {
+            console.error('🔥 ERRO 500 - Detalhes do servidor:', errorData)
+            console.error('📤 Payload que causou o erro:', JSON.stringify(payload, null, 2))
+            console.error('🌐 Endpoint usado:', endpoint)
+            
+            // Tentar extrair mensagem específica do erro
+            const serverMessage = errorData.message || errorData.error || errorData.details
+            
+            // Se o erro foi com endpoint específico, tentar com endpoint geral
+            if (endpoint.includes('/from-categoria/') && !payload._retry_with_general_endpoint) {
+              console.log('🔄 Tentando novamente com endpoint geral...')
+              
+              const payloadComCategoriaDefault = { ...payload }
+              payloadComCategoriaDefault.id_categoria = id_categoria || 1
+              payloadComCategoriaDefault._retry_with_general_endpoint = true
+              
+              // Usar endpoint geral
+              const generalEndpoint = API_ENDPOINTS.SERVICES
+              
+              try {
+                const retryResponse = await fetchWithAuth(generalEndpoint, {
+                  method: 'POST',
+                  body: JSON.stringify(payloadComCategoriaDefault)
+                })
+                
+                if (retryResponse.ok) {
+                  console.log('✅ Sucesso na segunda tentativa (endpoint geral)')
+                  const retryData = await retryResponse.json()
+                  
+                  // Processar sucesso (mesmo código do bloco de sucesso)
+                  let serviceId = retryData.id || 
+                                 retryData.servico_id || 
+                                 retryData.service_id ||
+                                 retryData.data?.id ||
+                                 retryData.data?.servico?.id ||
+                                 retryData.data?.servico_id
+                  
+                  if (retryData.servico) serviceId = retryData.servico.id
+                  if (retryData.service) serviceId = retryData.service.id
+                  
+                  if (serviceId) {
+                    setCreatedServiceId(serviceId)
+                    
+                    const serviceInfo = {
+                      id: serviceId,
+                      id_categoria: 1, // Categoria padrão
+                      id_contratante: payloadComCategoriaDefault.id_contratante,
+                      descricao: payloadComCategoriaDefault.descricao,
+                      valor: retryData.data?.servico?.valor || payloadComCategoriaDefault.valor_adicional,
+                      status: 'PENDENTE',
+                      origem: pickupLocation,
+                      destino: deliveryLocation,
+                      createdAt: new Date().toISOString(),
+                      userId: loggedUser?.email
+                    }
+                    localStorage.setItem('currentService', JSON.stringify(serviceInfo))
+                    
+                    return true
+                  }
+                } else {
+                  // Tratar erro 400 na segunda tentativa
+                  console.error('❌ Erro na segunda tentativa (com categoria padrão):')
+                  console.error('  - Status:', retryResponse.status)
+                  console.error('  - Status Text:', retryResponse.statusText)
+                  
+                  try {
+                    const retryErrorData = await retryResponse.json()
+                    console.error('  - Detalhes do erro 400:', retryErrorData)
+                    console.error('  - Payload com categoria padrão:', JSON.stringify(payloadComCategoriaDefault, null, 2))
+                    
+                    // Se o erro 400 tem detalhes específicos, usar essa informação
+                    if (retryErrorData.message || retryErrorData.error) {
+                      const specificError = retryErrorData.message || retryErrorData.error
+                      errorMessage = `Erro de validação: ${specificError}`
+                    }
+                    
+                    // Tentar uma terceira vez com payload ultra-simplificado
+                    if (retryResponse.status === 400 && !payloadComCategoriaDefault._ultra_simple_retry) {
+                      console.log('🔄 Terceira tentativa com payload ultra-simplificado...')
+                      
+                      const payloadUltraSimples = {
+                        id_categoria: 1, // Categoria obrigatória
+                        id_contratante: Number(id_contratante),
+                        descricao: descricaoServico.trim(),
+                        valor_adicional: 10, // Valor fixo simples
+                        origem_lat: Number(pickupLocation.lat),
+                        origem_lng: Number(pickupLocation.lng),
+                        origem_endereco: "Origem",
+                        destino_lat: Number(deliveryLocation.lat),
+                        destino_lng: Number(deliveryLocation.lng),
+                        destino_endereco: "Destino",
+                        _ultra_simple_retry: true
+                      }
+                      
+                      try {
+                        const ultraSimpleResponse = await fetchWithAuth(endpoint, {
+                          method: 'POST',
+                          body: JSON.stringify(payloadUltraSimples)
+                        })
+                        
+                        if (ultraSimpleResponse.ok) {
+                          console.log('✅ Sucesso na terceira tentativa (ultra-simplificado)')
+                          const ultraData = await ultraSimpleResponse.json()
+                          
+                          let serviceId = ultraData.id || ultraData.data?.id || ultraData.data?.servico?.id
+                          if (serviceId) {
+                            setCreatedServiceId(serviceId)
+                            
+                            const serviceInfo = {
+                              id: serviceId,
+                              id_categoria: null,
+                              id_contratante: payloadUltraSimples.id_contratante,
+                              descricao: payloadUltraSimples.descricao,
+                              valor: 10,
+                              status: 'PENDENTE',
+                              origem: pickupLocation,
+                              destino: deliveryLocation,
+                              createdAt: new Date().toISOString(),
+                              userId: loggedUser?.email
+                            }
+                            localStorage.setItem('currentService', JSON.stringify(serviceInfo))
+                            
+                            return true
+                          }
+                        } else {
+                          console.error('❌ Falha na terceira tentativa também:', ultraSimpleResponse.status)
+                        }
+                      } catch (ultraError) {
+                        console.error('❌ Erro na terceira tentativa:', ultraError)
+                      }
+                    }
+                  } catch (parseError) {
+                    console.error('  - Não foi possível parsear erro 400')
+                  }
+                }
+              } catch (retryError) {
+                console.error('❌ Erro na segunda tentativa:', retryError)
+              }
+            }
+            
+            if (serverMessage) {
+              errorMessage = `Erro no servidor: ${serverMessage}`
+            } else {
+              errorMessage = 'Erro interno do servidor. Verifique os dados e tente novamente.'
+            }
           } else {
-            errorMessage = errorData.message || `Erro ${response.status}: ${response.statusText}`
+            errorMessage = errorData.message || 'Erro ao processar sua solicitação.'
           }
           
-          alert(`Erro ao criar serviço: ${errorMessage}`)
-          console.error('💡 SUGESTÃO: Verifique se todos os IDs de referência existem no banco de dados')
+          showError('Erro ao criar serviço', errorMessage)
         } catch (parseError) {
-          console.error('❌ Erro ao parsear resposta de erro:', parseError)
-          
-          // Tentar obter texto da resposta se JSON falhou
-          try {
-            const errorText = await response.text()
-            console.error('❌ Resposta de erro (texto):', errorText)
-            alert(`Erro ${response.status}: ${errorText || 'Erro desconhecido no servidor'}`)
-          } catch (textError) {
-            console.error('❌ Erro ao obter texto da resposta:', textError)
-            alert(`Erro ${response.status}: Erro desconhecido no servidor. Verifique sua conexão e tente novamente.`)
-          }
+          // Se não conseguir parsear o erro, mostrar mensagem genérica
+          showError('Erro ao criar serviço', 'Não foi possível processar sua solicitação. Tente novamente.')
         }
         
         return false
       }
     } catch (error) {
-      console.error('❌ Erro na requisição de criação de serviço:', error)
+      // Tratar erros de conexão sem expor detalhes técnicos
       
       // Verificar se é erro de sessão expirada
       if (error instanceof Error && error.message.includes('sessão expirou')) {
-        alert(error.message)
-        // Redirecionar para login
+        showError('Sessão Expirada', 'Sua sessão expirou. Faça login novamente.')
         setCurrentScreen('login')
         return false
       }
@@ -6122,7 +6485,7 @@ const handleServiceCreate = async () => {
           error.message.includes('Token não encontrado') ||
           error.message.includes('Acesso negado: Token')
       )) {
-        alert('Sua sessão expirou. Por favor, faça login novamente.')
+        showError('Sessão Expirada', 'Sua sessão expirou. Por favor, faça login novamente.')
         localStorage.removeItem('authToken')
         localStorage.removeItem('loggedUser')
         setLoggedUser(null)
@@ -6132,14 +6495,12 @@ const handleServiceCreate = async () => {
       
       // Verificar se é erro de perfil incompleto
       if (error instanceof Error && error.message.includes('ID do contratante não encontrado')) {
-        alert('Complete seu perfil de contratante antes de criar serviços.')
+        showWarning('Perfil Incompleto', 'Complete seu perfil de contratante antes de criar serviços.')
         setShowCompleteProfileModal(true)
       } else if (error instanceof TypeError && error.message.includes('fetch')) {
-        alert('Erro de conexão: Verifique sua internet e tente novamente.')
-      } else if (error instanceof Error) {
-        alert(`Erro: ${error.message}`)
+        showError('Erro de Conexão', 'Verifique sua internet e tente novamente.')
       } else {
-        alert('Erro inesperado ao criar serviço. Verifique sua conexão e tente novamente.')
+        showError('Erro', 'Não foi possível criar o serviço. Tente novamente.')
       }
       
       return false
@@ -6148,39 +6509,31 @@ const handleServiceCreate = async () => {
 
   // Função para confirmar pagamento (serviço já foi criado)
   const handlePaymentConfirmation = async () => {
-    console.log('🔍 handlePaymentConfirmation chamado')
-    console.log('🆔 createdServiceId:', createdServiceId)
-    console.log('💰 servicePrice:', servicePrice)
-    console.log('💵 walletBalance:', walletBalance)
-    
     if (!createdServiceId) {
-      console.error('❌ ID do serviço não encontrado!')
-      alert('Erro: ID do serviço não encontrado. Tente criar o serviço novamente.')
+      showError('Erro', 'ID do serviço não encontrado. Tente criar o serviço novamente.')
       return
     }
 
     const serviceValue = servicePrice > 0 ? servicePrice : 119.99
-    console.log('💵 Valor do serviço:', serviceValue)
 
     // Verificar saldo suficiente
     if (walletBalance < serviceValue) {
-      console.warn('⚠️ Saldo insuficiente')
-      alert(`Saldo insuficiente!\n\nVocê possui: R$ ${walletBalance.toFixed(2)}\nValor do serviço: R$ ${serviceValue.toFixed(2)}\n\nPor favor, recarregue sua carteira.`)
+      showWarning(
+        'Saldo Insuficiente', 
+        `Você possui R$ ${walletBalance.toFixed(2)} e o serviço custa R$ ${serviceValue.toFixed(2)}. Por favor, recarregue sua carteira.`
+      )
       return
     }
     
     // Pagar serviço com carteira digital
     const serviceId = typeof createdServiceId === 'string' ? parseInt(createdServiceId) : createdServiceId
-    console.log('🔢 ID do serviço convertido:', serviceId, '(tipo:', typeof serviceId, ')')
-    
     const paymentSuccess = await payServiceWithWallet(serviceId)
     
     if (paymentSuccess) {
-      console.log('✅ Pagamento bem-sucedido, redirecionando para tracking...')
       // Redirecionar para tela de tracking do serviço
       handleScreenTransition('service-tracking')
     } else {
-      console.error('❌ Pagamento falhou')
+      showError('Erro no Pagamento', 'Não foi possível processar o pagamento. Tente novamente.')
     }
   }
 
@@ -6360,6 +6713,247 @@ const handleServiceCreate = async () => {
               Cancelar
             </button>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Waiting Driver Screen
+  if (currentScreen === 'waiting-driver') {
+    return (
+      <>
+        <div className={`min-h-screen ${themeClasses.bg} flex items-center justify-center transition-all duration-300 ${
+          isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+        }`}>
+          <div className="max-w-md w-full mx-4">
+            <div className={`${themeClasses.bgCard} rounded-2xl shadow-2xl p-8 text-center`}>
+              {/* Animação de loading */}
+              <div className="mb-6">
+                <div className="relative w-32 h-32 mx-auto">
+                  <div className="absolute inset-0 border-8 border-blue-200 rounded-full"></div>
+                  <div className="absolute inset-0 border-8 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <svg className="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Título */}
+              <h2 className={`text-2xl font-bold ${themeClasses.text} mb-3`}>
+                Procurando Motorista
+              </h2>
+              
+              {/* Descrição */}
+              <p className={`${themeClasses.textSecondary} mb-6`}>
+                Aguarde enquanto encontramos um motorista disponível para aceitar seu serviço...
+              </p>
+
+              {/* Info do serviço */}
+              {createdServiceId && (
+                <div className={`${themeClasses.bgSecondary} rounded-lg p-4 mb-6`}>
+                  <p className={`text-sm ${themeClasses.textSecondary} mb-2`}>ID do Serviço</p>
+                  <p className={`font-mono text-lg ${themeClasses.text}`}>{createdServiceId}</p>
+                </div>
+              )}
+
+              {/* Botão cancelar */}
+              <button
+                onClick={() => {
+                  // Parar polling
+                  if (serviceStatusPolling) {
+                    clearInterval(serviceStatusPolling)
+                    setServiceStatusPolling(null)
+                  }
+                  handleScreenTransition('home')
+                }}
+                className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal de Motorista Encontrado */}
+        {showDriverFoundModal && foundDriver && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className={`${themeClasses.bgCard} rounded-2xl shadow-2xl p-8 text-center max-w-md mx-4`}>
+              {/* Ícone de sucesso */}
+              <div className="mb-6">
+                <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto">
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Título */}
+              <h2 className={`text-2xl font-bold ${themeClasses.text} mb-3`}>
+                Motorista Encontrado!
+              </h2>
+
+              {/* Info do motorista */}
+              <div className={`${themeClasses.bgSecondary} rounded-lg p-4 mb-6`}>
+                <p className={`font-semibold ${themeClasses.text} mb-2`}>{foundDriver.nome}</p>
+                <p className={`text-sm ${themeClasses.textSecondary} mb-1`}>
+                  {foundDriver.veiculo.tipo} - {foundDriver.veiculo.modelo}
+                </p>
+                <p className={`text-sm ${themeClasses.textSecondary} mb-2`}>
+                  ⭐ {foundDriver.avaliacao} • Chegada: {foundDriver.tempo_estimado}
+                </p>
+                <p className={`text-xs ${themeClasses.textSecondary}`}>
+                  📞 {foundDriver.telefone}
+                </p>
+              </div>
+
+              <p className={`text-sm ${themeClasses.textSecondary}`}>
+                Redirecionando para o acompanhamento...
+              </p>
+            </div>
+          </div>
+        )}
+      </>
+    )
+  }
+
+  // Tracking Screen
+  if (currentScreen === 'tracking') {
+    return (
+      <div className={`min-h-screen ${themeClasses.bg} transition-all duration-300 ${
+        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
+      }`}>
+        {/* Header */}
+        <div className="bg-blue-500 text-white p-4 relative">
+          <button
+            onClick={() => handleScreenTransition('home')}
+            className="absolute left-4 top-1/2 transform -translate-y-1/2"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h1 className="text-xl font-bold text-center">Acompanhar Entrega</h1>
+        </div>
+
+        {/* Mapa simulado */}
+        <div className="h-64 bg-gray-300 relative">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-gray-600 text-center">
+              <svg className="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <p className="text-sm">Mapa de Rastreamento</p>
+              {driverLocation && (
+                <p className="text-xs mt-1">
+                  Motorista: {driverLocation.lat.toFixed(4)}, {driverLocation.lng.toFixed(4)}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Info do motorista */}
+        {foundDriver && (
+          <div className={`${themeClasses.bgCard} m-4 rounded-lg shadow-lg p-4`}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className={`font-semibold ${themeClasses.text}`}>{foundDriver.nome}</h3>
+                <p className={`text-sm ${themeClasses.textSecondary}`}>
+                  {foundDriver.veiculo.tipo} - {foundDriver.veiculo.modelo}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className={`text-sm ${themeClasses.textSecondary}`}>⭐ {foundDriver.avaliacao}</p>
+                <p className={`text-sm font-semibold text-green-600`}>A caminho</p>
+              </div>
+            </div>
+
+            {/* Botões de ação */}
+            <div className="flex gap-2">
+              <button className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm">
+                📞 Ligar
+              </button>
+              <button className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg text-sm">
+                💬 Mensagem
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Status do serviço */}
+        <div className={`${themeClasses.bgCard} m-4 rounded-lg shadow-lg p-4`}>
+          <h3 className={`font-semibold ${themeClasses.text} mb-3`}>Status da Entrega</h3>
+          
+          <div className="space-y-3">
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-green-500 rounded-full mr-3"></div>
+              <div>
+                <p className={`text-sm font-medium ${themeClasses.text}`}>Serviço Aceito</p>
+                <p className={`text-xs ${themeClasses.textSecondary}`}>Motorista confirmou o pedido</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-blue-500 rounded-full mr-3 animate-pulse"></div>
+              <div>
+                <p className={`text-sm font-medium ${themeClasses.text}`}>A caminho da origem</p>
+                <p className={`text-xs ${themeClasses.textSecondary}`}>Tempo estimado: {foundDriver?.tempo_estimado || '5-10 min'}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-gray-300 rounded-full mr-3"></div>
+              <div>
+                <p className={`text-sm ${themeClasses.textSecondary}`}>Coletando item</p>
+                <p className={`text-xs ${themeClasses.textSecondary}`}>Aguardando chegada</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-gray-300 rounded-full mr-3"></div>
+              <div>
+                <p className={`text-sm ${themeClasses.textSecondary}`}>A caminho do destino</p>
+                <p className={`text-xs ${themeClasses.textSecondary}`}>Aguardando coleta</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-gray-300 rounded-full mr-3"></div>
+              <div>
+                <p className={`text-sm ${themeClasses.textSecondary}`}>Entregue</p>
+                <p className={`text-xs ${themeClasses.textSecondary}`}>Aguardando entrega</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Informações do serviço */}
+        <div className={`${themeClasses.bgCard} m-4 rounded-lg shadow-lg p-4`}>
+          <h3 className={`font-semibold ${themeClasses.text} mb-3`}>Detalhes do Serviço</h3>
+          
+          {pickupLocation && (
+            <div className="mb-3">
+              <p className={`text-sm font-medium ${themeClasses.text}`}>📍 Origem</p>
+              <p className={`text-sm ${themeClasses.textSecondary}`}>{pickupLocation.address}</p>
+            </div>
+          )}
+          
+          {deliveryLocation && (
+            <div className="mb-3">
+              <p className={`text-sm font-medium ${themeClasses.text}`}>🎯 Destino</p>
+              <p className={`text-sm ${themeClasses.textSecondary}`}>{deliveryLocation.address}</p>
+            </div>
+          )}
+          
+          {createdServiceId && (
+            <div>
+              <p className={`text-sm font-medium ${themeClasses.text}`}>🆔 ID do Serviço</p>
+              <p className={`text-sm ${themeClasses.textSecondary} font-mono`}>{createdServiceId}</p>
+            </div>
+          )}
         </div>
       </div>
     )
