@@ -1,7 +1,7 @@
 // Constantes e configurações da aplicação
 
 // API Base URL
-export const API_BASE_URL = 'https://servidor-facilita.onrender.com/v1/facilita'
+export const API_BASE_URL = 'https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita'
 
 // API Endpoints
 export const API_ENDPOINTS = {
@@ -26,6 +26,10 @@ export const API_ENDPOINTS = {
   PRESTADORES: `${API_BASE_URL}/prestador`,
   PRESTADOR_BY_ID: (id: string) => `${API_BASE_URL}/prestador/${id}`,
   
+  // Localizações
+  LOCATIONS: `${API_BASE_URL}/localizacao`,
+  LOCATION_BY_ID: (id: string) => `${API_BASE_URL}/localizacao/${id}`,
+
   // Serviços
   SERVICES: `${API_BASE_URL}/servico`,
   SERVICE_BY_ID: (id: string) => `${API_BASE_URL}/servico/${id}`,
@@ -42,14 +46,41 @@ export const API_ENDPOINTS = {
   PAYMENTS: `${API_BASE_URL}/pagamento`,
   PAGBANK_PAYMENT: `${API_BASE_URL}/pagamento/pagbank`,
   
-  // Carteira
-  WALLET: `${API_BASE_URL}/carteira`,
+  // Carteira (conforme documentação oficial Apidog)
+  WALLET: `${API_BASE_URL}/carteira`, // POST - Criar carteira
   WALLET_BY_ID: (id: string) => `${API_BASE_URL}/carteira/${id}`,
-  MY_WALLET: `${API_BASE_URL}/carteira/minha-carteira`,
-  WALLET_RECHARGE: `${API_BASE_URL}/recarga/solicitar`,
-  WALLET_TRANSACTIONS: (walletId: string) => `${API_BASE_URL}/transacao/${walletId}`,
-  CREATE_TRANSACTION: `${API_BASE_URL}/transacao`,
-  PAYMENT_WEBHOOK: `${API_BASE_URL}/pagamento/webhook`,
+  MY_WALLET: `${API_BASE_URL}/carteira/minha-carteira`, // GET - Consultar carteira do usuário logado
+  WALLET_RECHARGE: `${API_BASE_URL}/recarga/solicitar`, // POST - Solicitar recarga via PIX
+  WALLET_TRANSACTIONS: (walletId: string) => `${API_BASE_URL}/transacao/${walletId}`, // GET - Listar transações (CORRIGIDO: singular)
+  CREATE_TRANSACTION: `${API_BASE_URL}/transacoes/registrar`, // POST - Registrar transação manual
+  PAYMENT_WEBHOOK: `${API_BASE_URL}/pagamento/webhook`, // POST - Webhook PagBank (CORRECTED)
+  PAYMENT_WITH_WALLET: `${API_BASE_URL}/servico/pagar`, // POST - Pagar serviço com carteira (CORRECTED)
+  
+  // Serviços - Endpoints adicionais
+  SERVICE_ACCEPT: (id: string) => `${API_BASE_URL}/servico/${id}/aceitar`, // POST - Prestador aceita serviço
+  SERVICE_FINISH: (id: string) => `${API_BASE_URL}/servico/${id}/finalizar`, // POST - Prestador finaliza serviço
+  SERVICE_CONFIRM: (id: string) => `${API_BASE_URL}/servico/${id}/confirmar`, // POST - Contratante confirma conclusão
+  SERVICES_AVAILABLE: `${API_BASE_URL}/servico/disponiveis`, // GET - Prestador busca serviços disponíveis
+  SERVICES_IN_PROGRESS: (prestadorId: string) => `${API_BASE_URL}/servico/em-andamento/${prestadorId}`, // GET - Serviços em andamento do prestador
+  SERVICE_DETAILS: (id: string) => `${API_BASE_URL}/servico/${id}/detalhes`, // GET - Detalhes de um pedido
+  
+  // Notificações
+  NOTIFICATIONS: (userId: string) => `${API_BASE_URL}/notificacao/usuario/${userId}`, // GET - Buscar notificações
+  NOTIFICATION_READ: (id: string) => `${API_BASE_URL}/notificacao/${id}/lida`, // PUT - Marcar como lida
+  NOTIFICATIONS_READ_ALL: (userId: string) => `${API_BASE_URL}/notificacao/usuario/${userId}/lidas`, // PUT - Marcar todas como lidas
+  
+  // Rastreamento
+  TRACKING_START_MOVEMENT: `${API_BASE_URL}/rastreamento/iniciar-deslocamento`, // POST
+  TRACKING_ARRIVED: `${API_BASE_URL}/rastreamento/chegou-local`, // POST
+  TRACKING_START_SERVICE: `${API_BASE_URL}/rastreamento/iniciar-servico`, // POST
+  TRACKING_FINISH_SERVICE: `${API_BASE_URL}/rastreamento/finalizar-servico`, // POST
+  TRACKING_HISTORY: (serviceId: string) => `${API_BASE_URL}/rastreamento/historico/${serviceId}`, // GET
+  TRACKING_LAST_STATUS: (serviceId: string) => `${API_BASE_URL}/rastreamento/ultimo-status/${serviceId}`, // GET
+  
+  // Avaliações
+  RATING_CREATE: `${API_BASE_URL}/avaliacao`, // POST - Avaliar serviço
+  RATING_BY_PROVIDER: (prestadorId: string) => `${API_BASE_URL}/avaliacao/prestador/${prestadorId}`, // GET - Ver avaliações do prestador
+  RATING_BY_SERVICE: (serviceId: string) => `${API_BASE_URL}/avaliacao/servico/${serviceId}`, // GET - Ver avaliação do serviço
 }
 
 // OpenStreetMap

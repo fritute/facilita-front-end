@@ -8,13 +8,11 @@ import CompleteProfileModal from './components/CompleteProfileModal'
 import LoadingSpinner from './components/LoadingSpinner'
 import NotificationSidebar from './components/NotificationSidebar'
 import ServiceCreateScreen from './components/ServiceCreateScreen'
+import { PlaceData } from './services/placesService'
 import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen, ResetPasswordScreen, ServiceProviderScreen } from './screens'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 import { API_ENDPOINTS } from './config/constants'
 import { handDetectionService } from './services/handDetectionService'
-import { searchDriver, type Driver, type DriverSearchOptions } from './services/driverSearch.service'
-import { buscarPrestadorDisponivel, verificarServicoAceito, type PrestadorFormatado } from './services/prestadorSearch.service'
-import { aceitarServicoAutomaticamente, setMockMode } from './services/mockPrestadorAccept.service'
 import { useNotifications } from './hooks/useNotifications'
 import { uploadImage } from './services/uploadImageToAzure'
 import { handleProfilePhotoUpload } from './utils/profilePhotoHandler'
@@ -1268,6 +1266,69 @@ function App() {
     }
   }
 
+  // Função de teste para buscar carteira via token
+  const testFetchWalletByToken = async () => {
+    try {
+      const token = localStorage.getItem('authToken')
+      
+      if (!token) {
+        console.error('❌ Token não encontrado')
+        return
+      }
+
+      console.log('🔍 Testando busca da carteira via token...')
+      console.log('🌐 URL:', API_ENDPOINTS.MY_WALLET)
+      console.log('🔑 Token:', token ? `${token.substring(0, 20)}...` : 'NENHUM')
+
+      const response = await fetch(API_ENDPOINTS.MY_WALLET, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      console.log('📊 Status da resposta:', response.status)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ Dados da carteira recebidos:', data)
+        
+        // Atualizar estados com dados reais
+        if (data && data.data) {
+          const walletInfo = data.data
+          console.log('💰 Saldo recebido (string):', walletInfo.saldo)
+          
+          // Converter saldo de string para número
+          const balance = parseFloat(walletInfo.saldo) || 0
+          console.log('💰 Saldo convertido (número):', balance)
+          
+          setWalletData(walletInfo)
+          setWalletBalance(balance)
+          setHasWallet(true)
+          
+          console.log('✅ Estados atualizados:')
+          console.log('  - walletData:', walletInfo)
+          console.log('  - walletBalance:', balance)
+          console.log('  - hasWallet:', true)
+          
+          // Forçar re-render da interface
+          setTimeout(() => {
+            console.log('🔄 Verificando se saldo foi atualizado na interface...')
+            console.log('💰 Saldo atual no estado:', balance)
+          }, 100)
+        }
+        
+        return data
+      } else {
+        const errorText = await response.text()
+        console.error('❌ Erro ao buscar carteira:', response.status, errorText)
+      }
+    } catch (error) {
+      console.error('❌ Erro na requisição da carteira:', error)
+    }
+  }
+
   // Função para buscar transações da carteira
   const fetchWalletTransactions = async () => {
     try {
@@ -1293,8 +1354,13 @@ function App() {
 
       if (response.ok) {
         const data = await response.json()
+        console.log('✅ Transações recebidas:', data)
         const transactions = data.data || data
         setWalletTransactions(Array.isArray(transactions) ? transactions : [])
+        console.log('✅ Transações processadas:', transactions.length, 'itens')
+      } else if (response.status === 404) {
+        console.warn('⚠️ Carteira não possui transações ainda')
+        setWalletTransactions([]) // Lista vazia para carteiras novas
       } else if (response.status === 500) {
         console.warn('⚠️ Erro 500 ao buscar transações - servidor indisponível')
       } else if (response.status === 401 || response.status === 403) {
@@ -1307,7 +1373,7 @@ function App() {
     }
   }
 
-  // Função para solicitar recarga (modo sandbox - sem API)
+  // Função para solicitar recarga via API
   const requestRecharge = async () => {
     try {
       if (rechargeAmount <= 0) {
@@ -1324,50 +1390,120 @@ function App() {
         return
       }
 
-      console.log('💰 Gerando recarga sandbox...')
+      console.log('💰 Solicitando recarga via API...')
       console.log('💵 Valor:', rechargeAmount)
+      console.log('💳 Carteira ID:', walletData?.id)
 
-      // Simular dados de recarga para sandbox
-      const mockRechargeData = {
-        message: 'Recarga solicitada com sucesso. Aguardando pagamento.',
-        recarga: {
-          id: Math.floor(Math.random() * 1000),
-          status: 'PENDENTE',
-          valor: rechargeAmount,
-          metodo: 'PIX'
-        },
-        pedido: {
-          id: `ORDE_${Date.now()}`,
-          reference_id: `recarga-sandbox-${Date.now()}`
+      // Verificar se tem carteira
+      if (!walletData?.id) {
+        alert('Carteira não encontrada. Por favor, crie uma carteira primeiro.')
+        return
+      }
+
+      console.log('💰 Preparando recarga...')
+      console.log('👤 Usuário:', loggedUser?.nome)
+      console.log('📧 Email:', loggedUser?.email)
+      console.log('🆔 CPF no perfil:', profileData.cpf)
+      console.log('🆔 CPF no usuário:', loggedUser?.cpf)
+      
+      // Para sandbox, SEMPRE usar CPF de teste oficial do PagBank (obrigatório)
+      const userCPF = '22222222222' // CPF de teste oficial - DEVE ser string com 11 dígitos exatos
+      console.log('🔧 Usando CPF oficial do PagBank Sandbox:', userCPF.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.***.***-$4'))
+
+      // Solicitar recarga via API (endpoint: POST /recarga/solicitar)
+      // Payload com customer obrigatório para PagBank Sandbox
+      const requestPayload = {
+        valor: rechargeAmount,
+        metodo: 'PIX',
+        customer: {
+          name: loggedUser?.nome || 'Cliente Sandbox',
+          email: loggedUser?.email || 'cliente_sandbox@teste.com',
+          tax_id: userCPF // STRING com exatamente 11 dígitos - NÃO remover nada
+        }
+      }
+      
+      console.log('📤 Payload da requisição:', requestPayload)
+      console.log('🔍 Payload JSON completo:', JSON.stringify(requestPayload, null, 2))
+      console.log('🌐 URL da requisição:', API_ENDPOINTS.WALLET_RECHARGE)
+      console.log('🔑 Token:', token ? `${token.substring(0, 20)}...` : 'NENHUM TOKEN')
+
+      let response
+      try {
+        console.log('🚀 Iniciando requisição fetch...')
+        response = await fetch(API_ENDPOINTS.WALLET_RECHARGE, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestPayload)
+        })
+        console.log('✅ Fetch executado com sucesso, status:', response.status)
+      } catch (fetchError) {
+        console.error('❌ Erro no fetch:', fetchError)
+        console.error('❌ Tipo do erro:', typeof fetchError)
+        console.error('❌ Mensagem do erro:', fetchError.message)
+        throw new Error(`Erro de conexão: ${fetchError.message}`)
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ Resposta de erro do servidor:', errorText)
+        console.error('❌ Status:', response.status)
+        
+        try {
+          const errorData = JSON.parse(errorText)
+          console.error('❌ Dados do erro:', errorData)
+          throw new Error(errorData.message || errorData.error || 'Erro ao solicitar recarga')
+        } catch (parseError) {
+          throw new Error(`Erro ${response.status}: ${errorText || 'Erro ao solicitar recarga'}`)
         }
       }
 
-      // Gerar QR Code fictício localmente
-      const pixCode = `00020126580014br.gov.bcb.pix0136${mockRechargeData.pedido.id}520400005303986540${rechargeAmount.toFixed(2)}5802BR5913Facilita App6009SAO PAULO62070503***6304`
+      const data = await response.json()
+      console.log('✅ Recarga solicitada:', data)
+      console.log('✅ Resposta completa:', JSON.stringify(data, null, 2))
       
-      console.log('📱 Gerando QR Code...')
-      const QRCode = (await import('qrcode')).default
-      const qrCodeDataUrl = await QRCode.toDataURL(pixCode)
+      // Extrair dados da resposta conforme estrutura da API
+      const rechargeData = data
       
-      setRechargeData(mockRechargeData)
-      setRechargeQrCode(pixCode)
-      setRechargeQrCodeUrl(qrCodeDataUrl)
+      // Gerar QR Code a partir do código PIX retornado
+      // Estrutura: data.pedido.qr_codes[0].text
+      if (rechargeData.pedido?.qr_codes && rechargeData.pedido.qr_codes.length > 0) {
+        const pixCode = rechargeData.pedido.qr_codes[0].text
+        console.log('📱 Gerando QR Code do PIX...')
+        console.log('🔗 Código PIX recebido')
+        
+        const QRCode = (await import('qrcode')).default
+        const qrCodeDataUrl = await QRCode.toDataURL(pixCode)
+        
+        setRechargeQrCode(pixCode)
+        setRechargeQrCodeUrl(qrCodeDataUrl)
+        console.log('✅ QR Code gerado com sucesso')
+      } else {
+        console.warn('⚠️ Nenhum QR Code encontrado na resposta')
+      }
       
-      console.log('✅ Recarga gerada com sucesso (modo sandbox)')
+      setRechargeData(rechargeData)
+      console.log('✅ Recarga gerada com sucesso')
+      
+      // Manter modal aberto para mostrar QR Code (será exibido automaticamente quando rechargeQrCode tiver valor)
+      // setShowRechargeModal(false) - Manter aberto para mostrar o QR Code
       
     } catch (error) {
-      showError('Erro na recarga', 'Não foi possível gerar o código de recarga. Tente novamente.')
+      console.error('❌ Erro ao solicitar recarga:', error)
+      showError('Erro na recarga', error instanceof Error ? error.message : 'Não foi possível gerar o código de recarga. Tente novamente.')
     } finally {
       setLoadingRecharge(false)
     }
   }
 
-  // Função para simular confirmação de pagamento (sandbox)
+  // Função para confirmar pagamento via webhook
   const confirmSandboxPayment = async () => {
     try {
       setLoadingRecharge(true)
       
-      console.log('💳 Simulando pagamento...')
+      console.log('💳 Confirmando pagamento via webhook...')
       console.log('💰 Valor a creditar:', rechargeAmount)
       
       const token = localStorage.getItem('authToken')
@@ -1377,62 +1513,96 @@ function App() {
         return
       }
 
-      if (!walletData?.id) {
-        alert('Carteira não encontrada')
+      if (!rechargeData) {
+        alert('Dados da recarga não encontrados')
         return
       }
 
-      // 1. Criar transação de ENTRADA no banco
-      console.log('📝 Criando transação no banco...')
-      const transactionPayload = {
-        id_carteira: walletData.id,
-        tipo: 'ENTRADA',
-        valor: rechargeAmount,
-        descricao: `Recarga via PIX - R$ ${rechargeAmount.toFixed(2)}`
-      }
-
-      const transactionResponse = await fetch(API_ENDPOINTS.CREATE_TRANSACTION, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(transactionPayload)
-      })
-
-      if (!transactionResponse.ok) {
-        showWarning('Transação', 'Houve um problema ao registrar a transação, mas o pagamento foi processado.')
-        // Continuar mesmo se falhar - modo sandbox
-      } else {
-        const transactionData = await transactionResponse.json()
-        console.log('✅ Transação criada no banco:', transactionData)
-      }
-
-      // 2. Calcular novo saldo (o backend calcula automaticamente baseado nas transações)
-      console.log('💰 Calculando novo saldo...')
+      // Confirmar pagamento via webhook
+      console.log('📝 Confirmando pagamento via webhook...')
+      console.log('💰 Valor a ser creditado:', rechargeAmount)
+      
       const newBalance = walletBalance + rechargeAmount
-      console.log('💵 Saldo atual:', walletBalance)
-      console.log('💵 Valor da recarga:', rechargeAmount)
-      console.log('💵 Novo saldo calculado:', newBalance)
-      console.log('ℹ️ O saldo será atualizado automaticamente pelo backend baseado nas transações')
-
-      // 3. Atualizar estado local e persistir
-      setWalletBalance(newBalance)
-      if (walletData) {
-        const updatedWalletData = {
-          ...walletData,
-          saldo: newBalance.toString()
+      
+      try {
+        // Usar webhook para confirmar pagamento
+        console.log('🔗 Chamando webhook de confirmação...')
+        const webhookPayload = {
+          id: rechargeData.id.toString(), // ID da recarga como string
+          status: 'PAID', // Status de pagamento confirmado
+          valor: rechargeAmount, // Valor em reais
+          reference_id: rechargeData.reference_id || `recarga_${Date.now()}`,
+          id_recarga: rechargeData.id // Adicionar id_recarga também
         }
-        setWalletData(updatedWalletData)
         
-        // Persistir no localStorage por usuário
-        saveUserWallet(loggedUser?.id, updatedWalletData, newBalance)
-        console.log('💾 Saldo persistido no localStorage')
+        console.log('📤 Payload do webhook:', webhookPayload)
+        
+        const webhookResponse = await fetch(API_ENDPOINTS.PAYMENT_WEBHOOK, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(webhookPayload)
+        })
+        
+        if (webhookResponse.ok) {
+          console.log('✅ Webhook processado com sucesso - pagamento confirmado')
+          
+          // Aguardar um pouco para o servidor processar
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          
+          // Buscar saldo atualizado do servidor
+          console.log('🔄 Buscando saldo atualizado do servidor...')
+          await fetchWallet()
+          
+          // Buscar transações atualizadas
+          await fetchWalletTransactions()
+          
+          console.log('✅ Recarga confirmada e saldo sincronizado!')
+        } else {
+          const errorText = await webhookResponse.text()
+          console.warn('⚠️ Erro no webhook de pagamento:', errorText)
+          console.log('💾 Continuando com atualização local apenas')
+          
+          // Fallback: atualizar apenas localmente
+          setWalletBalance(newBalance)
+          if (walletData) {
+            const updatedWalletData = {
+              ...walletData,
+              saldo: newBalance // Manter como número
+            }
+            setWalletData(updatedWalletData)
+            
+            // Salvar no localStorage para persistir
+            localStorage.setItem('walletData', JSON.stringify(updatedWalletData))
+            console.log('💾 Saldo salvo no localStorage:', newBalance)
+          }
+        }
+      } catch (serverError) {
+        console.warn('⚠️ Erro ao conectar com servidor:', serverError)
+        console.log('💾 Atualizando apenas localmente')
+        
+        // Fallback: atualizar apenas localmente
+        setWalletBalance(newBalance)
+        if (walletData) {
+          const updatedWalletData = {
+            ...walletData,
+            saldo: newBalance // Manter como número
+          }
+          setWalletData(updatedWalletData)
+          
+          // Salvar no localStorage para persistir
+          localStorage.setItem('walletData', JSON.stringify(updatedWalletData))
+          console.log('💾 Saldo salvo no localStorage:', newBalance)
+        }
       }
+
+      // Recarga processada com sucesso
       
-      console.log('✅ Pagamento confirmado! Novo saldo:', newBalance)
+      console.log('✅ Pagamento confirmado e saldo atualizado!')
       
-      // 4. Tocar som de notificação
+      // Tocar som de notificação
       try {
         const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWi77eafTRAMUKfj8LZjHAY4ktfyzHksBSR3x/DdkEAKFF606+uoVRQKRp/g8r5sIQUrgs7y2Yk2CBlou+3mn00QDFCn4/C2YxwGOJLX8sx5LAUkd8fw3ZBAC')
         audio.volume = 0.5
@@ -1441,14 +1611,14 @@ function App() {
         console.log('Erro ao tocar som:', e)
       }
 
-      // 5. Mostrar notificação
+      // Mostrar notificação
       const notificationMessage = `💰 Recarga confirmada! R$ ${rechargeAmount.toFixed(2)} creditado na sua carteira.`
       setNotificationToastMessage(notificationMessage)
       
       // Mostrar notificação de sucesso
       showSuccess('Recarga Confirmada', `R$ ${rechargeAmount.toFixed(2)} foi creditado na sua carteira`)
       
-      // 6. Fechar modal de recarga e mostrar modal de sucesso
+      // Fechar modal de recarga e mostrar modal de sucesso
       setShowRechargeModal(false)
       setRechargeAmount(0)
       setRechargeQrCode('')
@@ -1458,16 +1628,19 @@ function App() {
       // Mostrar modal de sucesso
       setShowRechargeSuccessModal(true)
       
-      // 7. Atualizar apenas transações do servidor (não buscar carteira para não sobrescrever saldo)
+      // Atualizar transações (opcional - não bloquear se der erro)
       console.log('🔄 Atualizando lista de transações...')
       if (walletData?.id) {
-        await fetchWalletTransactions()
+        try {
+          await fetchWalletTransactions()
+        } catch (error) {
+          console.warn('⚠️ Erro ao buscar transações, continuando sem elas')
+        }
       }
-      console.log('ℹ️ Saldo mantido localmente (backend não calcula automaticamente)')
       
     } catch (error) {
       console.error('❌ Erro ao confirmar pagamento:', error)
-      setRechargeErrorMessage('Erro ao confirmar pagamento. Tente novamente.')
+      setRechargeErrorMessage(error instanceof Error ? error.message : 'Erro ao confirmar pagamento. Tente novamente.')
       setShowRechargeErrorModal(true)
       setShowRechargeModal(false)
     } finally {
@@ -1582,6 +1755,30 @@ function App() {
         saveUserWallet(loggedUser?.id, updatedWalletData, newBalance)
       }
       
+      // 3.5 IMPORTANTE: Sincronizar saldo com servidor após saque
+      try {
+        console.log('🔄 Sincronizando saldo com o servidor após saque...')
+        const updateWalletResponse = await fetch(`${API_ENDPOINTS.MY_WALLET}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            saldo: newBalance
+          })
+        })
+        
+        if (updateWalletResponse.ok) {
+          console.log('✅ Saldo sincronizado com sucesso no servidor')
+        } else {
+          console.warn('⚠️ Não foi possível sincronizar saldo com servidor, mas foi salvo localmente')
+        }
+      } catch (syncError) {
+        console.warn('⚠️ Erro ao sincronizar com servidor:', syncError)
+        console.log('💾 Saldo mantido no localStorage')
+      }
+      
       // 4. Mostrar notificação
       const notificationMessage = `💸 Saque confirmado! R$ ${withdrawAmount.toFixed(2)} enviado para sua chave PIX.`
       useNotification('success', notificationMessage)
@@ -1650,7 +1847,7 @@ function App() {
       console.log('📤 Payload a ser enviado:', JSON.stringify(payload, null, 2))
 
       // Chamar API de pagamento
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/servico/pagar', {
+      const response = await fetch(API_ENDPOINTS.PAYMENT_WITH_WALLET, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1680,6 +1877,24 @@ function App() {
             }
             setWalletData(updatedWalletData)
             saveUserWallet(loggedUser?.id, updatedWalletData, newBalance)
+          }
+          
+          // Sincronizar saldo com servidor (sandbox)
+          try {
+            console.log('🔄 Sincronizando saldo com servidor (sandbox)...')
+            const updateWalletResponse = await fetch(`${API_ENDPOINTS.MY_WALLET}`, {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ saldo: newBalance })
+            })
+            if (updateWalletResponse.ok) {
+              console.log('✅ Saldo sincronizado no servidor')
+            }
+          } catch (syncError) {
+            console.warn('⚠️ Erro ao sincronizar:', syncError)
           }
 
           // Tocar som
@@ -1740,6 +1955,24 @@ function App() {
         setWalletData(updatedWalletData)
         saveUserWallet(loggedUser?.id, updatedWalletData, newBalance)
       }
+      
+      // Sincronizar saldo com servidor após pagamento
+      try {
+        console.log('🔄 Sincronizando saldo com servidor após pagamento...')
+        const updateWalletResponse = await fetch(`${API_ENDPOINTS.MY_WALLET}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ saldo: newBalance })
+        })
+        if (updateWalletResponse.ok) {
+          console.log('✅ Saldo sincronizado no servidor')
+        }
+      } catch (syncError) {
+        console.warn('⚠️ Erro ao sincronizar:', syncError)
+      }
 
       // Tocar som de notificação
       try {
@@ -1789,22 +2022,22 @@ function App() {
     }
   }
 
-  // Carregar saldo do localStorage quando usuário logar
+  // Carregar saldo do servidor quando usuário logar
   useEffect(() => {
     if (loggedUser?.id) {
+      // Primeiro, carregar do localStorage para ter dados imediatos
       const userData = loadUserWallet(loggedUser.id)
       
       if (userData.wallet) {
-        console.log('💾 Dados da carteira do usuário', loggedUser.id, 'carregados do localStorage')
+        console.log('💾 Dados da carteira do usuário', loggedUser.id, 'carregados do localStorage (temporário)')
         setWalletData(userData.wallet)
         setWalletBalance(userData.balance)
         setHasWallet(true)
-      } else {
-        console.log('📭 Usuário', loggedUser.id, 'não tem carteira salva localmente')
-        setWalletBalance(0)
-        setWalletData(null)
-        setHasWallet(false)
       }
+      
+      // Depois, buscar do servidor para garantir dados atualizados
+      console.log('📡 Buscando carteira atualizada do servidor...')
+      fetchWallet()
     }
   }, [loggedUser?.id])
 
@@ -1821,11 +2054,19 @@ function App() {
 
   // Buscar transações quando carteira for carregada
   useEffect(() => {
-    if (currentScreen === 'wallet' && walletData?.id) {
-      console.log('🔄 Carteira carregada, buscando transações...')
-      fetchWalletTransactions()
+    if (currentScreen === 'wallet') {
+      console.log('🔄 Tela da carteira carregada')
+      
+      // Testar busca da carteira via token
+      testFetchWalletByToken()
+      
+      // Buscar transações se já temos dados da carteira
+      if (walletData?.id) {
+        console.log('🔄 Carteira carregada, buscando transações...')
+        fetchWalletTransactions()
+      }
     }
-  }, [currentScreen, walletData])
+  }, [currentScreen])
 
   // Sistema de polling para notificações em tempo real
   useEffect(() => {
@@ -2231,6 +2472,96 @@ function App() {
   }
 
   // Função para atualizar perfil
+  const handleUpdateAddress = async (newAddress: string, coordinates?: { lat: number, lng: number }) => {
+    try {
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        throw new Error('Você precisa estar logado')
+      }
+
+      if (!loggedUser?.id) {
+        throw new Error('ID do usuário não encontrado')
+      }
+
+      console.log('📍 Atualizando endereço do usuário...')
+      console.log('🏠 Novo endereço:', newAddress)
+      if (coordinates) {
+        console.log('📍 Coordenadas:', coordinates)
+      }
+
+      // Atualizar profileData localmente
+      setProfileData(prev => ({
+        ...prev,
+        endereco: newAddress,
+        ...(coordinates && {
+          latitude: coordinates.lat,
+          longitude: coordinates.lng
+        })
+      }))
+
+      // Atualizar loggedUser localmente
+      const updatedUser = {
+        ...loggedUser,
+        endereco: newAddress,
+        ...(coordinates && {
+          latitude: coordinates.lat,
+          longitude: coordinates.lng
+        })
+      }
+      setLoggedUser(updatedUser)
+      localStorage.setItem('loggedUser', JSON.stringify(updatedUser))
+
+      console.log('✅ Endereço atualizado localmente')
+      
+      if (coordinates) {
+        showSuccess('Endereço Atualizado', `Endereço atualizado com coordenadas (${coordinates.lat.toFixed(4)}, ${coordinates.lng.toFixed(4)})`)
+      } else {
+        showSuccess('Endereço Atualizado', 'Seu endereço padrão foi atualizado com sucesso')
+      }
+
+      // Tentar atualizar no backend (se houver endpoint)
+      try {
+        // Buscar dados do contratante para atualizar
+        const contratanteId = loggedUser.id_contratante || loggedUser.id
+        if (contratanteId) {
+          const updatePayload: any = {
+            endereco: newAddress
+          }
+          
+          // Adicionar coordenadas se disponíveis
+          if (coordinates) {
+            updatePayload.latitude = coordinates.lat
+            updatePayload.longitude = coordinates.lng
+          }
+          
+          const response = await fetch(API_ENDPOINTS.CONTRATANTE_BY_ID(contratanteId.toString()), {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updatePayload)
+          })
+
+          if (response.ok) {
+            console.log('✅ Endereço sincronizado com servidor')
+            if (coordinates) {
+              console.log('✅ Coordenadas também foram salvas no servidor')
+            }
+          } else {
+            console.warn('⚠️ Não foi possível sincronizar endereço com servidor')
+          }
+        }
+      } catch (syncError) {
+        console.warn('⚠️ Erro ao sincronizar endereço:', syncError)
+      }
+
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar endereço:', error)
+      throw error
+    }
+  }
+
   const handleUpdateProfile = async (name: string, email: string) => {
     try {
       const token = localStorage.getItem('authToken')
@@ -2806,6 +3137,33 @@ function App() {
 
   const handleScreenTransition = (newScreen: Screen) => {
     setIsTransitioning(true)
+    
+    // Reset service creation state when going to home
+    if (newScreen === 'home') {
+      console.log('🏠 Voltando para home - resetando estado de criação de serviço')
+      setDeliveryLocation(null)
+      setPickupLocation(null)
+      setSelectedLocation('')
+      setSelectedOriginLocation('')
+      setStopPoints([])
+      setServiceDescription('')
+      setSelectedServiceType('')
+      setSelectedCategoryId(null)
+    }
+    
+    // Reset service creation state when entering service-create from home (fresh start)
+    if (newScreen === 'service-create' && currentScreen === 'home') {
+      console.log('🆕 Iniciando novo serviço - resetando estado')
+      setDeliveryLocation(null)
+      setPickupLocation(null)
+      setSelectedLocation('')
+      setSelectedOriginLocation('')
+      setStopPoints([])
+      setServiceDescription('')
+      setSelectedServiceType('')
+      setSelectedCategoryId(null)
+    }
+    
     setTimeout(() => {
       setCurrentScreen(newScreen)
       setTimeout(() => {
@@ -3278,8 +3636,14 @@ function App() {
     let attempts = 0
     const maxAttempts = 60
     let localPollingInterval: NodeJS.Timeout | null = null
+    let shouldStopPolling = false
     
     const checkServiceStatus = async () => {
+      if (shouldStopPolling) {
+        console.log('🛑 Parando polling conforme solicitado')
+        return
+      }
+      
       try {
         console.log(`🔍 Verificando status do serviço ${serviceId} (tentativa ${attempts + 1}/${maxAttempts})`)
         
@@ -3320,6 +3684,9 @@ function App() {
             console.log('📋 Dados do serviço:', service)
             console.log('👤 ID do prestador:', service.id_prestador)
             console.log('📊 Status atual:', service.status)
+            
+            // IMPORTANTE: Sinalizar para parar polling IMEDIATAMENTE
+            shouldStopPolling = true
             
             // IMPORTANTE: Limpar todos os intervalos PRIMEIRO
             console.log('🗑️ Limpando intervalos...')
@@ -3391,22 +3758,24 @@ function App() {
               id: prestador?.id || service.id_prestador
             })
             
-            // Verificar se ainda estamos na tela de busca antes de fazer transição
-            if (currentScreen === 'waiting-provider') {
-              console.log('📺 Fazendo transição de waiting-provider para service-tracking')
-              handleScreenTransition('service-tracking')
-            } else {
-              console.log('⚠️ Tela atual não é waiting-provider:', currentScreen)
-              // Forçar transição mesmo assim
-              console.log('🔄 Forçando transição para service-tracking...')
-              setTimeout(() => {
-                handleScreenTransition('service-tracking')
-              }, 500)
-            }
+            // Fazer transição para tracking imediatamente
+            console.log('📺 Fazendo transição para service-tracking')
+            console.log('🎯 Estado atual antes da transição:')
+            console.log('   - currentScreen:', currentScreen)
+            console.log('   - isSearchingProvider:', isSearchingProvider)
+            console.log('   - entregadorData:', {
+              nome: usuario?.nome || 'Prestador',
+              id: prestador?.id || service.id_prestador
+            })
+            console.log('   - pickupLocation:', pickupLocation)
+            console.log('   - deliveryLocation:', deliveryLocation)
             
-            console.log('📺 handleScreenTransition chamado para service-tracking')
-            console.log('📺 isSearchingProvider após:', isSearchingProvider)
-            console.log('✅ Condição duplicada de waiting-provider removida')
+            // Garantir que todos os dados estão configurados ANTES da transição
+            setTimeout(() => {
+              console.log('🚀 Executando transição para service-tracking')
+              handleScreenTransition('service-tracking')
+              console.log('✅ Transição para tracking concluída')
+            }, 100)
             
             return
           }
@@ -3414,6 +3783,7 @@ function App() {
         
         attempts++
         if (attempts >= maxAttempts) {
+          shouldStopPolling = true
           clearInterval(searchInterval)
           if (localPollingInterval) clearInterval(localPollingInterval)
           setIsSearchingProvider(false)
@@ -4339,8 +4709,9 @@ function App() {
       const userAddress = profileData.endereco || loggedUser?.endereco || ''
       const userLocationId = loggedUser?.id_localizacao
       
-      if (userAddress) {
-        console.log('📍 Preenchendo endereço de entrega automaticamente')
+      // Apenas preencher se o deliveryLocation ainda não foi definido
+      if (userAddress && !deliveryLocation) {
+        console.log('📍 Preenchendo endereço de entrega automaticamente (primeira vez)')
         console.log('🏠 Endereço:', userAddress)
         console.log('🆔 ID da localização:', userLocationId)
         
@@ -4354,6 +4725,8 @@ function App() {
           lng: -46.6333,
           id_localizacao: userLocationId
         })
+      } else if (deliveryLocation) {
+        console.log('✅ Endereço de entrega já definido:', deliveryLocation.address)
       } else {
         console.warn('⚠️ Endereço do usuário não encontrado')
       }
@@ -5535,49 +5908,39 @@ const handleServiceCreate = async () => {
       let endpoint: string
       let payload: any
       
-      // IMPORTANTE: Endpoint de categoria pode estar bloqueado para contratantes
-      // Vamos tentar sempre usar o endpoint sem categoria primeiro
-      console.log('⚠️ ATENÇÃO: Endpoint /from-categoria pode estar bloqueado')
-      console.log('⚠️ Tentando usar endpoint /servico com id_categoria no payload')
-      
-      // Obter id_localizacao
-      const id_localizacao = await getCurrentLocationId()
-      console.log('📍 ID da localização obtido:', id_localizacao)
-      
-      if (!id_localizacao || id_localizacao <= 0) {
-        console.error('❌ ID da localização inválido:', id_localizacao)
-        alert('Erro: Localização não foi obtida.')
-        return false
-      }
+      console.log('🎯 Preparando criação de serviço (sem criar localizações separadas)')
+      console.log('✅ ID do contratante já obtido:', id_contratante)
       
       // SEMPRE usar endpoint /servico (sem categoria na URL)
       endpoint = API_ENDPOINTS.SERVICES
       
-      // Se tem categoria, incluir no payload
-      if (id_categoria && id_categoria > 0) {
-        payload = {
-          id_categoria: Number(id_categoria),
-          descricao: descricaoServico.trim(),
-          valor_adicional: Number(valorAdicional),
-          origem_lat: Number(pickupLocation.lat),
-          origem_lng: Number(pickupLocation.lng),
-          destino_lat: Number(deliveryLocation.lat),
-          destino_lng: Number(deliveryLocation.lng)
-        }
-        
-        console.log('🎯 Criando serviço COM CATEGORIA (via endpoint /servico)')
-        console.log('🏷️ ID da categoria:', id_categoria)
-      } else {
-        payload = {
-          descricao: descricaoServico.trim(),
-          valor_adicional: Number(valorAdicional),
-          origem_lat: Number(pickupLocation.lat),
-          origem_lng: Number(pickupLocation.lng),
-          destino_lat: Number(deliveryLocation.lat),
-          destino_lng: Number(deliveryLocation.lng)
-        }
-        
-        console.log('🎯 Criando serviço SEM CATEGORIA')
+      // Construir payload conforme documentação da API (SIMPLIFICADO)
+      payload = {
+        id_categoria: id_categoria && id_categoria > 0 ? Number(id_categoria) : undefined,
+        descricao: descricaoServico.trim(),
+        valor_adicional: Number(valorAdicional),
+        origem_lat: Number(pickupLocation.lat),
+        origem_lng: Number(pickupLocation.lng),
+        origem_endereco: pickupLocation.address,
+        destino_lat: Number(deliveryLocation.lat),
+        destino_lng: Number(deliveryLocation.lng),
+        destino_endereco: deliveryLocation.address
+      }
+      
+      // Remover campos nulos
+      if (!payload.id_categoria) {
+        delete payload.id_categoria
+      }
+      
+      // Adicionar pontos de parada se existirem
+      if (stopPoints && stopPoints.length > 0) {
+        console.log('📍 Adicionando', stopPoints.length, 'pontos de parada')
+        payload.paradas = stopPoints.map((point: any) => ({
+          lat: Number(point.lat),
+          lng: Number(point.lng),
+          endereco_completo: point.address,
+          descricao: point.description || ''
+        }))
       }
       
       console.log('🌐 Endpoint:', endpoint)
@@ -6312,6 +6675,38 @@ const handleServiceCreate = async () => {
         }}
         onPriceChange={setServicePrice}
         onConfirmService={handleServiceCreate}
+        onPlaceSelect={(place: PlaceData) => {
+          console.log('🏪 Estabelecimento selecionado como DESTINO:', place.name)
+          console.log('📍 Endereço:', place.address)
+          console.log('🎯 Coordenadas:', place.lat, place.lng)
+          
+          // Atualizar o destino com o estabelecimento selecionado
+          setSelectedLocation(place.address)
+          setDeliveryLocation({
+            address: place.address,
+            lat: place.lat,
+            lng: place.lng
+          })
+          
+          // Mostrar feedback para o usuário
+          showSuccess('Destino Atualizado', `${place.name} foi definido como destino`)
+        }}
+        onOriginPlaceSelect={(place: PlaceData) => {
+          console.log('🏪 Estabelecimento selecionado como ORIGEM:', place.name)
+          console.log('📍 Endereço:', place.address)
+          console.log('🎯 Coordenadas:', place.lat, place.lng)
+          
+          // Atualizar a origem com o estabelecimento selecionado
+          setSelectedOriginLocation(place.address)
+          setPickupLocation({
+            address: place.address,
+            lat: place.lat,
+            lng: place.lng
+          })
+          
+          // Mostrar feedback para o usuário
+          showSuccess('Origem Atualizada', `${place.name} foi definido como origem`)
+        }}
         calculateDistance={calculateDistance}
         calculatePrice={calculatePrice}
       />
@@ -6483,7 +6878,7 @@ const handleServiceCreate = async () => {
                 
                 return (
                 <div key={order.id || index} className={`${themeClasses.bgCard} rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border ${themeClasses.border} ${
-                  isActive ? 'ring-2 ring-orange-200 bg-gradient-to-r from-orange-50 to-transparent' : ''
+                  isActive ? isDarkMode ? 'ring-2 ring-orange-600 bg-gradient-to-r from-orange-900/30 to-transparent' : 'ring-2 ring-orange-200 bg-gradient-to-r from-orange-50 to-transparent' : ''
                 } relative`}>
                   {/* Indicador de pedido ativo */}
                   {isActive && (
@@ -6522,7 +6917,7 @@ const handleServiceCreate = async () => {
                       )}
                       
                       {(order.origem || order.destino) && (
-                        <div className="text-sm text-gray-600 space-y-1">
+                        <div className={`text-sm ${themeClasses.textSecondary} space-y-1`}>
                           {order.origem && (
                             <p><strong>Origem:</strong> {order.origem.address || order.origem.endereco || 'Não informado'}</p>
                           )}
@@ -6797,6 +7192,7 @@ const handleServiceCreate = async () => {
           onWithdraw={() => setShowWithdrawModal(true)}
           transactions={walletTransactions}
           loadingTransactions={loadingTransactions}
+          onTestWallet={() => testFetchWalletByToken()}
           isDarkMode={isDarkMode}
           themeClasses={themeClasses}
         />
@@ -7250,7 +7646,7 @@ const handleServiceCreate = async () => {
         userName={loggedUser?.nome || 'Usuário'}
         userEmail={loggedUser?.email || ''}
         userPhone={loggedUser?.telefone || ''}
-        userAddress=""
+        userAddress={profileData.endereco || loggedUser?.endereco || ''}
         profilePhoto={loggedUser?.foto || profilePhoto || null}
         notificationsEnabled={notificationsEnabled}
         onBack={() => handleScreenTransition('home')}
@@ -7289,6 +7685,7 @@ const handleServiceCreate = async () => {
         }}
         onDeleteAccount={handleDeleteAccount}
         onUpdateProfile={handleUpdateProfile}
+        onUpdateAddress={handleUpdateAddress}
         onToggleNotifications={(enabled) => {
           setNotificationsEnabled(enabled)
           localStorage.setItem('notificationsEnabled', JSON.stringify(enabled))

@@ -24,6 +24,7 @@ interface WalletScreenProps {
   onWithdraw: () => void
   transactions: any[]
   loadingTransactions: boolean
+  onTestWallet?: () => void
   isDarkMode?: boolean
   themeClasses?: any
 }
@@ -43,6 +44,7 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
   onWithdraw,
   transactions: apiTransactions,
   loadingTransactions,
+  onTestWallet,
   isDarkMode = false,
   themeClasses = {
     bg: 'bg-gray-100',
@@ -285,6 +287,14 @@ const WalletScreen: React.FC<WalletScreenProps> = ({
           >
             Sacar
           </button>
+          {onTestWallet && (
+            <button 
+              onClick={onTestWallet}
+              className="bg-blue-600 text-white text-sm py-2.5 px-4 rounded-full font-medium hover:bg-blue-700 transition-colors shadow-md"
+            >
+              🔍 Teste
+            </button>
+          )}
         </div>
       </div>
 

@@ -200,6 +200,15 @@ export class FacilitaApiService extends ApiService {
     return this.get(API_ENDPOINTS.PRESTADOR_BY_ID(id))
   }
 
+  // === LOCALIZAÇÕES ===
+  async createLocation(locationData: any) {
+    return this.post(API_ENDPOINTS.LOCATIONS, locationData)
+  }
+
+  async getLocationById(id: string) {
+    return this.get(API_ENDPOINTS.LOCATION_BY_ID(id))
+  }
+
   // === SERVIÇOS ===
   async createService(serviceData: any) {
     return this.post(API_ENDPOINTS.SERVICES, serviceData)

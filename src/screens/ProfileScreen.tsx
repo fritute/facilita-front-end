@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { ArrowLeft, Bell, User, Camera, Lock, LogOut, Edit2, Check, X, Trash2 } from 'lucide-react'
+import { ArrowLeft, Bell, User, Camera, Lock, LogOut, Edit2, Check, X, Trash2, MapPin, Search, Loader } from 'lucide-react'
+import { geocodingService, LocationData } from '../services/geocodingService'
 
 interface ProfileScreenProps {
   userName: string
@@ -14,8 +15,8 @@ interface ProfileScreenProps {
   onLogout: () => void
   onDeleteAccount: () => void
   onUpdateProfile: (name: string, email: string) => Promise<void>
+  onUpdateAddress?: (address: string, coordinates?: { lat: number, lng: number }) => Promise<void>
   onToggleNotifications: (enabled: boolean) => void
-  isDarkMode?: boolean
   themeClasses?: any
 }
 
@@ -32,8 +33,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onLogout,
   onDeleteAccount,
   onUpdateProfile,
+  onUpdateAddress,
   onToggleNotifications,
-  isDarkMode = false,
   themeClasses = {
     bg: 'bg-gray-100',
     bgCard: 'bg-white',
@@ -45,17 +46,25 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 }) => {
   const [isEditingName, setIsEditingName] = useState(false)
   const [isEditingEmail, setIsEditingEmail] = useState(false)
+  const [isEditingAddress, setIsEditingAddress] = useState(false)
   const [editedName, setEditedName] = useState(userName)
   const [editedEmail, setEditedEmail] = useState(userEmail)
+  const [editedAddress, setEditedAddress] = useState(userAddress)
   const [isUpdating, setIsUpdating] = useState(false)
   const [updateError, setUpdateError] = useState('')
   const [updateSuccess, setUpdateSuccess] = useState(false)
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false)
+  const [foundLocation, setFoundLocation] = useState<LocationData | null>(null)
+  const [foundLocations, setFoundLocations] = useState<LocationData[]>([])
+  const [showLocationSuggestion, setShowLocationSuggestion] = useState(false)
+  const [showMultipleOptions, setShowMultipleOptions] = useState(false)
 
   // Atualizar os estados quando as props mudarem
   useEffect(() => {
     setEditedName(userName)
     setEditedEmail(userEmail)
-  }, [userName, userEmail])
+    setEditedAddress(userAddress)
+  }, [userName, userEmail, userAddress])
 
   const handlePhotoClick = () => {
     const input = document.createElement('input')
@@ -101,9 +110,129 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const handleCancelEdit = () => {
     setEditedName(userName)
     setEditedEmail(userEmail)
+    setEditedAddress(userAddress)
     setIsEditingName(false)
     setIsEditingEmail(false)
+    setIsEditingAddress(false)
     setUpdateError('')
+  }
+
+  const handleSearchLocation = async () => {
+    if (!editedAddress.trim()) {
+      setUpdateError('Digite um endereço ou CEP para buscar')
+      return
+    }
+
+    setIsSearchingLocation(true)
+    setUpdateError('')
+    setFoundLocation(null)
+    setFoundLocations([])
+    setShowLocationSuggestion(false)
+    setShowMultipleOptions(false)
+    
+    try {
+      console.log('🔍 Buscando localizações para:', editedAddress.trim())
+      
+      // Buscar múltiplas opções
+      const locations = await geocodingService.searchMultipleLocations(editedAddress.trim(), 5)
+      
+      if (locations.length > 0) {
+        if (locations.length === 1) {
+          // Se só tem uma opção, usar diretamente
+          setFoundLocation(locations[0])
+          setShowLocationSuggestion(true)
+          console.log('✅ Localização única encontrada:', locations[0])
+        } else {
+          // Se tem múltiplas opções, mostrar para escolher
+          setFoundLocations(locations)
+          setShowMultipleOptions(true)
+          console.log(`✅ ${locations.length} opções encontradas:`, locations)
+        }
+      } else {
+        setUpdateError('Não foi possível encontrar a localização. Verifique o endereço ou CEP.')
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar localização:', error)
+      setUpdateError('Erro ao buscar localização. Tente novamente.')
+    } finally {
+      setIsSearchingLocation(false)
+    }
+  }
+
+  const handleSelectLocation = (location: LocationData) => {
+    setFoundLocation(location)
+    setShowMultipleOptions(false)
+    setShowLocationSuggestion(true)
+    setFoundLocations([])
+  }
+
+  const handleAcceptLocation = async () => {
+    if (!foundLocation || !onUpdateAddress) {
+      return
+    }
+
+    setIsUpdating(true)
+    setUpdateError('')
+    setUpdateSuccess(false)
+    
+    try {
+      // Usar o endereço encontrado e passar as coordenadas
+      await onUpdateAddress(foundLocation.address, {
+        lat: foundLocation.lat,
+        lng: foundLocation.lng
+      })
+      
+      setEditedAddress(foundLocation.address)
+      setIsEditingAddress(false)
+      setShowLocationSuggestion(false)
+      setFoundLocation(null)
+      setUpdateSuccess(true)
+      
+      // Esconder mensagem de sucesso após 3 segundos
+      setTimeout(() => {
+        setUpdateSuccess(false)
+      }, 3000)
+    } catch (error: any) {
+      console.error('Erro ao salvar endereço:', error)
+      setUpdateError(error.message || 'Erro ao atualizar endereço. Tente novamente.')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleSaveAddress = async () => {
+    if (!editedAddress.trim()) {
+      setUpdateError('Endereço é obrigatório')
+      return
+    }
+
+    if (!onUpdateAddress) {
+      setUpdateError('Função de atualização não disponível')
+      return
+    }
+
+    setIsUpdating(true)
+    setUpdateError('')
+    setUpdateSuccess(false)
+    
+    try {
+      // Salvar apenas o endereço sem coordenadas se não foi buscado
+      await onUpdateAddress(editedAddress.trim())
+      setIsEditingAddress(false)
+      setShowLocationSuggestion(false)
+      setFoundLocation(null)
+      setUpdateSuccess(true)
+      
+      // Esconder mensagem de sucesso após 3 segundos
+      setTimeout(() => {
+        setUpdateSuccess(false)
+      }, 3000)
+    } catch (error: any) {
+      console.error('Erro ao salvar endereço:', error)
+      setUpdateError(error.message || 'Erro ao atualizar endereço. Tente novamente.')
+    } finally {
+      setIsUpdating(false)
+    }
   }
 
   return (
@@ -255,10 +384,166 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </div>
 
           <div>
-            <label className={`block text-sm font-medium ${themeClasses.textSecondary} mb-1`}>Endereço</label>
-            <div className={`p-3 ${themeClasses.bgSecondary} rounded-lg`}>
-              <p className={themeClasses.text}>{userAddress || 'Não informado'}</p>
+            <label className={`block text-sm font-medium ${themeClasses.textSecondary} mb-1`}>Endereço Padrão</label>
+            <div className="relative">
+              {isEditingAddress ? (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <textarea
+                      value={editedAddress}
+                      onChange={(e) => setEditedAddress(e.target.value)}
+                      className={`w-full p-3 pr-12 ${themeClasses.bgSecondary} rounded-lg border-2 border-green-500 focus:outline-none ${themeClasses.text} min-h-[80px]`}
+                      placeholder="Digite seu endereço completo ou CEP (ex: 01310-100)"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleSearchLocation}
+                      disabled={isSearchingLocation || !editedAddress.trim()}
+                      className="absolute right-2 top-2 p-2 text-gray-400 hover:text-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Buscar localização automaticamente"
+                    >
+                      {isSearchingLocation ? (
+                        <Loader className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Search className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Múltiplas opções de endereços */}
+                  {showMultipleOptions && foundLocations.length > 0 && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+                        <p className="text-sm font-medium text-yellow-800">
+                          {foundLocations.length} opções encontradas. Escolha a mais precisa:
+                        </p>
+                      </div>
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {foundLocations.map((location, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleSelectLocation(location)}
+                            className="w-full text-left p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                          >
+                            <p className="text-sm font-medium text-gray-800 break-words">
+                              {location.address}
+                            </p>
+                            {location.city && location.state && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                {location.city}, {location.state}
+                                {location.zipCode && ` - CEP: ${location.zipCode}`}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-400 mt-1">
+                              📍 {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowMultipleOptions(false)
+                          setFoundLocations([])
+                        }}
+                        className="w-full py-2 px-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors text-sm"
+                      >
+                        Cancelar busca
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Sugestão de localização encontrada */}
+                  {showLocationSuggestion && foundLocation && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-blue-700">Localização selecionada:</p>
+                          <p className="text-sm text-blue-600 break-words">{foundLocation.address}</p>
+                          {foundLocation.city && foundLocation.state && (
+                            <p className="text-xs text-blue-500">
+                              {foundLocation.city}, {foundLocation.state}
+                              {foundLocation.zipCode && ` - CEP: ${foundLocation.zipCode}`}
+                            </p>
+                          )}
+                          <p className="text-xs text-blue-500">
+                            📍 Coordenadas: {foundLocation.lat.toFixed(6)}, {foundLocation.lng.toFixed(6)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleAcceptLocation}
+                          disabled={isUpdating}
+                          className="flex-1 bg-blue-500 text-white py-2 px-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                        >
+                          <Check className="w-4 h-4" />
+                          {isUpdating ? 'Salvando...' : 'Usar este endereço'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowLocationSuggestion(false)
+                            setFoundLocation(null)
+                            if (foundLocations.length > 1) {
+                              setShowMultipleOptions(true)
+                            }
+                          }}
+                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors text-sm"
+                        >
+                          {foundLocations.length > 1 ? 'Voltar às opções' : 'Cancelar'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveAddress}
+                      disabled={isUpdating}
+                      className="flex-1 bg-green-500 text-white py-2 px-3 rounded-lg font-medium hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                    >
+                      <Check className="w-4 h-4" />
+                      {isUpdating ? 'Salvando...' : 'Salvar sem buscar'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditedAddress(userAddress)
+                        setIsEditingAddress(false)
+                        setShowLocationSuggestion(false)
+                        setShowMultipleOptions(false)
+                        setFoundLocation(null)
+                        setFoundLocations([])
+                        setUpdateError('')
+                      }}
+                      disabled={isUpdating}
+                      className="flex-1 bg-gray-200 text-gray-700 py-2 px-3 rounded-lg font-medium hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
+                    >
+                      <X className="w-4 h-4" />
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className={`p-3 ${themeClasses.bgSecondary} rounded-lg flex items-start justify-between gap-2`}>
+                  <div className="flex items-start gap-2 flex-1">
+                    <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <p className={`${themeClasses.text} break-words`}>{editedAddress || 'Não informado'}</p>
+                  </div>
+                  <button
+                    onClick={() => setIsEditingAddress(true)}
+                    className="text-gray-400 hover:text-green-500 transition-colors flex-shrink-0"
+                    title="Clique para alterar o endereço"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
+            <p className={`text-xs ${themeClasses.textSecondary} mt-1`}>
+              Este endereço será usado como destino padrão para seus serviços. 
+              <span className="font-medium"> Dica:</span> Digite um CEP para busca automática com coordenadas.
+            </p>
           </div>
         </div>
 

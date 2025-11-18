@@ -1,5 +1,7 @@
 import React from 'react'
-import { ArrowLeft, MapPin } from 'lucide-react'
+import { ArrowLeft, MapPin, Edit2 } from 'lucide-react'
+import NearbyPlacesMap from './NearbyPlacesMap'
+import { PlaceData } from '../services/placesService'
 
 interface ServiceCreateScreenProps {
   userAddress: string
@@ -23,6 +25,8 @@ interface ServiceCreateScreenProps {
   onServiceTypeChange: (value: string) => void
   onCategorySelect: (categoryId: number) => void
   onConfirmService: () => void
+  onPlaceSelect?: (place: PlaceData) => void
+  onOriginPlaceSelect?: (place: PlaceData) => void
   calculateDistance: (lat1: number, lng1: number, lat2: number, lng2: number) => number
   calculatePrice: (distance: number) => number
 }
@@ -48,7 +52,9 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
   onDescriptionChange,
   onServiceTypeChange,
   onCategorySelect,
-  onConfirmService
+  onConfirmService,
+  onPlaceSelect,
+  onOriginPlaceSelect
 }) => {
   return (
     <div className="min-h-screen bg-gray-100 overflow-x-hidden">
@@ -119,6 +125,19 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
               </button>
             </div>
             
+            {/* Estabelecimentos Próximos à Origem */}
+            {pickupLocation && (
+              <div className="mb-4">
+                <NearbyPlacesMap
+                  centerLocation={pickupLocation}
+                  onPlaceSelect={onOriginPlaceSelect}
+                  className="w-full"
+                  showFilters={true}
+                  title="🔵 Estabelecimentos na Origem"
+                  actionButtonText="Usar como Origem"
+                />
+              </div>
+            )}
             
             {/* Paradas intermediárias */}
             {stopPoints.length > 0 && (
@@ -174,14 +193,29 @@ const ServiceCreateScreen: React.FC<ServiceCreateScreenProps> = ({
                 </div>
                 <button
                   onClick={onSelectDestination}
-                  className="bg-green-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-600 transition-colors whitespace-nowrap flex-shrink-0"
+                  className="bg-green-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-600 transition-colors whitespace-nowrap flex-shrink-0 flex items-center gap-2"
+                  title="Clique para alterar o endereço de destino"
                 >
+                  <Edit2 className="w-4 h-4" />
                   Alterar
                 </button>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Estabelecimentos Próximos */}
+        {deliveryLocation && (
+          <div className="mb-6">
+            <NearbyPlacesMap
+              centerLocation={deliveryLocation}
+              onPlaceSelect={onPlaceSelect}
+              className="w-full"
+              title="🟢 Estabelecimentos no Destino"
+              actionButtonText="Usar como Destino"
+            />
+          </div>
+        )}
 
         {/* Descrição do pedido */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
