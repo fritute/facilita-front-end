@@ -1467,6 +1467,16 @@ function App() {
       // Extrair dados da resposta conforme estrutura da API
       const rechargeData = data
       
+      // 🔑 Armazenar ID do pedido para confirmação
+      const orderId = rechargeData.pedido?.id
+      if (orderId) {
+        console.log('💰 ID do pedido recebido:', orderId)
+        // Armazenar para uso na confirmação
+        localStorage.setItem('currentRechargeOrderId', orderId)
+      } else {
+        console.warn('⚠️ ID do pedido não encontrado na resposta')
+      }
+      
       // Gerar QR Code a partir do código PIX retornado
       // Estrutura: data.pedido.qr_codes[0].text
       if (rechargeData.pedido?.qr_codes && rechargeData.pedido.qr_codes.length > 0) {
@@ -1527,12 +1537,21 @@ function App() {
       try {
         // Usar webhook para confirmar pagamento
         console.log('🔗 Chamando webhook de confirmação...')
+        
+        // 🔑 USAR O ID DO PEDIDO (pedido.id) conforme retornado pela API
+        const orderId = rechargeData.pedido?.id
+        
+        if (!orderId) {
+          console.error('❌ ID do pedido não encontrado na resposta da recarga')
+          alert('Erro: ID do pedido não encontrado. Tente solicitar a recarga novamente.')
+          return
+        }
+        
+        console.log('📦 ID do pedido para confirmação:', orderId)
+        
         const webhookPayload = {
-          id: rechargeData.id.toString(), // ID da recarga como string
-          status: 'PAID', // Status de pagamento confirmado
-          valor: rechargeAmount, // Valor em reais
-          reference_id: rechargeData.reference_id || `recarga_${Date.now()}`,
-          id_recarga: rechargeData.id // Adicionar id_recarga também
+          id: orderId, // ID do PEDIDO (ex: "ORDE_16799BAD-949C-4737-A3D5-A84B6AE93AA7")
+          status: 'PAID' // Status de pagamento confirmado
         }
         
         console.log('📤 Payload do webhook:', webhookPayload)
@@ -1617,6 +1636,9 @@ function App() {
       
       // Mostrar notificação de sucesso
       showSuccess('Recarga Confirmada', `R$ ${rechargeAmount.toFixed(2)} foi creditado na sua carteira`)
+      
+      // Limpar ID do pedido armazenado
+      localStorage.removeItem('currentRechargeOrderId')
       
       // Fechar modal de recarga e mostrar modal de sucesso
       setShowRechargeModal(false)
