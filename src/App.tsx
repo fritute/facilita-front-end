@@ -16,8 +16,9 @@ import { handDetectionService } from './services/handDetectionService'
 import { useNotifications } from './hooks/useNotifications'
 import { uploadImage } from './services/uploadImageToAzure'
 import { handleProfilePhotoUpload } from './utils/profilePhotoHandler'
+import { runWebSocketTests } from './utils/websocketTest'
 //TELAS PARA TESTES E PARA MOVER
-type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "tracking" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
+type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
 
 // Adicione esta interface antes da função App
 interface ServiceTrackingProps {
@@ -2130,30 +2131,23 @@ function App() {
           if (firstNew) {
             setNotificationToastMessage(firstNew.message)
             setShowNotificationToast(true)
-            
-            // Auto-esconder toast após 5 segundos
-            setTimeout(() => {
-              setShowNotificationToast(false)
-            }, 5000)
           }
         }
-
       } catch (error) {
         console.error('❌ Erro ao verificar notificações:', error)
       }
     }
 
-    // Verificar notificações a cada 10 segundos
-    const notificationInterval = setInterval(checkNotifications, 10000)
+    // Verificar notificações a cada 30 segundos
+    const notificationInterval = setInterval(checkNotifications, 30000)
     
     // Verificar imediatamente
     checkNotifications()
-
+    
     return () => clearInterval(notificationInterval)
   }, [loggedUser?.id])
 
   // Removido: useEffect de waiting-driver (agora criamos o serviço antes de ir para pagamento)
-
   // Generate PIX QR Code when payment screen loads
   useEffect(() => {
     if (currentScreen === 'payment') {
@@ -2345,14 +2339,25 @@ function App() {
 
 
 
+  // Função para verificar se usuário está logado
+  const isUserLoggedIn = () => {
+    const token = localStorage.getItem('authToken')
+    const userData = localStorage.getItem('userData')
+    return !!(token && userData && loggedUser)
+  }
+
   // Função helper para fazer requisições autenticadas
   const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('authToken')
     
     // Validar se o token existe
     if (!token) {
-      console.error('❌ Token não encontrado')
-      throw new Error('Token não encontrado')
+      console.error('❌ Token não encontrado - usuário precisa fazer login')
+      console.log('🔄 Redirecionando para tela de login...')
+      
+      // Redirecionar para login se não tiver token
+      setCurrentScreen('login')
+      throw new Error('Token não encontrado - faça login novamente')
     }
     
     const headers = {
@@ -5146,14 +5151,17 @@ const handleServiceCreate = async () => {
     return
   }
 
-  // Verificar se usuário está logado
-  if (!loggedUser) {
-    console.error('❌ Erro: Usuário não está logado')
-    alert('Você precisa estar logado para criar um serviço')
+  // Verificar se usuário está logado e tem token
+  const token = localStorage.getItem('authToken')
+  if (!loggedUser || !token) {
+    console.error('❌ Erro: Usuário não está logado ou token não encontrado')
+    alert('Você precisa fazer login para criar um serviço')
+    setCurrentScreen('login')
     return
   }
 
   console.log('✅ Validações básicas passaram')
+  console.log('🔑 Token encontrado:', token ? 'Sim' : 'Não')
   console.log('📋 Dados do serviço:', {
     serviceDescription,
     selectedServiceType,
@@ -5198,29 +5206,41 @@ const handleServiceCreate = async () => {
   console.log('🔨 Criando serviço no banco...')
   
   try {
-    const serviceCreated = await createService()
+    const serviceResult = await createService()
     setIsLoading(false)
     
-    if (serviceCreated) {
+    if (serviceResult) {
       console.log('✅ Serviço criado com sucesso!')
+      console.log('🆔 Resultado da criação:', serviceResult)
+      
+      // Aguardar um pouco para o estado ser atualizado
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      console.log('🆔 Estado do createdServiceId após delay:', createdServiceId)
+      console.log('🆔 Tipo do createdServiceId:', typeof createdServiceId)
       
       if (!createdServiceId) {
         console.error('❌ ID do serviço não foi retornado')
+        console.error('🔍 Valor atual de createdServiceId:', createdServiceId)
+        console.error('🔍 serviceResult:', serviceResult)
         alert('Erro: ID do serviço não foi retornado. Tente novamente.')
         return
       }
       
+      // Converter para string se necessário
+      const serviceIdString = createdServiceId.toString()
+      
       // Definir serviço como ativo
-      setActiveServiceId(createdServiceId)
+      setActiveServiceId(serviceIdString)
       
       // Ir para tela de espera do prestador
       handleScreenTransition('waiting-driver')
       
       // Iniciar polling para verificar quando o prestador aceitar
-      startServiceStatusPolling(createdServiceId)
+      startServiceStatusPolling(serviceIdString)
       
       console.log('🔍 Polling iniciado - aguardando prestador aceitar o serviço...')
-      console.log('📋 ID do serviço sendo monitorado:', createdServiceId)
+      console.log('📋 ID do serviço sendo monitorado:', serviceIdString)
     } else {
       showError('Erro', 'Não foi possível criar o serviço. Verifique os dados e tente novamente.')
     }
@@ -5670,7 +5690,8 @@ const handleServiceCreate = async () => {
   // Função para verificar status do serviço
   const checkServiceStatus = async (serviceId: string) => {
     try {
-      console.log('🔍 Verificando status do serviço:', serviceId)
+      console.log('🔍 Verificando status do serviço ID:', serviceId)
+      console.log('🌐 URL da requisição:', API_ENDPOINTS.SERVICE_BY_ID(serviceId))
       
       const response = await fetchWithAuth(API_ENDPOINTS.SERVICE_BY_ID(serviceId), {
         method: 'GET'
@@ -5686,9 +5707,23 @@ const handleServiceCreate = async () => {
         const prestador = servico.prestador || servico.provider
         
         console.log('🔍 Dados extraídos:')
-        console.log('  - servico:', servico)
+        console.log('  - ID do serviço na resposta:', servico.id, '(tipo:', typeof servico.id, ')')
+        console.log('  - ID esperado:', serviceId, '(tipo:', typeof serviceId, ')')
+        console.log('  - Comparação string:', servico.id?.toString(), '===', serviceId)
+        console.log('  - Comparação número:', servico.id, '===', parseInt(serviceId))
+        console.log('  - IDs coincidem?', servico.id?.toString() === serviceId || servico.id === parseInt(serviceId))
+        console.log('  - servico completo:', servico)
         console.log('  - status extraído:', status)
         console.log('  - prestador extraído:', prestador)
+        
+        // Verificar se estamos recebendo o serviço correto (comparação mais flexível)
+        const idsMatch = servico.id?.toString() === serviceId || servico.id === parseInt(serviceId)
+        if (!idsMatch) {
+          console.warn('⚠️ ATENÇÃO: ID do serviço na resposta não confere!')
+          console.warn('  - Esperado:', serviceId, '(tipo:', typeof serviceId, ')')
+          console.warn('  - Recebido:', servico.id, '(tipo:', typeof servico.id, ')')
+          return false
+        }
         
         console.log('📊 Status atual:', status)
         console.log('👨‍💼 Prestador:', prestador)
@@ -5735,11 +5770,11 @@ const handleServiceCreate = async () => {
           setDriverLocation(driverData.localizacao)
           setShowDriverFoundModal(true)
           
-          // Após 3 segundos, ir para tela de tracking
+          // Após 3 segundos, ir para tela de tracking existente
           setTimeout(() => {
             setShowDriverFoundModal(false)
-            setCurrentScreen('tracking')
-            console.log('🗺️ Redirecionando para tela de tracking...')
+            setCurrentScreen('service-tracking')
+            console.log('🗺️ Redirecionando para tela de service-tracking...')
           }, 3000)
           
           return true
@@ -6610,13 +6645,24 @@ Usando ID temporário: ${tempId}`)
       <ServiceTracking
         onBack={() => handleScreenTransition('home')}
         onServiceCompleted={handleServiceCompleted}
-        entregador={entregadorData}
+        entregador={foundDriver ? {
+          nome: foundDriver.nome,
+          telefone: foundDriver.telefone,
+          veiculo: `${foundDriver.veiculo.tipo} - ${foundDriver.veiculo.modelo}`,
+          placa: 'ABC-1234', // Valor padrão
+          rating: foundDriver.avaliacao,
+          tempoEstimado: foundDriver.tempo_estimado,
+          distancia: '2.5 km' // Valor padrão
+        } : entregadorData}
         destination={selectedDestination || {
           address: selectedLocation || 'Endereço não especificado',
           lat: -23.55052, 
           lng: -46.63330
         }}
-        driverOrigin={(driverOrigin || pickupLocation) ? {
+        driverOrigin={foundDriver?.localizacao ? {
+          lat: foundDriver.localizacao.lat,
+          lng: foundDriver.localizacao.lng
+        } : (driverOrigin || pickupLocation) ? {
           lat: (driverOrigin?.lat ?? pickupLocation!.lat),
           lng: (driverOrigin?.lng ?? pickupLocation!.lng)
         } : { lat: -23.5324859, lng: -46.7916801 }} 
@@ -6818,146 +6864,6 @@ Usando ID temporário: ${tempId}`)
     )
   }
 
-  // Tracking Screen
-  if (currentScreen === 'tracking') {
-    return (
-      <div className={`min-h-screen ${themeClasses.bg} transition-all duration-300 ${
-        isTransitioning ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'
-      }`}>
-        {/* Header */}
-        <div className="bg-blue-500 text-white p-4 relative">
-          <button
-            onClick={() => handleScreenTransition('home')}
-            className="absolute left-4 top-1/2 transform -translate-y-1/2"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <h1 className="text-xl font-bold text-center">Acompanhar Entrega</h1>
-        </div>
-
-        {/* Mapa simulado */}
-        <div className="h-64 bg-gray-300 relative">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-gray-600 text-center">
-              <svg className="w-16 h-16 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <p className="text-sm">Mapa de Rastreamento</p>
-              {driverLocation && (
-                <p className="text-xs mt-1">
-                  Motorista: {driverLocation.lat.toFixed(4)}, {driverLocation.lng.toFixed(4)}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Info do motorista */}
-        {foundDriver && (
-          <div className={`${themeClasses.bgCard} m-4 rounded-lg shadow-lg p-4`}>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className={`font-semibold ${themeClasses.text}`}>{foundDriver.nome}</h3>
-                <p className={`text-sm ${themeClasses.textSecondary}`}>
-                  {foundDriver.veiculo.tipo} - {foundDriver.veiculo.modelo}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className={`text-sm ${themeClasses.textSecondary}`}>⭐ {foundDriver.avaliacao}</p>
-                <p className={`text-sm font-semibold text-green-600`}>A caminho</p>
-              </div>
-            </div>
-
-            {/* Botões de ação */}
-            <div className="flex gap-2">
-              <button className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm">
-                📞 Ligar
-              </button>
-              <button className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg text-sm">
-                💬 Mensagem
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Status do serviço */}
-        <div className={`${themeClasses.bgCard} m-4 rounded-lg shadow-lg p-4`}>
-          <h3 className={`font-semibold ${themeClasses.text} mb-3`}>Status da Entrega</h3>
-          
-          <div className="space-y-3">
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-green-500 rounded-full mr-3"></div>
-              <div>
-                <p className={`text-sm font-medium ${themeClasses.text}`}>Serviço Aceito</p>
-                <p className={`text-xs ${themeClasses.textSecondary}`}>Motorista confirmou o pedido</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-blue-500 rounded-full mr-3 animate-pulse"></div>
-              <div>
-                <p className={`text-sm font-medium ${themeClasses.text}`}>A caminho da origem</p>
-                <p className={`text-xs ${themeClasses.textSecondary}`}>Tempo estimado: {foundDriver?.tempo_estimado || '5-10 min'}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-gray-300 rounded-full mr-3"></div>
-              <div>
-                <p className={`text-sm ${themeClasses.textSecondary}`}>Coletando item</p>
-                <p className={`text-xs ${themeClasses.textSecondary}`}>Aguardando chegada</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-gray-300 rounded-full mr-3"></div>
-              <div>
-                <p className={`text-sm ${themeClasses.textSecondary}`}>A caminho do destino</p>
-                <p className={`text-xs ${themeClasses.textSecondary}`}>Aguardando coleta</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-gray-300 rounded-full mr-3"></div>
-              <div>
-                <p className={`text-sm ${themeClasses.textSecondary}`}>Entregue</p>
-                <p className={`text-xs ${themeClasses.textSecondary}`}>Aguardando entrega</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Informações do serviço */}
-        <div className={`${themeClasses.bgCard} m-4 rounded-lg shadow-lg p-4`}>
-          <h3 className={`font-semibold ${themeClasses.text} mb-3`}>Detalhes do Serviço</h3>
-          
-          {pickupLocation && (
-            <div className="mb-3">
-              <p className={`text-sm font-medium ${themeClasses.text}`}>📍 Origem</p>
-              <p className={`text-sm ${themeClasses.textSecondary}`}>{pickupLocation.address}</p>
-            </div>
-          )}
-          
-          {deliveryLocation && (
-            <div className="mb-3">
-              <p className={`text-sm font-medium ${themeClasses.text}`}>🎯 Destino</p>
-              <p className={`text-sm ${themeClasses.textSecondary}`}>{deliveryLocation.address}</p>
-            </div>
-          )}
-          
-          {createdServiceId && (
-            <div>
-              <p className={`text-sm font-medium ${themeClasses.text}`}>🆔 ID do Serviço</p>
-              <p className={`text-sm ${themeClasses.textSecondary} font-mono`}>{createdServiceId}</p>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
 
   // Payment Screen
   if (currentScreen === 'payment') {
@@ -10788,5 +10694,8 @@ Usando ID temporário: ${tempId}`)
   )
   
 }
+
+// Disponibilizar testes WebSocket no console
+runWebSocketTests()
 
 export default App

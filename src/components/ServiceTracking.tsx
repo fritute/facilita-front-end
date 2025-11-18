@@ -1,11 +1,13 @@
-// ServiceTracking.tsx - Rastreamento com OSRM
+// ServiceTracking.tsx - Rastreamento com OSRM e WebSocket
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ArrowLeft, MessageSquare, Star, Clock, CheckCircle } from 'lucide-react';
 import ChatModal from './ChatModal';
+import WebSocketStatus from './WebSocketStatus';
 import { ServiceTrackingManager, ServiceTrackingState } from '../utils/serviceTrackingUtils';
+import useWebSocket from '../hooks/useWebSocket';
 
 // Fix para ícones do Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -79,6 +81,33 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
   const [isServiceCompleted, setIsServiceCompleted] = useState(savedState?.isServiceCompleted || false);
   const [isPaused, setIsPaused] = useState(false);
   const [hasShownCompletionMessage, setHasShownCompletionMessage] = useState(false);
+
+  // WebSocket para tracking em tempo real
+  const serviceId = localStorage.getItem('currentServiceId') || savedState?.serviceId
+  const { 
+    isConnected: isWebSocketConnected, 
+    onLocationUpdate,
+    startLocationTracking,
+    stopLocationTracking,
+    isTrackingLocation
+  } = useWebSocket({
+    serviceId,
+    enableTracking: true,
+    enableChat: false
+  })
+
+  // Escutar atualizações de localização em tempo real
+  useEffect(() => {
+    onLocationUpdate((locationData) => {
+      console.log('📍 Localização em tempo real recebida:', locationData)
+      
+      // Atualizar posição do prestador em tempo real
+      setDriverPosition({
+        lat: locationData.latitude,
+        lng: locationData.longitude
+      })
+    })
+  }, [onLocationUpdate])
 
   // Buscar rota real usando OSRM (apenas se não tiver rota salva)
   useEffect(() => {
@@ -423,9 +452,12 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
                       style={{ width: `${progress}%` }}
                     ></div>
                   </div>
-                  <p className="text-xs opacity-75 mt-1">
-                    Progresso: {Math.round(progress)}% {isPaused && '(Pausado)'}
-                  </p>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-xs opacity-75">
+                      Progresso: {Math.round(progress)}% {isPaused && '(Pausado)'}
+                    </p>
+                    <WebSocketStatus isConnected={isWebSocketConnected} />
+                  </div>
                   {savedState && (
                     <p className="text-xs opacity-60 mt-1">
                       💾 Progresso salvo - continue de onde parou
@@ -441,6 +473,26 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>Conversar</span>
+              </button>
+              
+              {/* Botão de tracking de localização */}
+              <button 
+                onClick={() => {
+                  if (isTrackingLocation) {
+                    stopLocationTracking()
+                  } else {
+                    startLocationTracking()
+                  }
+                }}
+                className={`px-4 py-2 rounded-full font-semibold transition-all flex items-center space-x-2 ${
+                  isTrackingLocation 
+                    ? 'bg-red-500 text-white hover:bg-red-600' 
+                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                }`}
+              >
+                <span className="text-xs">
+                  {isTrackingLocation ? '🛑 Parar Tracking' : '📍 Iniciar Tracking'}
+                </span>
               </button>
               
               {progress < 100 && (

@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react'
 import { X, Phone, Video, Send, Mic, MicOff, VideoOff, ExternalLink, Image as ImageIcon } from 'lucide-react'
 import videoCallService, { VideoCallRoom } from '../services/videoCallService'
 import { notificationService } from '../services/notificationService'
+import useWebSocket from '../hooks/useWebSocket'
+import WebSocketStatus from './WebSocketStatus'
 
 interface Message {
   id: number
@@ -57,6 +59,17 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
   const [currentRoom, setCurrentRoom] = useState<VideoCallRoom | null>(null)
   const [isCreatingRoom, setIsCreatingRoom] = useState(false)
 
+  // WebSocket para chat em tempo real
+  const { 
+    isConnected: isWebSocketConnected,
+    sendMessage: sendWebSocketMessage,
+    onMessageReceived
+  } = useWebSocket({
+    serviceId,
+    enableTracking: false,
+    enableChat: true // Chat agora usa WebSocket
+  })
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
@@ -65,18 +78,53 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
     scrollToBottom()
   }, [messages])
 
-  // Buscar mensagens quando o modal abrir
+  // Buscar mensagens quando o modal abrir e configurar WebSocket
   useEffect(() => {
     if (isOpen && serviceId) {
+      // Buscar mensagens históricas
       fetchMessages()
-      // Polling a cada 5 segundos para buscar novas mensagens
+      
+      // Configurar listener para mensagens em tempo real via WebSocket
+      if (isWebSocketConnected) {
+        onMessageReceived((message) => {
+          console.log('💬 Mensagem em tempo real recebida:', message)
+          
+          // Converter formato WebSocket para formato da API
+          const newMessage: Message = {
+            id: Date.now(),
+            id_servico: message.servicoId,
+            id_contratante: 0,
+            id_prestador: 0,
+            mensagem: message.mensagem,
+            tipo: 'texto',
+            url_anexo: null,
+            enviado_por: message.sender,
+            lida: false,
+            data_envio: message.timestamp
+          }
+          
+          // Adicionar mensagem se não for do usuário atual
+          const userType = localStorage.getItem('userType') || 'CONTRATANTE'
+          const currentUserType = userType.toLowerCase()
+          if (message.sender !== currentUserType) {
+            setMessages(prev => [...prev, newMessage])
+          }
+        })
+      }
+    }
+  }, [isOpen, serviceId, isWebSocketConnected, onMessageReceived])
+
+  // Polling para buscar novas mensagens (fallback quando WebSocket não conectado)
+  useEffect(() => {
+    if (isOpen && serviceId && !isWebSocketConnected) {
+      // Polling a cada 3 segundos apenas se WebSocket não estiver conectado
       const interval = setInterval(() => {
         fetchMessages()
-      }, 5000)
+      }, 3000)
       
       return () => clearInterval(interval)
     }
-  }, [isOpen, serviceId])
+  }, [isOpen, serviceId, isWebSocketConnected])
 
   // Função para buscar mensagens da API
   const fetchMessages = async () => {
@@ -182,46 +230,90 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
     
     try {
       setIsSendingMessage(true)
-      const token = localStorage.getItem('authToken')
       
-      let imageUrl = null
+      const userData = JSON.parse(localStorage.getItem('userData') || '{}')
+      const userType = localStorage.getItem('userType') || 'CONTRATANTE'
       
-      // Se houver imagem, fazer upload primeiro (implementar conforme sua API)
-      if (selectedImage) {
-        // TODO: Implementar upload de imagem para seu servidor
-        // Por enquanto, usar base64 ou URL temporária
-        imageUrl = imagePreview
-      }
-      
-      const messageData = {
-        mensagem: newMessage.trim() || 'Imagem enviada',
-        tipo: selectedImage ? 'imagem' : 'texto',
-        url_anexo: imageUrl || ''
-      }
-
-      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/chat/${serviceId}/mensagem`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(messageData)
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.success && data.mensagem) {
-          // Adicionar mensagem à lista
-          setMessages(prev => [...prev, data.mensagem])
+      // Se WebSocket estiver conectado, usar WebSocket
+      if (isWebSocketConnected) {
+        console.log('💬 Enviando mensagem via WebSocket...')
+        
+        // Obter ID do prestador do serviço atual (se disponível)
+        const foundDriver = JSON.parse(localStorage.getItem('foundDriver') || '{}')
+        const targetUserId = foundDriver.id || 2 // Fallback para ID 2 (prestador padrão)
+        
+        // Enviar via WebSocket usando a documentação oficial
+        sendWebSocketMessage(newMessage.trim() || 'Imagem enviada', targetUserId)
+        
+        // Adicionar mensagem à lista localmente (optimistic update)
+        const optimisticMessage: Message = {
+          id: Date.now(),
+          id_servico: serviceId,
+          id_contratante: userType === 'CONTRATANTE' ? userData.id || userData.id_usuario : 0,
+          id_prestador: userType === 'PRESTADOR' ? userData.id || userData.id_usuario : 0,
+          mensagem: newMessage.trim() || 'Imagem enviada',
+          tipo: selectedImage ? 'imagem' : 'texto',
+          url_anexo: selectedImage ? imagePreview : null,
+          enviado_por: userType.toLowerCase() as 'contratante' | 'prestador',
+          lida: false,
+          data_envio: new Date().toISOString()
         }
+        
+        setMessages(prev => [...prev, optimisticMessage])
         setNewMessage('')
         removeSelectedImage()
-        // Atualizar lista de mensagens
-        await fetchMessages()
+        
       } else {
-        alert('Erro ao enviar mensagem')
+        // Fallback para API REST quando WebSocket não conectado
+        console.log('💬 WebSocket desconectado, usando API REST...')
+        
+        const token = localStorage.getItem('authToken')
+        
+        let imageUrl = null
+        
+        // Se houver imagem, fazer upload primeiro
+        if (selectedImage) {
+          imageUrl = imagePreview
+        }
+        
+        const messageData = {
+          mensagem: newMessage.trim() || 'Imagem enviada',
+          tipo: selectedImage ? 'imagem' : 'texto',
+          url_anexo: imageUrl || ''
+        }
+
+        console.log('📤 Enviando mensagem para prestador via API:', messageData)
+
+        const response = await fetch(`https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/chat/${serviceId}/mensagem`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(messageData)
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log('✅ Mensagem enviada com sucesso via API:', data)
+          
+          if (data.success && data.mensagem) {
+            setMessages(prev => [...prev, data.mensagem])
+          }
+          setNewMessage('')
+          removeSelectedImage()
+          
+          // Atualizar lista de mensagens
+          await fetchMessages()
+        } else {
+          const errorData = await response.text()
+          console.error('❌ Erro na API:', response.status, errorData)
+          throw new Error(`Erro ${response.status}: ${errorData}`)
+        }
       }
+      
     } catch (error) {
+      console.error('❌ Erro ao enviar mensagem:', error)
       notificationService.showError('Chat', 'Não foi possível enviar a mensagem. Tente novamente.')
     } finally {
       setIsSendingMessage(false)
@@ -336,9 +428,12 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
             />
             <div>
               <h3 className="font-semibold">{driverName}</h3>
-              <p className="text-sm opacity-90">
-                {isInCall ? (isVideoCall ? 'Em videochamada' : 'Em ligação') : 'Online'}
-              </p>
+              <div className="flex items-center space-x-2">
+                <p className="text-sm opacity-90">
+                  {isInCall ? (isVideoCall ? 'Em videochamada' : 'Em ligação') : 'Online'}
+                </p>
+                <WebSocketStatus isConnected={isWebSocketConnected} className="text-white" />
+              </div>
             </div>
           </div>
           <div className="flex items-center space-x-2">
