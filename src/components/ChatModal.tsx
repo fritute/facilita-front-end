@@ -42,7 +42,7 @@ interface ChatModalProps {
   serviceId?: number // ID do serviço para buscar mensagens
 }
 
-const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driverPhone, serviceId }) => {
+const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driverPhone: _, serviceId }) => {
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
@@ -134,7 +134,8 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
       setIsLoadingMessages(true)
       const token = localStorage.getItem('authToken')
       
-      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/chat/${serviceId}/mensagens`, {
+      // Usar URL correta da API
+      const response = await fetch(`https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/servico/${serviceId}/mensagens`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -163,7 +164,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
     try {
       const token = localStorage.getItem('authToken')
       
-      await fetch(`https://servidor-facilita.onrender.com/v1/facilita/chat/${serviceId}/marcar-lidas`, {
+      await fetch(`https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/servico/${serviceId}/mensagens/marcar-lidas`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -214,7 +215,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
     }
   }, [localStream, isVideoCall])
 
-  // Cleanup: parar câmera quando componente for desmontado
+  // Cleanup: parar câmera e limpar videoCallService quando componente for desmontado
   useEffect(() => {
     return () => {
       if (localStream) {
@@ -222,6 +223,11 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
           track.stop()
         })
       }
+      
+      // Limpar instância do videoCallService
+      videoCallService.destroy().catch(error => {
+        console.warn('Erro ao limpar videoCallService:', error)
+      })
     }
   }, [localStream])
 
@@ -237,10 +243,20 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
       // Se WebSocket estiver conectado, usar WebSocket
       if (isWebSocketConnected) {
         console.log('💬 Enviando mensagem via WebSocket...')
+        console.log('📊 Status da conexão WebSocket:', { isWebSocketConnected, serviceId })
         
         // Obter ID do prestador do serviço atual (se disponível)
         const foundDriver = JSON.parse(localStorage.getItem('foundDriver') || '{}')
-        const targetUserId = foundDriver.id || 2 // Fallback para ID 2 (prestador padrão)
+        const entregadorData = JSON.parse(localStorage.getItem('entregadorData') || '{}')
+        const targetUserId = foundDriver.id_prestador || entregadorData.id || 2 // Fallback para ID 2
+        
+        console.log('🎯 Dados para envio WebSocket:', {
+          serviceId,
+          targetUserId,
+          foundDriver,
+          entregadorData,
+          message: newMessage.trim()
+        })
         
         // Enviar via WebSocket usando a documentação oficial
         sendWebSocketMessage(newMessage.trim() || 'Imagem enviada', targetUserId)
@@ -276,15 +292,19 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
           imageUrl = imagePreview
         }
         
+        // Baseado na documentação oficial da API
         const messageData = {
           mensagem: newMessage.trim() || 'Imagem enviada',
           tipo: selectedImage ? 'imagem' : 'texto',
-          url_anexo: imageUrl || ''
+          url_anexo: imageUrl || null,
+          id_servico: serviceId,
+          enviado_por: userType.toLowerCase()
         }
 
         console.log('📤 Enviando mensagem para prestador via API:', messageData)
 
-        const response = await fetch(`https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/chat/${serviceId}/mensagem`, {
+        // Usar endpoint correto baseado na documentação
+        const response = await fetch(`https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/servico/${serviceId}/mensagem`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -349,9 +369,23 @@ const ChatModal: React.FC<ChatModalProps> = ({ isOpen, onClose, driverName, driv
     try {
       setIsCreatingRoom(true)
       
+      console.log('🎥 Iniciando videochamada...')
+      
+      // Garantir que não há instâncias anteriores com timeout
+      console.log('🧹 Limpeza forçada antes de criar nova videochamada...')
+      await videoCallService.destroy()
+      
+      // Aguardar um pouco mais para garantir limpeza completa
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
       // Criar sala de videochamada
       const room = await videoCallService.createRoom(`video-${Date.now()}`)
       setCurrentRoom(room)
+      
+      console.log('🏠 Sala criada, entrando...', room.url)
+      
+      // Aguardar antes de tentar entrar na sala
+      await new Promise(resolve => setTimeout(resolve, 100))
       
       // Entrar na sala
       await videoCallService.joinRoom(room.url, 'Cliente')

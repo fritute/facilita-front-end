@@ -11,7 +11,7 @@ import ServiceCreateScreen from './components/ServiceCreateScreen'
 import { PlaceData } from './services/placesService'
 import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen, ResetPasswordScreen, ServiceProviderScreen } from './screens'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
-import { API_ENDPOINTS } from './config/constants'
+import { API_ENDPOINTS, API_BASE_URL } from './config/constants'
 import { handDetectionService } from './services/handDetectionService'
 import { useNotifications } from './hooks/useNotifications'
 import { uploadImage } from './services/uploadImageToAzure'
@@ -2256,6 +2256,10 @@ function App() {
     if (storedProfileData) {
       try {
         const parsedData = JSON.parse(storedProfileData)
+        // Garantir que foto seja null se não for um File válido
+        if (parsedData.foto && !(parsedData.foto instanceof File)) {
+          parsedData.foto = null
+        }
         setProfileData(parsedData)
         console.log('📋 Dados do perfil recuperados do localStorage:', parsedData)
       } catch (error) {
@@ -2267,8 +2271,10 @@ function App() {
   // useEffect para salvar profileData no localStorage sempre que mudar
   useEffect(() => {
     if (profileData.endereco || profileData.cpf || profileData.necessidade) {
-      localStorage.setItem('profileData', JSON.stringify(profileData))
-      console.log('💾 Dados do perfil salvos no localStorage:', profileData)
+      // Criar cópia sem o campo foto para salvar no localStorage (File não é serializável)
+      const { foto, ...profileDataToSave } = profileData
+      localStorage.setItem('profileData', JSON.stringify({ ...profileDataToSave, foto: null }))
+      console.log('💾 Dados do perfil salvos no localStorage:', { ...profileDataToSave, foto: null })
     }
   }, [profileData])
 
@@ -2612,8 +2618,8 @@ function App() {
       console.log('🔑 Token:', token ? token.substring(0, 20) + '...' : 'Não encontrado')
       console.log('📦 Dados a enviar:', { nome: name, email: email })
 
-      // Usar endpoint correto: https://servidor-facilita.onrender.com/v1/facilita/usuario/perfil
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/usuario/perfil', {
+      // Usar endpoint correto: API_BASE_URL/usuario/perfil
+      const response = await fetch(`${API_BASE_URL}/usuario/perfil`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -2723,14 +2729,14 @@ function App() {
       }
 
       console.log('🗑️ Deletando conta do usuário ID:', userId)
-      console.log('🔗 URL:', `https://servidor-facilita.onrender.com/v1/facilita/usuario/${userId}`)
+      console.log('🔗 URL:', `${API_BASE_URL}/usuario/${userId}`)
       console.log('🔑 Token:', token ? token.substring(0, 20) + '...' : 'Não encontrado')
       console.log('📋 Headers enviados:', {
         'Authorization': `Bearer ${token.substring(0, 30)}...`,
         'Content-Type': 'application/json'
       })
 
-      const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/usuario/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/usuario/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -3678,7 +3684,7 @@ function App() {
       try {
         console.log(`🔍 Verificando status do serviço ${serviceId} (tentativa ${attempts + 1}/${maxAttempts})`)
         
-        const response = await fetch(`https://servidor-facilita.onrender.com/v1/facilita/servico/${serviceId}`, {
+        const response = await fetch(`${API_BASE_URL}/servico/${serviceId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         
@@ -3731,82 +3737,125 @@ function App() {
             setIsSearchingProvider(false)
             console.log('✅ Busca de prestador finalizada')
             
-            // Extrair dados do prestador da resposta
-            const prestador = service.prestador
-            const usuario = prestador?.usuario
-            
-            console.log('✅ Prestador encontrado:', usuario?.nome)
-            console.log('📍 Origem salva:', pickupLocation)
-            console.log('📍 Destino salvo:', deliveryLocation)
-            
-            // Atualizar entregadorData com dados reais da API
-            setEntregadorData({
-              id: prestador?.id || service.id_prestador,
-              nome: usuario?.nome || 'Prestador',
-              telefone: usuario?.telefone || '',
-              veiculo: prestador?.veiculo || 'Veículo',
-              placa: prestador?.placa || 'N/A',
-              rating: prestador?.avaliacao_media || 5.0,
-              tempoEstimado: service.tempo_estimado || '15 min',
-              distancia: '2.5 km'
-            })
-            
-            // Atualizar valor do serviço
-            if (service.valor) {
-              setServicePrice(parseFloat(service.valor))
-            }
-            
-            // CORREÇÃO: Usar coordenadas reais dos pontos selecionados
-            if (pickupLocation && deliveryLocation) {
-              console.log('✅ Configurando locais REAIS para rastreamento')
-              console.log('📍 Origem (pickup):', pickupLocation)
-              console.log('📍 Destino (delivery):', deliveryLocation)
+            try {
+              // Buscar dados completos do prestador incluindo localização real
+              console.log('🔍 Buscando dados completos do prestador...')
+              const { buscarPrestadorPorId, formatarPrestador } = await import('./services/prestadorSearch.service')
+              const prestadorCompleto = await buscarPrestadorPorId(service.id_prestador, token)
+              const prestadorFormatado = formatarPrestador(prestadorCompleto)
               
-              setSelectedDestination(deliveryLocation)
+              console.log('📋 Dados completos do prestador:', prestadorCompleto)
+              console.log('📋 Prestador formatado:', prestadorFormatado)
               
-              // USAR COORDENADAS REAIS da origem (não fictícias)
-              setDriverOrigin({ 
-                lat: pickupLocation.lat, 
-                lng: pickupLocation.lng 
+              // Extrair localização real do prestador
+              const prestadorLat = prestadorFormatado.latitude ? parseFloat(prestadorFormatado.latitude) : null
+              const prestadorLng = prestadorFormatado.longitude ? parseFloat(prestadorFormatado.longitude) : null
+              
+              console.log('📍 Localização real do prestador:', { lat: prestadorLat, lng: prestadorLng })
+              
+              // Atualizar entregadorData com dados reais da API
+              setEntregadorData({
+                id: prestadorFormatado.id,
+                nome: prestadorFormatado.nome,
+                telefone: prestadorFormatado.telefone,
+                veiculo: prestadorFormatado.veiculo,
+                placa: prestadorFormatado.placa,
+                rating: prestadorFormatado.avaliacao,
+                tempoEstimado: prestadorFormatado.tempoChegada,
+                distancia: prestadorFormatado.distancia
               })
               
-              console.log('📍 Prestador iniciará em:', { lat: pickupLocation.lat, lng: pickupLocation.lng })
-              console.log('📍 Destino final:', { lat: deliveryLocation.lat, lng: deliveryLocation.lng })
-            } else {
-              console.warn('⚠️ Origem ou destino não definidos!')
-              console.warn('Origem:', pickupLocation)
-              console.warn('Destino:', deliveryLocation)
+              // Configurar localização do prestador (real ou próxima à origem)
+              let driverLocation
+              if (prestadorLat && prestadorLng) {
+                // Usar localização real do prestador
+                driverLocation = { lat: prestadorLat, lng: prestadorLng }
+                console.log('✅ Usando localização REAL do prestador:', driverLocation)
+              } else if (pickupLocation) {
+                // Fallback: usar localização próxima à origem com pequena variação
+                const offsetLat = (Math.random() - 0.5) * 0.01 // ~1km de variação
+                const offsetLng = (Math.random() - 0.5) * 0.01
+                driverLocation = {
+                  lat: pickupLocation.lat + offsetLat,
+                  lng: pickupLocation.lng + offsetLng
+                }
+                console.log('⚠️ Localização do prestador não encontrada, usando localização próxima à origem:', driverLocation)
+              } else {
+                // Fallback final: localização padrão de São Paulo
+                driverLocation = { lat: -23.5505, lng: -46.6333 }
+                console.warn('⚠️ Usando localização padrão para o prestador')
+              }
+              
+              // Configurar localização do prestador para tracking
+              setDriverLocation(driverLocation)
+              setDriverOrigin(driverLocation)
+              
+              // Configurar destino
+              if (deliveryLocation) {
+                setSelectedDestination(deliveryLocation)
+                console.log('📍 Destino configurado:', deliveryLocation)
+              }
+              
+              // Atualizar valor do serviço
+              if (service.valor) {
+                setServicePrice(parseFloat(service.valor))
+              }
+              
+              console.log('🎯 Configuração final para tracking:')
+              console.log('   - Prestador:', prestadorFormatado.nome)
+              console.log('   - Localização do prestador:', driverLocation)
+              console.log('   - Origem:', pickupLocation)
+              console.log('   - Destino:', deliveryLocation)
+              
+              showSuccess('Prestador Encontrado!', `${prestadorFormatado.nome} aceitou sua corrida!`)
+              setServiceStartTime(new Date())
+              
+              // Fazer transição para tracking imediatamente
+              console.log('🚀 Redirecionando para service-tracking...')
+              setTimeout(() => {
+                handleScreenTransition('service-tracking')
+                console.log('✅ Transição para tracking concluída')
+              }, 100)
+              
+            } catch (error) {
+              console.error('❌ Erro ao buscar dados do prestador:', error)
+              
+              // Fallback: usar dados básicos do serviço
+              const prestador = service.prestador
+              const usuario = prestador?.usuario
+              
+              setEntregadorData({
+                id: prestador?.id || service.id_prestador,
+                nome: usuario?.nome || 'Prestador',
+                telefone: usuario?.telefone || '',
+                veiculo: prestador?.veiculo || 'Veículo',
+                placa: prestador?.placa || 'N/A',
+                rating: prestador?.avaliacao_media || 5.0,
+                tempoEstimado: service.tempo_estimado || '15 min',
+                distancia: '2.5 km'
+              })
+              
+              // Usar localização próxima à origem como fallback
+              if (pickupLocation) {
+                const offsetLat = (Math.random() - 0.5) * 0.01
+                const offsetLng = (Math.random() - 0.5) * 0.01
+                const fallbackLocation = {
+                  lat: pickupLocation.lat + offsetLat,
+                  lng: pickupLocation.lng + offsetLng
+                }
+                setDriverLocation(fallbackLocation)
+                setDriverOrigin(fallbackLocation)
+                setSelectedDestination(deliveryLocation)
+              }
+              
+              showSuccess('Prestador Encontrado!', `${usuario?.nome || 'Prestador'} aceitou sua corrida!`)
+              setServiceStartTime(new Date())
+              
+              setTimeout(() => {
+                handleScreenTransition('service-tracking')
+                console.log('✅ Transição para tracking concluída (fallback)')
+              }, 100)
             }
-            
-            showSuccess('Prestador Encontrado!', `${usuario?.nome || 'Prestador'} aceitou sua corrida!`)
-            setServiceStartTime(new Date())
-            
-            console.log('🔄 Redirecionando para tracking...')
-            console.log('📺 Tela atual antes da transição:', currentScreen)
-            console.log('📺 isSearchingProvider antes:', isSearchingProvider)
-            console.log('📺 Dados do entregador configurados:', {
-              nome: usuario?.nome || 'Prestador',
-              id: prestador?.id || service.id_prestador
-            })
-            
-            // Fazer transição para tracking imediatamente
-            console.log('📺 Fazendo transição para service-tracking')
-            console.log('🎯 Estado atual antes da transição:')
-            console.log('   - currentScreen:', currentScreen)
-            console.log('   - isSearchingProvider:', isSearchingProvider)
-            console.log('   - entregadorData:', {
-              nome: usuario?.nome || 'Prestador',
-              id: prestador?.id || service.id_prestador
-            })
-            console.log('   - pickupLocation:', pickupLocation)
-            console.log('   - deliveryLocation:', deliveryLocation)
-            
-            // Garantir que todos os dados estão configurados ANTES da transição
-            setTimeout(() => {
-              console.log('🚀 Executando transição para service-tracking')
-              handleScreenTransition('service-tracking')
-              console.log('✅ Transição para tracking concluída')
-            }, 100)
             
             return
           }
@@ -4349,7 +4398,7 @@ function App() {
       console.log('👤 Usuário logado:', loggedUser)
       console.log('👤 ID do usuário:', loggedUser?.id)
 
-      console.log('🌐 Fazendo requisição para:', 'https://servidor-facilita.onrender.com/v1/facilita/contratante/register')
+      console.log('🌐 Fazendo requisição para:', `${API_BASE_URL}/contratante/register`)
       console.log('📦 Payload COM id_usuario:', JSON.stringify(payload, null, 2))
       console.log('📦 Payload SEM id_usuario (alternativo):', JSON.stringify(payloadSemId, null, 2))
       
@@ -4599,8 +4648,8 @@ function App() {
       
       // Se temos id_contratante, usar direto. Senão, usar query param com id_usuario
       const url = loggedUser.id_contratante 
-        ? `https://servidor-facilita.onrender.com/v1/facilita/contratante/${idParaBuscar}`
-        : `https://servidor-facilita.onrender.com/v1/facilita/contratante?id_usuario=${idParaBuscar}`
+        ? `${API_BASE_URL}/contratante/${idParaBuscar}`
+        : `${API_BASE_URL}/contratante?id_usuario=${idParaBuscar}`
       
       console.log('🔍 URL completa:', url)
       const response = await fetchWithAuth(url)
@@ -4808,10 +4857,10 @@ function App() {
         hasToken: !!token,
         tokenLength: token.length,
         userLoggedIn: !!loggedUser,
-        endpoint: 'https://servidor-facilita.onrender.com/v1/facilita/notificacao'
+        endpoint: `${API_BASE_URL}/notificacao`
       })
       
-      const response = await fetch('https://servidor-facilita.onrender.com/v1/facilita/notificacao', {
+      const response = await fetch(`${API_BASE_URL}/notificacao`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -5211,33 +5260,25 @@ const handleServiceCreate = async () => {
     
     if (serviceResult) {
       console.log('✅ Serviço criado com sucesso!')
-      console.log('🆔 Resultado da criação:', serviceResult)
+      console.log('🆔 ID do serviço retornado:', serviceResult)
+      console.log('🆔 Tipo do ID:', typeof serviceResult)
       
-      // Aguardar um pouco para o estado ser atualizado
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      console.log('🆔 Estado do createdServiceId após delay:', createdServiceId)
-      console.log('🆔 Tipo do createdServiceId:', typeof createdServiceId)
-      
-      if (!createdServiceId) {
-        console.error('❌ ID do serviço não foi retornado')
-        console.error('🔍 Valor atual de createdServiceId:', createdServiceId)
-        console.error('🔍 serviceResult:', serviceResult)
-        alert('Erro: ID do serviço não foi retornado. Tente novamente.')
-        return
-      }
-      
-      // Converter para string se necessário
-      const serviceIdString = createdServiceId.toString()
+      // Usar o ID retornado diretamente em vez de depender do estado
+      const serviceIdString = serviceResult.toString()
       
       // Definir serviço como ativo
       setActiveServiceId(serviceIdString)
       
+      // Atualizar o estado também (para consistência)
+      setCreatedServiceId(serviceIdString)
+      
+      console.log('✅ ID do serviço configurado:', serviceIdString)
+      
       // Ir para tela de espera do prestador
       handleScreenTransition('waiting-driver')
       
-      // Iniciar polling para verificar quando o prestador aceitar
-      startServiceStatusPolling(serviceIdString)
+      // Iniciar busca de prestador com localização real
+      startProviderSearch(serviceIdString)
       
       console.log('🔍 Polling iniciado - aguardando prestador aceitar o serviço...')
       console.log('📋 ID do serviço sendo monitorado:', serviceIdString)
@@ -5269,7 +5310,7 @@ const handleServiceCreate = async () => {
       
       // Tentar buscar dados do contratante que incluem id_localizacao
       if (loggedUser?.id) {
-        const response = await fetchWithAuth(`https://servidor-facilita.onrender.com/v1/facilita/contratante?id_usuario=${loggedUser.id}`)
+        const response = await fetchWithAuth(`${API_BASE_URL}/contratante?id_usuario=${loggedUser.id}`)
         
         if (response.ok) {
           const data = await response.json()
@@ -5317,9 +5358,9 @@ const handleServiceCreate = async () => {
         // Tentar buscar usando endpoint que aceita id_usuario como query param ou path
         // Primeiro tentar: /contratante?id_usuario=32
         console.log('🔍 Tentativa 1: Buscar por id_usuario via query param')
-        console.log('🔍 URL:', `https://servidor-facilita.onrender.com/v1/facilita/contratante?id_usuario=${loggedUser.id}`)
+        console.log('🔍 URL:', `${API_BASE_URL}/contratante?id_usuario=${loggedUser.id}`)
         
-        let response = await fetchWithAuth(`https://servidor-facilita.onrender.com/v1/facilita/contratante?id_usuario=${loggedUser.id}`)
+        let response = await fetchWithAuth(`${API_BASE_URL}/contratante?id_usuario=${loggedUser.id}`)
         
         if (response.ok) {
           const data = await response.json()
@@ -5506,15 +5547,15 @@ const handleServiceCreate = async () => {
       // Tentar diferentes formatos de URL para buscar TODOS os pedidos
       const possibleUrls = [
         // URLs específicas para listar todos os pedidos do contratante
-        `https://servidor-facilita.onrender.com/v1/facilita/servico?id_contratante=${contratanteId}`,
-        `https://servidor-facilita.onrender.com/v1/facilita/servico/contratante/${contratanteId}`,
-        `https://servidor-facilita.onrender.com/v1/facilita/servico/contratante/${contratanteId}/todos`,
-        `https://servidor-facilita.onrender.com/v1/facilita/servico/contratante/${contratanteId}/pedidos`,
-        `https://servidor-facilita.onrender.com/v1/facilita/servico/contratante/pedidos?id_contratante=${contratanteId}`,
-        `https://servidor-facilita.onrender.com/v1/facilita/servico/pedidos?contratante=${contratanteId}`,
-        `https://servidor-facilita.onrender.com/v1/facilita/servico/lista?contratante_id=${contratanteId}`,
+        `${API_BASE_URL}/servico?id_contratante=${contratanteId}`,
+        `${API_BASE_URL}/servico/contratante/${contratanteId}`,
+        `${API_BASE_URL}/servico/contratante/${contratanteId}/todos`,
+        `${API_BASE_URL}/servico/contratante/${contratanteId}/pedidos`,
+        `${API_BASE_URL}/servico/contratante/pedidos?id_contratante=${contratanteId}`,
+        `${API_BASE_URL}/servico/pedidos?contratante=${contratanteId}`,
+        `${API_BASE_URL}/servico/lista?contratante_id=${contratanteId}`,
         // Tentar também com POST se GET não funcionar
-        `https://servidor-facilita.onrender.com/v1/facilita/servico/contratante/pedidos`
+        `${API_BASE_URL}/servico/contratante/pedidos`
       ]
       
       console.log('👤 Usuário logado completo:', loggedUser)
@@ -5901,8 +5942,8 @@ const handleServiceCreate = async () => {
         
         // Se temos id_contratante, usar direto. Senão, usar query param com id_usuario
         const url = loggedUser.id_contratante 
-          ? `https://servidor-facilita.onrender.com/v1/facilita/contratante/${idParaVerificar}`
-          : `https://servidor-facilita.onrender.com/v1/facilita/contratante?id_usuario=${idParaVerificar}`
+          ? `${API_BASE_URL}/contratante/${idParaVerificar}`
+          : `${API_BASE_URL}/contratante?id_usuario=${idParaVerificar}`
         
         console.log('🔍 URL verificação perfil:', url)
         const profileCheck = await fetchWithAuth(url)
@@ -6230,30 +6271,48 @@ const handleServiceCreate = async () => {
           return null
         }
         
-        // Tentar extrair ID do serviço de vários formatos possíveis
-        let serviceId = findServiceId(data)
+        // Baseado na documentação oficial da API, a resposta tem formato:
+        // { "status_code": 201, "message": "...", "data": { "id": 34, ... } }
+        let serviceId = null
         
-        // Fallback: tentar localizações específicas conhecidas
-        if (!serviceId) {
+        console.log('🔍 Analisando estrutura da resposta da API:')
+        console.log('  - Chaves principais:', Object.keys(data))
+        console.log('  - data existe?', !!data.data)
+        console.log('  - data.id existe?', !!data.data?.id)
+        console.log('  - Valor de data.id:', data.data?.id)
+        
+        // Primeiro, tentar o formato oficial da documentação
+        if (data.data && data.data.id) {
+          serviceId = data.data.id
+          console.log('✅ ID encontrado no formato oficial (data.id):', serviceId)
+        }
+        // Fallback para outros formatos possíveis
+        else {
+          console.log('⚠️ Formato oficial não encontrado, tentando fallbacks...')
+          
           const fallbackPaths = [
-            data.id,
-            data.servico_id,
-            data.service_id,
-            data.data?.id,
-            data.data?.servico?.id,
-            data.data?.servico_id,
-            data.servico?.id,
-            data.service?.id,
-            data.result?.id,
-            data.response?.id
+            { path: 'data.id', value: data.data?.id },
+            { path: 'id', value: data.id },
+            { path: 'data.servico.id', value: data.data?.servico?.id },
+            { path: 'servico.id', value: data.servico?.id },
+            { path: 'service.id', value: data.service?.id },
+            { path: 'data.service_id', value: data.data?.service_id },
+            { path: 'service_id', value: data.service_id },
+            { path: 'servico_id', value: data.servico_id }
           ]
           
-          for (let i = 0; i < fallbackPaths.length; i++) {
-            if (fallbackPaths[i] !== undefined && fallbackPaths[i] !== null) {
-              serviceId = fallbackPaths[i]
-              console.log(`🎯 ID encontrado no fallback ${i}:`, serviceId)
+          for (const fallback of fallbackPaths) {
+            if (fallback.value !== undefined && fallback.value !== null) {
+              serviceId = fallback.value
+              console.log(`🎯 ID encontrado via fallback (${fallback.path}):`, serviceId)
               break
             }
+          }
+          
+          // Se ainda não encontrou, usar busca recursiva
+          if (!serviceId) {
+            console.log('🔍 Tentando busca recursiva...')
+            serviceId = findServiceId(data)
           }
         }
         
@@ -6292,8 +6351,19 @@ Usando ID temporário: ${tempId}`)
         console.log('🆔 ID do serviço criado:', serviceId)
         console.log('🔍 Tipo do ID:', typeof serviceId)
         console.log('💾 Salvando createdServiceId no estado...')
-        setCreatedServiceId(serviceId)
-        console.log('✅ createdServiceId salvo:', serviceId)
+        
+        // Garantir que o ID seja uma string válida
+        const serviceIdString = serviceId.toString()
+        setCreatedServiceId(serviceIdString)
+        console.log('✅ createdServiceId salvo:', serviceIdString)
+        
+        // Verificação imediata para debug
+        setTimeout(() => {
+          console.log('🔍 Verificação pós-setState:')
+          console.log('  - serviceId original:', serviceId)
+          console.log('  - serviceIdString:', serviceIdString)
+          console.log('  - Estado atual (pode não estar atualizado ainda):', createdServiceId)
+        }, 10)
         
         // Extrair informações do serviço da resposta
         const servicoData = data.data?.servico || data.servico || data
@@ -6319,7 +6389,9 @@ Usando ID temporário: ${tempId}`)
         
         console.log('💾 Serviço salvo no localStorage:', serviceInfo)
         
-        return true
+        // Retornar o ID do serviço em vez de apenas true
+        console.log('🔄 Retornando ID do serviço:', serviceIdString)
+        return serviceIdString
       } else {
         // Tratar erros da API sem expor dados sensíveis
         try {
@@ -6404,7 +6476,7 @@ Usando ID temporário: ${tempId}`)
                     }
                     localStorage.setItem('currentService', JSON.stringify(serviceInfo))
                     
-                    return true
+                    return serviceId.toString()
                   }
                 } else {
                   // Tratar erro 400 na segunda tentativa
@@ -6469,7 +6541,7 @@ Usando ID temporário: ${tempId}`)
                             }
                             localStorage.setItem('currentService', JSON.stringify(serviceInfo))
                             
-                            return true
+                            return serviceId.toString()
                           }
                         } else {
                           console.error('❌ Falha na terceira tentativa também:', ultraSimpleResponse.status)
@@ -6776,10 +6848,10 @@ Usando ID temporário: ${tempId}`)
               {/* Animação de loading */}
               <div className="mb-6">
                 <div className="relative w-32 h-32 mx-auto">
-                  <div className="absolute inset-0 border-8 border-blue-200 rounded-full"></div>
-                  <div className="absolute inset-0 border-8 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+                  <div className="absolute inset-0 border-8 border-green-200 rounded-full"></div>
+                  <div className="absolute inset-0 border-8 border-green-500 rounded-full border-t-transparent animate-spin"></div>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <svg className="w-16 h-16 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-16 h-16 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                   </div>
@@ -8846,7 +8918,7 @@ Usando ID temporário: ${tempId}`)
             <div className="text-center mb-8">
               <div className="relative inline-block mb-4">
                 <div className="w-24 h-24 bg-blue-200 rounded-full flex items-center justify-center mx-auto overflow-hidden">
-                  {profileData.foto ? (
+                  {profileData.foto && profileData.foto instanceof File ? (
                     <img 
                       src={URL.createObjectURL(profileData.foto)} 
                       alt="Foto do perfil" 
