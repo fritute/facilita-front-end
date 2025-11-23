@@ -45,12 +45,12 @@ class WebSocketService {
   private reconnectDelay = 1000
 
   // URLs do WebSocket
-  private readonly WEBSOCKET_URL = 'wss://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net'
+  private readonly WEBSOCKET_URL = import.meta.env?.VITE_WS_URL || 'ws://localhost:3001'
 
   connect(): Promise<boolean> {
     return new Promise((resolve, reject) => {
       try {
-        console.log('🔌 Conectando ao WebSocket:', this.WEBSOCKET_URL)
+        // Conectando ao WebSocket
         
         this.socket = io(this.WEBSOCKET_URL, {
           transports: ['websocket'],
@@ -59,22 +59,21 @@ class WebSocketService {
         })
 
         this.socket.on('connect', () => {
-          console.log('✅ WebSocket conectado com sucesso')
-          console.log('🆔 Socket ID:', this.socket?.id)
+          // WebSocket conectado com sucesso
           this.isConnected = true
           this.reconnectAttempts = 0
           resolve(true)
         })
 
         this.socket.on('connect_error', (error) => {
-          console.error('❌ Erro na conexão WebSocket:', error)
+          // Erro na conexão WebSocket
           this.isConnected = false
           this.handleReconnect()
           reject(error)
         })
 
         this.socket.on('disconnect', (reason) => {
-          console.log('🔌 WebSocket desconectado:', reason)
+          // WebSocket desconectado
           this.isConnected = false
           if (reason === 'io server disconnect') {
             // Servidor desconectou, tentar reconectar
@@ -85,13 +84,13 @@ class WebSocketService {
         // Timeout para conexão
         setTimeout(() => {
           if (!this.isConnected) {
-            console.error('⏰ Timeout na conexão WebSocket')
+            // Timeout na conexão WebSocket
             reject(new Error('Timeout na conexão'))
           }
         }, 10000)
 
       } catch (error) {
-        console.error('❌ Erro ao inicializar WebSocket:', error)
+        // Erro ao inicializar WebSocket
         reject(error)
       }
     })
@@ -100,15 +99,15 @@ class WebSocketService {
   private handleReconnect() {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++
-      console.log(`🔄 Tentativa de reconexão ${this.reconnectAttempts}/${this.maxReconnectAttempts}`)
+      // Tentativa de reconexão
       
       setTimeout(() => {
-        this.connect().catch(error => {
-          console.error('❌ Falha na reconexão:', error)
+        this.connect().catch(() => {
+          // Falha na reconexão
         })
       }, this.reconnectDelay * this.reconnectAttempts)
     } else {
-      console.error('❌ Máximo de tentativas de reconexão atingido')
+      // Máximo de tentativas de reconexão atingido
     }
   }
 
@@ -120,7 +119,7 @@ class WebSocketService {
         return
       }
 
-      console.log('🔐 Autenticando usuário:', userData)
+      // Autenticando usuário
       
       // Enviar exatamente como na documentação
       this.socket.emit('user_connected', {
@@ -131,13 +130,13 @@ class WebSocketService {
       
       // Escutar resposta de conexão estabelecida
       this.socket.once('connection_established', (response) => {
-        console.log('✅ Conexão estabelecida:', response)
+        // Conexão estabelecida
         resolve(response)
       })
 
       // Timeout para autenticação
       setTimeout(() => {
-        console.log('✅ User connected enviado, continuando...')
+        // User connected enviado
         resolve({ success: true })
       }, 2000)
     })
@@ -151,20 +150,20 @@ class WebSocketService {
         return
       }
 
-      console.log('🏠 Entrando na sala do serviço:', servicoId)
+      // Entrando na sala do serviço
       
       // Enviar evento join_servico conforme documentação (apenas o número do serviço)
       this.socket.emit('join_servico', parseInt(servicoId.toString()))
       
       // Escutar confirmação de entrada na sala
       this.socket.once('joined_servico', (response) => {
-        console.log('✅ Entrou na sala do serviço:', response)
+        // Entrou na sala do serviço
         resolve(response)
       })
 
       // Timeout
       setTimeout(() => {
-        console.log('✅ Join servico enviado, continuando...')
+        // Join servico enviado
         resolve({ success: true, servicoId })
       }, 2000)
     })
@@ -173,23 +172,23 @@ class WebSocketService {
   // Enviar localização
   sendLocation(locationData: LocationData) {
     if (!this.socket || !this.isConnected) {
-      console.error('❌ WebSocket não conectado para enviar localização')
+      // WebSocket não conectado para enviar localização
       return
     }
 
-    console.log('📍 Enviando localização:', locationData)
+    // Enviando localização
     this.socket.emit('update_location', locationData)
   }
 
   // Escutar atualizações de localização
   onLocationUpdate(callback: (data: LocationUpdate) => void) {
     if (!this.socket) {
-      console.error('❌ WebSocket não conectado para escutar localização')
+      // WebSocket não conectado para escutar localização
       return
     }
 
     this.socket.on('location_updated', (data: LocationUpdate) => {
-      console.log('📍 Localização atualizada recebida:', data)
+      // Localização atualizada recebida
       callback(data)
     })
   }
@@ -197,7 +196,7 @@ class WebSocketService {
   // Enviar mensagem no chat
   sendMessage(messageData: MessageData) {
     if (!this.socket || !this.isConnected) {
-      console.error('❌ WebSocket não conectado para enviar mensagem')
+      // WebSocket não conectado para enviar mensagem
       return
     }
 
@@ -209,19 +208,19 @@ class WebSocketService {
       targetUserId: messageData.targetUserId
     }
 
-    console.log('💬 Enviando mensagem via WebSocket:', payload)
+    // Enviando mensagem via WebSocket
     this.socket.emit('send_message', payload)
   }
 
   // Escutar mensagens do chat
   onMessageReceived(callback: (message: ReceivedMessage) => void) {
     if (!this.socket) {
-      console.error('❌ WebSocket não conectado para escutar mensagens')
+      // WebSocket não conectado para escutar mensagens
       return
     }
 
     this.socket.on('receive_message', (message: ReceivedMessage) => {
-      console.log('💬 Mensagem recebida via WebSocket:', message)
+      // Mensagem recebida via WebSocket
       callback(message)
     })
   }
@@ -229,7 +228,7 @@ class WebSocketService {
   // Desconectar
   disconnect() {
     if (this.socket) {
-      console.log('🔌 Desconectando WebSocket')
+      // Desconectando WebSocket
       this.socket.disconnect()
       this.socket = null
       this.isConnected = false

@@ -1,7 +1,7 @@
 // Constantes e configurações da aplicação
 
 // API Base URL
-export const API_BASE_URL = 'https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita'
+export const API_BASE_URL = import.meta.env?.VITE_API_URL || 'https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita'
 
 // API Endpoints
 export const API_ENDPOINTS = {
@@ -54,7 +54,7 @@ export const API_ENDPOINTS = {
   WALLET_TRANSACTIONS: (walletId: string) => `${API_BASE_URL}/transacao/${walletId}`, // GET - Listar transações (CORRIGIDO: singular)
   CREATE_TRANSACTION: `${API_BASE_URL}/transacoes/registrar`, // POST - Registrar transação manual
   PAYMENT_WEBHOOK: `${API_BASE_URL}/pagamento/webhook`, // POST - Webhook PagBank (CORRECTED)
-  PAYMENT_WITH_WALLET: `${API_BASE_URL}/servico/pagar`, // POST - Pagar serviço com carteira (CORRECTED)
+  PAYMENT_WITH_WALLET: `${API_BASE_URL}/servico/pagar`, // POST - Pagar serviço com carteira
   
   // Serviços - Endpoints adicionais
   SERVICE_ACCEPT: (id: string) => `${API_BASE_URL}/servico/${id}/aceitar`, // POST - Prestador aceita serviço

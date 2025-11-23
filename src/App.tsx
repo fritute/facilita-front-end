@@ -16,7 +16,6 @@ import { handDetectionService } from './services/handDetectionService'
 import { useNotifications } from './hooks/useNotifications'
 import { uploadImage } from './services/uploadImageToAzure'
 import { handleProfilePhotoUpload } from './utils/profilePhotoHandler'
-import { runWebSocketTests } from './utils/websocketTest'
 //TELAS PARA TESTES E PARA MOVER
 type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
 
@@ -955,21 +954,19 @@ function App() {
   // Função para buscar categorias de serviço da API
   const fetchServiceCategories = async () => {
     setLoadingCategories(true)
-    console.log('🔍 Buscando categorias de serviço...')
-    console.log('🌐 URL:', API_ENDPOINTS.CATEGORIES)
+    // Buscando categorias de serviço
     
     try {
       const response = await fetch(API_ENDPOINTS.CATEGORIES)
-      console.log('📥 Resposta recebida - Status:', response.status)
+      // Resposta recebida
       
       if (response.ok) {
         const data = await response.json()
-        console.log('✅ Categorias recebidas:', data)
-        console.log('📊 Quantidade de categorias:', Array.isArray(data) ? data.length : 'Não é array')
+        // Categorias recebidas
         
         // A API pode retornar { data: [...] } ou diretamente [...]
         const categories = Array.isArray(data) ? data : (data.data || [])
-        console.log('📋 Categorias processadas:', categories)
+        // Categorias processadas
         
         setServiceCategories(categories)
       } else {
@@ -1120,7 +1117,7 @@ function App() {
     if (walletKey && balanceKey) {
       localStorage.setItem(walletKey, JSON.stringify(walletData))
       localStorage.setItem(balanceKey, balance.toString())
-      console.log(`💾 Carteira do usuário ${userId} salva no localStorage`)
+      // Carteira salva no localStorage
     }
   }
 
@@ -1148,7 +1145,7 @@ function App() {
     if (walletKey && balanceKey) {
       localStorage.removeItem(walletKey)
       localStorage.removeItem(balanceKey)
-      console.log(`🗑️ Carteira do usuário ${userId} removida do localStorage`)
+      // Carteira removida do localStorage
     }
   }
 
@@ -1281,9 +1278,7 @@ function App() {
         return
       }
 
-      console.log('🔍 Testando busca da carteira via token...')
-      console.log('🌐 URL:', API_ENDPOINTS.MY_WALLET)
-      console.log('🔑 Token:', token ? `${token.substring(0, 20)}...` : 'NENHUM')
+      // Testando busca da carteira via token
 
       const response = await fetch(API_ENDPOINTS.MY_WALLET, {
         method: 'GET',
@@ -1302,11 +1297,8 @@ function App() {
         // Atualizar estados com dados reais
         if (data && data.data) {
           const walletInfo = data.data
-          console.log('💰 Saldo recebido (string):', walletInfo.saldo)
-          
           // Converter saldo de string para número
           const balance = parseFloat(walletInfo.saldo) || 0
-          console.log('💰 Saldo convertido (número):', balance)
           
           setWalletData(walletInfo)
           setWalletBalance(balance)
@@ -3716,6 +3708,12 @@ function App() {
           // Verificar se prestador aceitou (pode estar em diferentes status)
           const prestadorAceitou = (service.status === 'EM_ANDAMENTO' || service.status === 'ACEITO') && service.id_prestador
           
+          console.log('🎯 VERIFICAÇÃO CRÍTICA:')
+          console.log('   - prestadorAceitou:', prestadorAceitou)
+          console.log('   - shouldStopPolling atual:', shouldStopPolling)
+          console.log('   - isSearchingProvider atual:', isSearchingProvider)
+          console.log('   - currentScreen atual:', currentScreen)
+          
           if (prestadorAceitou) {
             console.log('✅ Prestador aceitou o serviço!')
             console.log('📋 Dados do serviço:', service)
@@ -3811,11 +3809,31 @@ function App() {
               setServiceStartTime(new Date())
               
               // Fazer transição para tracking imediatamente
-              console.log('🚀 Redirecionando para service-tracking...')
+              console.log('🚀 INICIANDO REDIRECIONAMENTO PARA SERVICE-TRACKING...')
+              console.log('📊 Estado antes da transição:')
+              console.log('   - currentScreen:', currentScreen)
+              console.log('   - isSearchingProvider:', isSearchingProvider)
+              console.log('   - shouldStopPolling:', shouldStopPolling)
+              
+              // Forçar parada de busca
+              setIsSearchingProvider(false)
+              
+              // CORREÇÃO: Forçar transição imediata sem setTimeout
+              console.log('🎯 EXECUTANDO handleScreenTransition("service-tracking") IMEDIATAMENTE')
+              handleScreenTransition('service-tracking')
+              console.log('✅ Transição para tracking executada')
+              
+              // Verificação adicional: se não funcionou, tentar novamente
               setTimeout(() => {
-                handleScreenTransition('service-tracking')
-                console.log('✅ Transição para tracking concluída')
-              }, 100)
+                console.log('🔍 Verificando se transição funcionou:')
+                console.log('   - currentScreen após transição:', currentScreen)
+                
+                if (currentScreen !== 'service-tracking') {
+                  console.log('⚠️ Transição não funcionou, tentando novamente...')
+                  setCurrentScreen('service-tracking')
+                  setIsTransitioning(false)
+                }
+              }, 500)
               
             } catch (error) {
               console.error('❌ Erro ao buscar dados do prestador:', error)
@@ -6945,7 +6963,6 @@ Usando ID temporário: ${tempId}`)
       }`}>
         <div className="bg-green-500 text-white p-4 relative">
           <button
-          //TALVEZ SEJA ESSA
             onClick={() => handleScreenTransition('home')}
             className="absolute left-4 top-4 text-white hover:text-gray-200"
           >
@@ -6954,9 +6971,6 @@ Usando ID temporário: ${tempId}`)
           <div className="text-center">
             <h1 className="text-lg font-bold">Você está quase lá...!</h1>
           </div>
-          <button className="absolute right-4 top-4 text-white">
-            Voltar
-          </button>
         </div>
 
         <div className="flex flex-col lg:flex-row min-h-screen">
@@ -10767,7 +10781,5 @@ Usando ID temporário: ${tempId}`)
   
 }
 
-// Disponibilizar testes WebSocket no console
-runWebSocketTests()
 
 export default App

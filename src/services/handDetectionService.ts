@@ -6,7 +6,7 @@ export class HandDetectionService {
   private hands: Hands | null = null
   private onResultsCallback: ((results: any) => void) | null = null
   private currentWord = ''
-  private sentence = ''
+  private sentence = '' 
   private lastLetter = ''
   private lastTime = 0
 

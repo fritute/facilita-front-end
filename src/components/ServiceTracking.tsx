@@ -3,11 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ArrowLeft, MessageSquare, Star, Clock, CheckCircle } from 'lucide-react';
-import ChatModal from './ChatModal';
+import { ArrowLeft, Star, Clock, CheckCircle, Phone } from 'lucide-react';
 import WebSocketStatus from './WebSocketStatus';
 import { ServiceTrackingManager, ServiceTrackingState } from '../utils/serviceTrackingUtils';
 import useWebSocket from '../hooks/useWebSocket';
+import { API_ENDPOINTS } from '../config/constants';
+import { notificationService } from '../services/notificationService';
 
 // Fix para ícones do Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -75,12 +76,60 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>(savedState?.routeCoordinates || []);
   const [currentRouteIndex, setCurrentRouteIndex] = useState(savedState?.currentRouteIndex || 0);
   const [estimatedTime, setEstimatedTime] = useState<number>(savedState?.estimatedTime || 0);
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [serviceStartTime] = useState<Date>(savedState?.serviceStartTime ? new Date(savedState.serviceStartTime) : new Date());
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [isServiceCompleted, setIsServiceCompleted] = useState(savedState?.isServiceCompleted || false);
   const [isPaused, setIsPaused] = useState(false);
   const [hasShownCompletionMessage, setHasShownCompletionMessage] = useState(false);
+  const [isFinishingService, setIsFinishingService] = useState(false);
+
+  // Função para finalizar serviço via API
+  const finishService = async () => {
+    if (!savedState?.serviceId) {
+      notificationService.showError('Erro', 'ID do serviço não encontrado');
+      return;
+    }
+
+    try {
+      setIsFinishingService(true);
+      const token = localStorage.getItem('authToken');
+      
+      if (!token) {
+        notificationService.showError('Erro', 'Token de autenticação não encontrado');
+        return;
+      }
+
+      const response = await fetch(API_ENDPOINTS.SERVICE_FINISH(savedState.serviceId), {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        await response.json();
+        notificationService.showSuccess('Serviço Finalizado', 'Serviço finalizado com sucesso! Aguardando confirmação do contratante.');
+        
+        // Atualizar progresso para 100% e marcar como concluído
+        setProgress(100);
+        setIsServiceCompleted(true);
+        
+        // Redirecionar para tela de pagamento após 2 segundos
+        setTimeout(() => {
+          onServiceCompleted();
+        }, 2000);
+      } else {
+        const errorData = await response.json();
+        notificationService.showError('Erro', errorData.message || 'Não foi possível finalizar o serviço');
+      }
+    } catch (error) {
+      console.error('Erro ao finalizar serviço:', error);
+      notificationService.showError('Erro', 'Erro de conexão ao finalizar serviço');
+    } finally {
+      setIsFinishingService(false);
+    }
+  };
 
   // WebSocket para tracking em tempo real
   const serviceId = localStorage.getItem('currentServiceId') || savedState?.serviceId
@@ -467,12 +516,18 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
               )}
             </div>
             <div className="flex flex-col space-y-2 ml-4">
+              
+              {/* Botão de Ligação Telefônica */}
               <button 
-                onClick={() => setIsChatOpen(true)}
-                className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold hover:bg-opacity-90 transition-all flex items-center space-x-2"
+                onClick={() => {
+                  // Abrir discador do telefone com o número do prestador
+                  const phoneNumber = entregador.telefone.replace(/\D/g, '') // Remove caracteres não numéricos
+                  window.open(`tel:${phoneNumber}`, '_self')
+                }}
+                className="bg-blue-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-blue-600 transition-all flex items-center space-x-2"
               >
-                <MessageSquare className="w-4 h-4" />
-                <span>Conversar</span>
+                <Phone className="w-4 h-4" />
+                <span>Ligar</span>
               </button>
               
               {/* Botão de tracking de localização */}
@@ -505,15 +560,21 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
                   </button>
                   
                   <button 
-                    onClick={() => {
-                      setProgress(100);
-                      setTimeout(() => {
-                        onServiceCompleted();
-                      }, 500);
-                    }}
-                    className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors"
+                    onClick={finishService}
+                    disabled={isFinishingService}
+                    className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
                   >
-                    Encerrar
+                    {isFinishingService ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Finalizando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Finalizar Serviço</span>
+                      </>
+                    )}
                   </button>
                 </>
               )}
@@ -523,14 +584,6 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
 
       </div>
 
-      {/* Chat Modal */}
-      <ChatModal
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        driverName={entregador.nome}
-        driverPhone={entregador.telefone}
-        serviceId={savedState?.serviceId ? parseInt(savedState.serviceId) : undefined}
-      />
     </div>
   );
 };
