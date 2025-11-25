@@ -6692,16 +6692,17 @@ Usando ID temporário: ${tempId}`)
     const paymentSuccess = await payServiceWithWallet(serviceId)
     
     if (paymentSuccess) {
-      // Limpar dados do serviço após pagamento confirmado
-      setCreatedServiceId(null)
-      setActiveServiceId(null)
-      ServiceTrackingManager.clearActiveService()
+      // NÃO limpar IDs ainda - precisamos deles para service-details e avaliação
+      // Só limpar depois da avaliação final
       
       // Mostrar mensagem de sucesso
       notificationService.showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Voltando para o rastreamento...')
       
       // Marcar serviço como pago no localStorage
       localStorage.setItem('servicePaid', 'true')
+      localStorage.setItem('lastPaidServiceId', serviceId.toString())
+      
+      console.log('💰 Pagamento confirmado para serviço:', serviceId)
       
       // Redirecionar para tracking após pagamento
       setTimeout(() => {
@@ -6824,7 +6825,19 @@ Usando ID temporário: ${tempId}`)
     return (
       <ServiceRating
         onBack={() => handleScreenTransition('service-tracking')}
-        onFinish={() => handleScreenTransition('home')}
+        onFinish={() => {
+          // Limpar todos os IDs do serviço após avaliação
+          console.log('🧹 Limpando IDs do serviço após avaliação');
+          setCreatedServiceId(null);
+          setActiveServiceId(null);
+          localStorage.removeItem('currentServiceId');
+          localStorage.removeItem('servicePaid');
+          localStorage.removeItem('lastPaidServiceId');
+          ServiceTrackingManager.clearActiveService();
+          
+          // Voltar para home
+          handleScreenTransition('home');
+        }}
         entregador={entregadorData}
         serviceCompletionTime={serviceCompletionTime || new Date()}
         serviceStartTime={serviceStartTime || new Date(Date.now() - 300000)} // 5 min atrás como exemplo
@@ -6846,12 +6859,30 @@ Usando ID temporário: ${tempId}`)
     console.log('🆔 ServiceDetailsScreen - ID do serviço:', serviceIdToUse);
     console.log('📦 Fontes:', { storedServiceId, activeServiceId, createdServiceId });
     
-    // Se não tiver ID válido, voltar para home
+    // Se não tiver ID válido, mostrar mensagem e componente vazio que redireciona
     if (!serviceIdToUse || serviceIdToUse === 0) {
-      console.error('❌ ID do serviço inválido, voltando para home');
-      notificationService.showError('Erro', 'ID do serviço não encontrado');
-      handleScreenTransition('home');
-      return null;
+      console.error('❌ ID do serviço inválido');
+      
+      // Componente temporário que redireciona
+      const RedirectHome = () => {
+        React.useEffect(() => {
+          notificationService.showError('Erro', 'ID do serviço não encontrado');
+          const timer = setTimeout(() => {
+            handleScreenTransition('home');
+          }, 100);
+          return () => clearTimeout(timer);
+        }, []);
+        
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-gray-100">
+            <div className="text-center">
+              <p className="text-gray-600">Redirecionando...</p>
+            </div>
+          </div>
+        );
+      };
+      
+      return <RedirectHome />;
     }
     
     return (

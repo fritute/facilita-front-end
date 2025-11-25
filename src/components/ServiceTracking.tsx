@@ -120,15 +120,22 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isStartingCall, setIsStartingCall] = useState(false);
   const [servicePaid, setServicePaid] = useState(false); // Controla se o serviço foi pago
+  const [showCancelModal, setShowCancelModal] = useState(false); // Modal de confirmação de cancelamento
 
   // Verificar se o serviço foi pago (via localStorage) quando voltar da tela de pagamento
   useEffect(() => {
     const paid = localStorage.getItem('servicePaid') === 'true';
-    if (paid) {
-      console.log('✅ Serviço já foi pago - habilitando botão de finalizar');
+    const currentServiceIdCheck = getCurrentServiceId();
+    const lastPaidServiceId = localStorage.getItem('lastPaidServiceId');
+    
+    // Só marcar como pago se for o mesmo serviço
+    if (paid && currentServiceIdCheck && lastPaidServiceId === currentServiceIdCheck) {
+      console.log('✅ Serviço já foi pago - habilitando botão de cancelar');
       setServicePaid(true);
-      // Limpar flag após ler
-      // localStorage.removeItem('servicePaid'); // Não limpar ainda, só após finalizar
+    } else {
+      console.log('🆕 Novo serviço - botão de pagar habilitado');
+      setServicePaid(false);
+      localStorage.removeItem('servicePaid');
     }
   }, []);
 
@@ -277,11 +284,13 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     }
   };
 
-  // Função para finalizar serviço via API (só pode finalizar se foi pago)
-  const finishService = async () => {
+  // Função para cancelar serviço
+  const cancelService = async () => {
+    setShowCancelModal(false);
+    
     // Verificar se o serviço foi pago
     if (!servicePaid) {
-      notificationService.showWarning('Pagamento Necessário', 'O serviço precisa ser pago antes de finalizar');
+      notificationService.showWarning('Pagamento Necessário', 'O serviço precisa ser pago antes de cancelar');
       return;
     }
 
@@ -310,10 +319,11 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
 
       if (response.ok) {
         await response.json();
-        notificationService.showSuccess('Serviço Finalizado', 'Serviço finalizado com sucesso!');
+        notificationService.showSuccess('Serviço Cancelado', 'Serviço cancelado com sucesso!');
         
-        // Limpar flag de pagamento
+        // Limpar flags de pagamento
         localStorage.removeItem('servicePaid');
+        localStorage.removeItem('lastPaidServiceId');
         
         setProgress(100);
         setIsServiceCompleted(true);
@@ -852,10 +862,10 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
               </button>
             )}
             
-            {/* Botão de Finalizar Serviço (só aparece se foi pago) */}
+            {/* Botão de Cancelar Serviço (só aparece se foi pago) */}
             {servicePaid && (
               <button 
-                onClick={finishService}
+                onClick={() => setShowCancelModal(true)}
                 disabled={isFinishingService}
                 className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center space-x-2"
               >
@@ -863,8 +873,8 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <>
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Finalizar</span>
+                    <X className="w-5 h-5" />
+                    <span>Cancelar</span>
                   </>
                 )}
               </button>
@@ -1016,6 +1026,38 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
           onToggleAudio={toggleAudio}
           onClose={handleCloseCall}
         />
+      )}
+
+      {/* Modal de Confirmação de Cancelamento */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-sm mx-4 shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <X className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Cancelar Serviço?</h3>
+              <p className="text-gray-600">
+                Tem certeza que deseja cancelar este serviço? Esta ação não pode ser desfeita.
+              </p>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 px-4 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+              >
+                Não, voltar
+              </button>
+              <button
+                onClick={cancelService}
+                className="flex-1 px-4 py-3 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition-colors"
+              >
+                Sim, cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
