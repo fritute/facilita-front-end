@@ -3,6 +3,15 @@
 // API Base URL
 export const API_BASE_URL = import.meta.env?.VITE_API_URL || 'https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita'
 
+// WebSocket URLs
+export const WEBSOCKET_URLS = {
+  // Chat WebSocket - conforme documentação oficial
+  CHAT_DEV: 'wss://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net', // Usar produção sempre
+  CHAT_PROD: 'wss://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net', // Produção
+  // Usar APENAS a URL de produção
+  CHAT: 'wss://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net'
+}
+
 // API Endpoints
 export const API_ENDPOINTS = {
   // Autenticação
@@ -35,6 +44,7 @@ export const API_ENDPOINTS = {
   SERVICE_BY_ID: (id: string) => `${API_BASE_URL}/servico/${id}`,
   SERVICE_FROM_CATEGORY: (categoryId: number) => `${API_BASE_URL}/servico/from-categoria/${categoryId}`,
   SERVICES_BY_CONTRATANTE: (contratanteId: string) => `${API_BASE_URL}/servico?id_contratante=${contratanteId}`,
+  SERVICES_BY_STATUS_CONTRATANTE: (status: string, contratanteId: string) => `${API_BASE_URL}/servico/status/${status}?id_contratante=${contratanteId}`, // GET - Buscar serviços por status do contratante
   
   // Categorias
   CATEGORIES: `${API_BASE_URL}/categoria`,
@@ -64,10 +74,10 @@ export const API_ENDPOINTS = {
   SERVICES_IN_PROGRESS: (prestadorId: string) => `${API_BASE_URL}/servico/em-andamento/${prestadorId}`, // GET - Serviços em andamento do prestador
   SERVICE_DETAILS: (id: string) => `${API_BASE_URL}/servico/${id}/detalhes`, // GET - Detalhes de um pedido
   
-  // Notificações
-  NOTIFICATIONS: (userId: string) => `${API_BASE_URL}/notificacao/usuario/${userId}`, // GET - Buscar notificações
-  NOTIFICATION_READ: (id: string) => `${API_BASE_URL}/notificacao/${id}/lida`, // PUT - Marcar como lida
-  NOTIFICATIONS_READ_ALL: (userId: string) => `${API_BASE_URL}/notificacao/usuario/${userId}/lidas`, // PUT - Marcar todas como lidas
+  // Notificações (conforme documentação oficial)
+  NOTIFICATIONS: `${API_BASE_URL}/notificacao`, // GET - Buscar notificações do usuário logado
+  NOTIFICATION_READ: (id: string) => `${API_BASE_URL}/notificacao/${id}/lida`, // PATCH - Marcar como lida
+  NOTIFICATIONS_READ_ALL: `${API_BASE_URL}/notificacao/todas-lidas`, // PATCH - Marcar todas como lidas
   
   // Rastreamento
   TRACKING_START_MOVEMENT: `${API_BASE_URL}/rastreamento/iniciar-deslocamento`, // POST
@@ -81,6 +91,11 @@ export const API_ENDPOINTS = {
   RATING_CREATE: `${API_BASE_URL}/avaliacao`, // POST - Avaliar serviço
   RATING_BY_PROVIDER: (prestadorId: string) => `${API_BASE_URL}/avaliacao/prestador/${prestadorId}`, // GET - Ver avaliações do prestador
   RATING_BY_SERVICE: (serviceId: string) => `${API_BASE_URL}/avaliacao/servico/${serviceId}`, // GET - Ver avaliação do serviço
+  
+  // Chat - conforme documentação oficial (verificar se endpoints existem)
+  CHAT_SEND_MESSAGE: (serviceId: string) => `${API_BASE_URL}/chat/${serviceId}/mensagem`, // POST - Enviar mensagem
+  CHAT_GET_MESSAGES: (serviceId: string) => `${API_BASE_URL}/chat/${serviceId}/mensagens`, // GET - Buscar mensagens
+  CHAT_MARK_READ: (serviceId: string) => `${API_BASE_URL}/chat/${serviceId}/mensagens/marcar-lidas`, // PATCH - Marcar como lidas
 }
 
 // OpenStreetMap
@@ -185,3 +200,18 @@ export const SUCCESS_MESSAGES = {
   RATING_SUBMITTED: 'Avaliação enviada com sucesso!',
   PROFILE_UPDATED: 'Perfil atualizado com sucesso!',
 }
+
+// WebSocket Events - conforme documentação oficial
+export const WEBSOCKET_EVENTS = {
+  // Eventos que o cliente EMITE
+  USER_CONNECTED: 'user_connected',
+  JOIN_SERVICO: 'join_servico', 
+  SEND_MESSAGE: 'send_message',
+  DISCONNECT: 'disconnect',
+  
+  // Eventos que o cliente RECEBE
+  RECEIVE_MESSAGE: 'receive_message',
+  MESSAGE_NOTIFICATION: 'message_notification',
+  CONNECTION_ESTABLISHED: 'connection_established',
+  JOINED_SERVICE: 'joined_service',
+} as const

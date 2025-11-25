@@ -3,12 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ArrowLeft, Star, Clock, CheckCircle, Phone } from 'lucide-react';
+import { ArrowLeft, Star, CheckCircle, Phone, MessageCircle, X, Send, Video, PhoneCall } from 'lucide-react';
 import WebSocketStatus from './WebSocketStatus';
-import { ServiceTrackingManager, ServiceTrackingState } from '../utils/serviceTrackingUtils';
 import useWebSocket from '../hooks/useWebSocket';
 import { API_ENDPOINTS } from '../config/constants';
 import { notificationService } from '../services/notificationService';
+import { chatService, ChatMessage } from '../services/chatService';
+import CallInterface from './CallInterface';
+import { useCall } from '../hooks/useCall';
 
 // Fix para ícones do Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -18,74 +20,313 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Ícone customizado para o motorista
-const driverIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+// Função para criar ícone SVG customizado
+const createCustomIcon = (color: string, symbol?: string) => {
+  const svgIcon = `
+    <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12.5 0C5.6 0 0 5.6 0 12.5c0 12.5 12.5 28.5 12.5 28.5s12.5-16 12.5-28.5C25 5.6 19.4 0 12.5 0z" fill="${color}" stroke="#000" stroke-width="1"/>
+      <circle cx="12.5" cy="12.5" r="8" fill="white"/>
+      ${symbol ? `<text x="12.5" y="17" text-anchor="middle" font-size="10" font-weight="bold" fill="${color}">${symbol}</text>` : ''}
+    </svg>
+  `;
+  
+  return new L.DivIcon({
+    html: svgIcon,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    className: 'custom-marker-icon'
+  });
+};
 
-// Ícone customizado para o destino
-const destinationIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+// Ícones customizados mais robustos
+const driverIcon = createCustomIcon('#2563eb', '🚗'); // Azul
+const pickupIcon = createCustomIcon('#16a34a', '📍'); // Verde  
+const destinationIcon = createCustomIcon('#dc2626', '🎯'); // Vermelho
+
+// CSS para os ícones customizados
+const iconStyles = `
+  .custom-marker-icon {
+    background: none !important;
+    border: none !important;
+  }
+  .custom-marker-icon svg {
+    filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
+  }
+`;
+
+// Adicionar estilos ao documento
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = iconStyles;
+  document.head.appendChild(styleSheet);
+}
 
 interface ServiceTrackingProps {
   onBack: () => void;
-  onServiceCompleted: () => void; // Nova prop para quando o serviço for concluído
+  onServiceCompleted: () => void;
+  serviceId?: string;
   entregador: {
     nome: string;
     telefone: string;
     veiculo: string;
     placa: string;
-    rating: number;
+    rating: string;
     tempoEstimado: string;
-    distancia: string;
   };
   destination: {
+    lat: number;
+    lng: number;
     address: string;
+  };
+  driverOrigin?: {
     lat: number;
     lng: number;
   };
-  driverOrigin: {
+  pickupLocation?: {
     lat: number;
     lng: number;
+    address: string;
   };
 }
 
-const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceCompleted, entregador, destination, driverOrigin }) => {
-  // Carregar estado do serviço ativo
-  const savedState = ServiceTrackingManager.loadActiveService();
-  
-  // CORREÇÃO: Usar sempre a posição salva se existir
-  const initialDriverPosition = savedState?.driverPosition || {
-    lat: driverOrigin?.lat || -23.5324859,
-    lng: driverOrigin?.lng || -46.7916801
-  };
+const ServiceTracking: React.FC<ServiceTrackingProps> = ({
+  onBack,
+  onServiceCompleted,
+  serviceId,
+  entregador,
+  destination,
+  driverOrigin,
+  pickupLocation
+}) => {
+  // Debug dos props recebidos
+  console.log('🗺️ ServiceTracking - Props recebidos:', {
+    destination,
+    pickupLocation,
+    driverOrigin,
+    serviceId
+  });
 
-  const [driverPosition, setDriverPosition] = useState<{ lat: number; lng: number }>(initialDriverPosition);
-  const [progress, setProgress] = useState(savedState?.progress || 0);
-  const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>(savedState?.routeCoordinates || []);
-  const [currentRouteIndex, setCurrentRouteIndex] = useState(savedState?.currentRouteIndex || 0);
-  const [estimatedTime, setEstimatedTime] = useState<number>(savedState?.estimatedTime || 0);
-  const [serviceStartTime] = useState<Date>(savedState?.serviceStartTime ? new Date(savedState.serviceStartTime) : new Date());
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  const [isServiceCompleted, setIsServiceCompleted] = useState(savedState?.isServiceCompleted || false);
+  // Estados básicos
+  const [driverPosition, setDriverPosition] = useState(driverOrigin || { lat: -23.5324859, lng: -46.7916801 });
+  const [progress, setProgress] = useState(0);
+  const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
+  const [currentRouteIndex, setCurrentRouteIndex] = useState(0);
+  const [estimatedTime, setEstimatedTime] = useState(0);
+  const [serviceStartTime] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [isServiceCompleted, setIsServiceCompleted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [hasShownCompletionMessage, setHasShownCompletionMessage] = useState(false);
   const [isFinishingService, setIsFinishingService] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isStartingCall, setIsStartingCall] = useState(false);
+
+  // Hook de chamadas
+  const {
+    callState,
+    localStream,
+    remoteStream,
+    isInitialized: isCallInitialized,
+    initializeCall,
+    startVideoCall,
+    startAudioCall,
+    acceptCall,
+    rejectCall,
+    endCall,
+    toggleVideo,
+    toggleAudio
+  } = useCall();
+
+  // Função para obter ID do serviço
+  const getCurrentServiceId = () => {
+    console.log('🔍 ServiceTracking - Buscando serviceId...');
+    
+    // 1. Verificar prop serviceId
+    if (serviceId) {
+      console.log('✅ ServiceId encontrado via prop:', serviceId);
+      return serviceId;
+    }
+    
+    // 2. Verificar localStorage direto
+    const directIds = [
+      localStorage.getItem('currentServiceId'),
+      localStorage.getItem('createdServiceId'), 
+      localStorage.getItem('activeServiceId')
+    ].filter(Boolean);
+    
+    console.log('📊 IDs diretos encontrados:', directIds);
+    
+    if (directIds.length > 0) {
+      console.log('✅ ServiceId encontrado via localStorage:', directIds[0]);
+      return directIds[0];
+    }
+    
+    // 3. Verificar currentService
+    try {
+      const currentService = localStorage.getItem('currentService');
+      console.log('📄 currentService raw:', currentService);
+      
+      if (currentService) {
+        const serviceData = JSON.parse(currentService);
+        console.log('📊 serviceData parsed:', serviceData);
+        
+        const possibleIds = [
+          serviceData.id,
+          serviceData.serviceId,
+          serviceData.service_id,
+          serviceData.data?.id
+        ].filter(Boolean);
+        
+        console.log('🔍 Possíveis IDs encontrados:', possibleIds);
+        
+        if (possibleIds.length > 0) {
+          console.log('✅ ServiceId encontrado via currentService:', possibleIds[0]);
+          return possibleIds[0].toString();
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Erro ao parsear currentService:', error);
+    }
+    
+    console.log('❌ Nenhum serviceId encontrado!');
+    return null;
+  };
+
+  // Função para carregar mensagens do chat
+  const loadChatMessages = async () => {
+    const chatServiceId = getCurrentServiceId();
+    if (!chatServiceId) return;
+
+    try {
+      setIsLoadingMessages(true);
+      const result = await chatService.getMessages(chatServiceId);
+      
+      if (result.success && result.data) {
+        const messages = Array.isArray(result.data) ? result.data : [];
+        setChatMessages(messages);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar mensagens:', error);
+    } finally {
+      setIsLoadingMessages(false);
+    }
+  };
+
+  // Função para enviar mensagem no chat via API
+  const sendMessage = async () => {
+    if (!newMessage.trim()) return;
+    
+    const chatServiceId = getCurrentServiceId();
+    if (!chatServiceId) {
+      notificationService.showError('Chat', 'ID do serviço não encontrado');
+      return;
+    }
+
+    try {
+      const result = await chatService.sendTextMessage(chatServiceId, newMessage.trim());
+      
+      if (result.success) {
+        setNewMessage('');
+        await loadChatMessages();
+      } else {
+        notificationService.showError('Chat', result.message || 'Erro ao enviar mensagem');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao enviar mensagem:', error);
+      notificationService.showError('Chat', 'Erro de conexão');
+    }
+  };
+
+  // Função para configurar usuários reais (DEBUG)
+  const setupRealUsersForTracking = () => {
+    console.log('👥 ServiceTracking - Configurando usuários reais...');
+    
+    const contratante = {
+      id: 1,
+      name: 'Usuário Contratante',
+      phone: '+5511959272335',
+      type: 'contratante'
+    };
+    
+    const prestador = {
+      id: 2, 
+      name: 'Prestador Serviço',
+      phone: '+5511959272336',
+      type: 'prestador'
+    };
+    
+    // Salvar no localStorage
+    localStorage.setItem('realUserId', contratante.id.toString());
+    localStorage.setItem('realUserType', contratante.type);
+    localStorage.setItem('realUserName', contratante.name);
+    localStorage.setItem('realUserPhone', contratante.phone);
+    
+    localStorage.setItem('prestadorId', prestador.id.toString());
+    localStorage.setItem('prestadorName', prestador.name);
+    localStorage.setItem('prestadorPhone', prestador.phone);
+    
+    console.log('✅ Usuários reais configurados no ServiceTracking');
+    notificationService.showSuccess('Debug', 'Usuários reais configurados!');
+  };
+
+  // Função para ligar para o prestador
+  const callDriver = async () => {
+    console.log('📞 Tentativa de ligação para:', entregador.telefone);
+    console.log('📊 Estado do sistema:', {
+      isCallInitialized,
+      currentServiceId,
+      hasRealUserId: !!localStorage.getItem('realUserId')
+    });
+    
+    // Se sistema não inicializado, tentar inicializar primeiro
+    if (!isCallInitialized) {
+      console.log('⚠️ Sistema não inicializado, tentando inicializar...');
+      
+      if (!currentServiceId) {
+        console.error('❌ Sem serviceId, não é possível inicializar');
+        alert(`Sistema não disponível. Número: ${entregador.telefone}`);
+        return;
+      }
+      
+      // Usar dados de usuário real se disponível
+      const realUserId = localStorage.getItem('realUserId');
+      const realUserName = localStorage.getItem('realUserName');
+      
+      const userId = realUserId || localStorage.getItem('userId') || '1';
+      const userName = realUserName || localStorage.getItem('loggedUser') || entregador.nome;
+      
+      console.log('🚀 Tentando inicializar sistema com:', { currentServiceId, userId, userName });
+      
+      try {
+        const initialized = await initializeCall(currentServiceId, userId, userName);
+        if (initialized) {
+          console.log('✅ Sistema inicializado com sucesso!');
+          // Aguardar um pouco para garantir inicialização
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Tentar chamada novamente
+          handleVideoCall();
+        } else {
+          console.error('❌ Falha na inicialização');
+          alert(`Falha no sistema de chamadas. Número: ${entregador.telefone}`);
+        }
+      } catch (error) {
+        console.error('❌ Erro na inicialização:', error);
+        alert(`Erro no sistema. Número: ${entregador.telefone}`);
+      }
+    } else {
+      console.log('✅ Sistema já inicializado, iniciando chamada...');
+      handleVideoCall();
+    }
+  };
 
   // Função para finalizar serviço via API
   const finishService = async () => {
-    if (!savedState?.serviceId) {
+    const currentServiceIdForFinish = getCurrentServiceId();
+    if (!currentServiceIdForFinish) {
       notificationService.showError('Erro', 'ID do serviço não encontrado');
       return;
     }
@@ -99,7 +340,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
         return;
       }
 
-      const response = await fetch(API_ENDPOINTS.SERVICE_FINISH(savedState.serviceId), {
+      const response = await fetch(API_ENDPOINTS.SERVICE_FINISH(currentServiceIdForFinish), {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -111,14 +352,9 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
         await response.json();
         notificationService.showSuccess('Serviço Finalizado', 'Serviço finalizado com sucesso! Aguardando confirmação do contratante.');
         
-        // Atualizar progresso para 100% e marcar como concluído
         setProgress(100);
         setIsServiceCompleted(true);
-        
-        // Redirecionar para tela de pagamento após 2 segundos
-        setTimeout(() => {
-          onServiceCompleted();
-        }, 2000);
+        onServiceCompleted();
       } else {
         const errorData = await response.json();
         notificationService.showError('Erro', errorData.message || 'Não foi possível finalizar o serviço');
@@ -130,9 +366,10 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
       setIsFinishingService(false);
     }
   };
-
-  // WebSocket para tracking em tempo real
-  const serviceId = localStorage.getItem('currentServiceId') || savedState?.serviceId
+  
+  const currentServiceId = getCurrentServiceId();
+  
+  // WebSocket hook
   const { 
     isConnected: isWebSocketConnected, 
     onLocationUpdate,
@@ -140,263 +377,267 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
     stopLocationTracking,
     isTrackingLocation
   } = useWebSocket({
-    serviceId,
+    serviceId: currentServiceId || undefined,
     enableTracking: true,
     enableChat: false
-  })
+  });
 
-  // Escutar atualizações de localização em tempo real
+  // Inicializar sistema de chamadas
   useEffect(() => {
-    onLocationUpdate((locationData) => {
-      console.log('📍 Localização em tempo real recebida:', locationData)
+    console.log('🔧 ServiceTracking - Verificando inicialização de chamadas...');
+    console.log('📊 Estado atual:', {
+      currentServiceId,
+      isCallInitialized,
+      hasUserId: !!localStorage.getItem('userId'),
+      hasRealUserId: !!localStorage.getItem('realUserId')
+    });
+
+    if (currentServiceId && !isCallInitialized) {
+      // Usar dados de usuário real se disponível
+      const realUserId = localStorage.getItem('realUserId');
+      const realUserName = localStorage.getItem('realUserName');
       
-      // Atualizar posição do prestador em tempo real
-      setDriverPosition({
-        lat: locationData.latitude,
-        lng: locationData.longitude
-      })
-    })
-  }, [onLocationUpdate])
-
-  // Buscar rota real usando OSRM (apenas se não tiver rota salva)
-  useEffect(() => {
-    if (routeCoordinates.length > 0) {
-      // CORREÇÃO: Garantir que a posição do motorista está correta baseada no índice salvo
-      if (savedState && savedState.currentRouteIndex < routeCoordinates.length) {
-        const savedPosition = routeCoordinates[savedState.currentRouteIndex];
-        const correctPosition = { lat: savedPosition[0], lng: savedPosition[1] };
-        
-        setDriverPosition(correctPosition);
-      }
-      return;
+      const userId = realUserId || localStorage.getItem('userId') || '1';
+      const userName = realUserName || localStorage.getItem('loggedUser') || entregador.nome;
+      
+      console.log('🚀 Inicializando sistema de chamadas com:', {
+        serviceId: currentServiceId,
+        userId,
+        userName
+      });
+      
+      initializeCall(currentServiceId, userId, userName);
+    } else {
+      console.log('❌ Não inicializando chamadas:', {
+        noServiceId: !currentServiceId,
+        alreadyInitialized: isCallInitialized
+      });
     }
-    // Usar a posição original para calcular a rota (não a posição atual do motorista)
-    const routeOrigin = driverOrigin || { lat: -23.5324859, lng: -46.7916801 };
-    
-    const fetchRoute = async () => {
-      try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${routeOrigin.lng},${routeOrigin.lat};${destination.lng},${destination.lat}?overview=full&geometries=geojson`;
-        const response = await fetch(url);
+  }, [currentServiceId, isCallInitialized, initializeCall, entregador.nome]);
+
+  // Conectar ao WebSocket do chat quando necessário
+  useEffect(() => {
+    if (isChatOpen && currentServiceId) {
+      const userId = localStorage.getItem('userId');
+      if (userId) {
+        chatService.connectToChat(currentServiceId, userId);
+        
+        const removeMessageListener = chatService.onNewMessage((newMessage: ChatMessage) => {
+          setChatMessages(prev => [...prev, newMessage]);
+        });
+
+        return () => {
+          removeMessageListener();
+          chatService.disconnectFromChat();
+        };
+      }
+    }
+  }, [isChatOpen, currentServiceId]);
+
+  // Função para criar rota real usando OpenRouteService
+  const createRealRoute = async (start: { lat: number; lng: number }, end: { lat: number; lng: number }) => {
+    try {
+      console.log('🗺️ Criando rota real de', start, 'para', end);
+      
+      // Usar OSRM (Open Source Routing Machine) - gratuito
+      const response = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`
+      );
+      
+      if (response.ok) {
         const data = await response.json();
         
         if (data.routes && data.routes.length > 0) {
           const route = data.routes[0];
-          const coordinates: [number, number][] = route.geometry.coordinates.map(
-            (coord: number[]) => [coord[1], coord[0]] // Inverter para [lat, lng]
-          );
+          const coordinates = route.geometry.coordinates;
           
-          setRouteCoordinates(coordinates);
-          setEstimatedTime(Math.round(route.duration / 60)); // Converter para minutos
+          // Converter coordenadas [lng, lat] para [lat, lng] para o Leaflet
+          const routeCoords: [number, number][] = coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
           
-          // CORREÇÃO: Se é uma nova rota, começar do início
-          if (!savedState) {
-            setDriverPosition({ lat: coordinates[0][0], lng: coordinates[0][1] });
-            setCurrentRouteIndex(0);
-          }
-        }
-      } catch (error) {
-        // Fallback: rota curta e rápida para teste
-        const fallbackRoute: [number, number][] = [];
-        const steps = 8; // Apenas 8 pontos para ser mais rápido
-        
-        // Usar coordenadas próximas para teste rápido
-        const testOrigin = { lat: -23.5505, lng: -46.6333 }; // Centro SP
-        const testDestination = { lat: -23.5515, lng: -46.6343 }; // Muito próximo
-        
-        for (let i = 0; i <= steps; i++) {
-          const ratio = i / steps;
-          const lat = testOrigin.lat + (testDestination.lat - testOrigin.lat) * ratio;
-          const lng = testOrigin.lng + (testDestination.lng - testOrigin.lng) * ratio;
-          fallbackRoute.push([lat, lng]);
-        }
-        
-        setRouteCoordinates(fallbackRoute);
-        
-        // CORREÇÃO: Se é uma nova rota, começar do início
-        if (!savedState) {
-          setDriverPosition({ lat: fallbackRoute[0][0], lng: fallbackRoute[0][1] });
-          setCurrentRouteIndex(0);
+          setRouteCoordinates(routeCoords);
+          
+          // Atualizar tempo estimado
+          const durationMinutes = Math.round(route.duration / 60);
+          setEstimatedTime(durationMinutes);
+          
+          console.log(`✅ Rota criada com ${routeCoords.length} pontos, tempo estimado: ${durationMinutes} min`);
+          return;
         }
       }
-    };
+    } catch (error) {
+      console.warn('⚠️ Erro ao criar rota real, usando rota simples:', error);
+    }
+    
+    // Fallback: criar linha reta se a API falhar
+    const route: [number, number][] = [
+      [start.lat, start.lng],
+      [end.lat, end.lng]
+    ];
+    setRouteCoordinates(route);
+  };
 
-    fetchRoute();
-  }, [destination, driverOrigin?.lat, driverOrigin?.lng, routeCoordinates.length, savedState]);
-
-  // Atualizar horário atual a cada segundo
+  // Escutar atualizações de localização em tempo real
   useEffect(() => {
-    const timeInterval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
-    return () => clearInterval(timeInterval);
-  }, []);
-
-  // Salvar estado sempre que houver mudanças importantes
-  useEffect(() => {
-    if (savedState && !isServiceCompleted) {
-      const currentState: ServiceTrackingState = {
-        serviceId: savedState.serviceId,
-        driverPosition,
-        progress,
-        routeCoordinates,
-        currentRouteIndex,
-        estimatedTime,
-        serviceStartTime: serviceStartTime.toISOString(),
-        isServiceCompleted,
-        destination,
-        entregador
+    onLocationUpdate((locationData) => {
+      const newPosition = {
+        lat: locationData.latitude,
+        lng: locationData.longitude
       };
+      setDriverPosition(newPosition);
       
-      ServiceTrackingManager.saveActiveService(currentState);
-    }
-  }, [driverPosition, progress, routeCoordinates, currentRouteIndex, estimatedTime, serviceStartTime, isServiceCompleted, destination, entregador, savedState]);
+      // Atualizar rota quando a posição do motorista mudar
+      createRealRoute(newPosition, destination);
+    });
+  }, [onLocationUpdate, destination]);
 
-  // Detectar quando o prestador chegou e encerrar automaticamente
+  // Criar rota inicial
   useEffect(() => {
-    if (progress >= 100 && !isServiceCompleted && !hasShownCompletionMessage) {
-      setHasShownCompletionMessage(true);
-      
-      // Mostrar mensagem de chegada por 1 segundo, depois encerrar
-      const completionTimer = setTimeout(() => {
-        setIsServiceCompleted(true);
-        
-        // Aguardar um pouco mais antes de chamar onServiceCompleted
-        setTimeout(() => {
-          onServiceCompleted();
-        }, 300);
-      }, 1000);
-
-      return () => clearTimeout(completionTimer);
+    if (driverPosition && destination) {
+      createRealRoute(driverPosition, destination);
     }
-  }, [progress, isServiceCompleted, onServiceCompleted, hasShownCompletionMessage]);
+  }, [driverPosition, destination]);
 
-  // Simular movimento do motorista ao longo da rota
-  useEffect(() => {
-    if (routeCoordinates.length === 0 || isPaused || isServiceCompleted) {
-      return;
-    }
-
-    // CORREÇÃO: Verificar se já chegou ao final baseado no índice salvo
-    if (currentRouteIndex >= routeCoordinates.length - 1) {
-      setProgress(100);
+  // Funções de chamada
+  const handleVideoCall = async () => {
+    // Evitar múltiplas chamadas simultâneas
+    if (isStartingCall) {
+      console.log('⚠️ Chamada já está sendo iniciada, ignorando...');
       return;
     }
     
-    const interval = setInterval(() => {
-      setCurrentRouteIndex((prev: number) => {
-        const nextIndex = prev + 1;
-        
-        if (nextIndex >= routeCoordinates.length) {
-          setProgress(100);
-          return prev; // Chegou ao destino
-        }
-        
-        // Atualizar posição do motorista
-        const newPosition = routeCoordinates[nextIndex];
-        const newDriverPosition = { lat: newPosition[0], lng: newPosition[1] };
-        setDriverPosition(newDriverPosition);
-        
-        // Calcular progresso
-        const newProgress = Math.min(100, (nextIndex / (routeCoordinates.length - 1)) * 100);
-        setProgress(newProgress);
-        
-        // Se chegou ao último ponto, definir progresso como 100%
-        if (nextIndex === routeCoordinates.length - 1) {
-          setTimeout(() => {
-            setProgress(100);
-          }, 100);
-        }
-        
-        return nextIndex;
+    // Se já está em chamada, não fazer nada
+    if (callState.isInCall) {
+      console.log('⚠️ Chamada já está ativa, ignorando...');
+      return;
+    }
+    
+    console.log('🔥 ServiceTracking - INICIANDO CHAMADA DE VÍDEO');
+    setIsStartingCall(true);
+    
+    try {
+      // Usar dados de usuários reais
+      const prestadorId = localStorage.getItem('prestadorId') || '2';
+      
+      console.log('📊 Estado da chamada:', {
+        isCallInitialized,
+        currentServiceId,
+        prestadorId,
+        hasRealUserId: !!localStorage.getItem('realUserId')
       });
-    }, 1000); // Move para o próximo ponto a cada 1 segundo (mais rápido)
-
-    return () => clearInterval(interval);
-  }, [routeCoordinates, isPaused, isServiceCompleted, currentRouteIndex]);
-
-  // Função para pausar/retomar o tracking
-  const toggleTracking = () => {
-    setIsPaused(!isPaused);
+      
+      if (!isCallInitialized) {
+        console.log('⚠️ Sistema não inicializado, tentando inicializar...');
+        
+        // Usar dados de usuário real se disponível
+        const realUserId = localStorage.getItem('realUserId');
+        const realUserName = localStorage.getItem('realUserName');
+        
+        const userId = realUserId || localStorage.getItem('userId') || '1';
+        const userName = realUserName || localStorage.getItem('loggedUser') || entregador.nome;
+        
+        if (!currentServiceId || !userId) {
+          console.error('❌ Dados insuficientes:', { currentServiceId, userId });
+          notificationService.showError('Chamada', 'Dados insuficientes para chamada');
+          return;
+        }
+        
+        console.log('🚀 Inicializando com dados:', { currentServiceId, userId, userName });
+        
+        const initialized = await initializeCall(currentServiceId, userId, userName);
+        if (!initialized) {
+          console.error('❌ Falha na inicialização');
+          notificationService.showError('Chamada', 'Falha na inicialização do sistema');
+          return;
+        }
+        
+        console.log('✅ Sistema inicializado, aguardando...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      
+      console.log('📞 Tentando iniciar chamada de vídeo para:', prestadorId);
+      const success = await startVideoCall(prestadorId);
+      
+      if (success) {
+        console.log('✅ Chamada de vídeo iniciada com sucesso!');
+        notificationService.showSuccess('Chamada', 'Chamada de vídeo iniciada!');
+      } else {
+        console.error('❌ Falha ao iniciar chamada');
+        notificationService.showError('Chamada', 'Falha ao iniciar chamada de vídeo');
+      }
+    } catch (error) {
+      console.error('❌ Erro na chamada de vídeo:', error);
+      notificationService.showError('Chamada', 'Erro inesperado: ' + (error as Error).message);
+    } finally {
+      setIsStartingCall(false); // Sempre resetar o estado
+    }
   };
 
-  // Limpar estado salvo quando o componente for desmontado (apenas se serviço não foi completado)
-  useEffect(() => {
-    return () => {
-      // Manter estado salvo para continuidade se serviço não foi completado
-    };
-  }, [isServiceCompleted]);
+  const handleAudioCall = async () => {
+    try {
+      const prestadorId = localStorage.getItem('prestadorId') || '2';
+      
+      if (!isCallInitialized) {
+        const userId = localStorage.getItem('userId');
+        const userName = localStorage.getItem('loggedUser') || entregador.nome;
+        
+        if (!currentServiceId || !userId) {
+          notificationService.showError('Chamada', 'Dados insuficientes para chamada');
+          return;
+        }
+        
+        const initialized = await initializeCall(currentServiceId, userId, userName);
+        if (!initialized) {
+          notificationService.showError('Chamada', 'Falha na inicialização');
+          return;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      const success = await startAudioCall(prestadorId);
+      if (!success) {
+        notificationService.showError('Chamada', 'Falha ao iniciar chamada de áudio');
+      }
+    } catch (error) {
+      console.error('📞 CHAMADA ÁUDIO - Erro:', error);
+      notificationService.showError('Chamada', 'Erro inesperado na chamada');
+    }
+  };
 
-  // Funções para formatação de horário
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('pt-BR', { 
+  const handleCloseCall = () => {
+    console.log('📞 Fechando interface de chamada');
+  };
+
+  // Funções de formatação
+  const formatTime = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString('pt-BR', { 
       hour: '2-digit', 
-      minute: '2-digit',
-      second: '2-digit'
+      minute: '2-digit' 
     });
-  };
-
-  const getElapsedTime = () => {
-    const elapsed = Math.floor((currentTime.getTime() - serviceStartTime.getTime()) / 1000);
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = elapsed % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const getEstimatedArrival = () => {
-    const remainingMinutes = estimatedTime > 0 
-      ? Math.ceil(estimatedTime * (1 - progress / 100))
-      : Math.ceil(parseInt(entregador.tempoEstimado) * (1 - progress / 100));
-    
-    const arrivalTime = new Date(currentTime.getTime() + remainingMinutes * 60000);
+    const now = new Date();
+    const arrivalTime = new Date(now.getTime() + (estimatedTime * 60000));
     return arrivalTime.toLocaleTimeString('pt-BR', { 
       hour: '2-digit', 
-      minute: '2-digit'
+      minute: '2-digit' 
     });
   };
 
-  // Centro do mapa (ponto médio entre motorista e destino)
-  const mapCenter: [number, number] = [
-    (driverPosition.lat + destination.lat) / 2,
-    (driverPosition.lng + destination.lng) / 2
-  ];
-
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
-      {/* Header */}
-      <div className="bg-green-500 text-white p-4 relative">
-        <button
-          onClick={onBack}
-          className="absolute left-4 top-4 text-white hover:text-gray-200"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <div className="text-center">
-          <h1 className="text-lg font-bold">Acompanhe o serviço</h1>
-          <div className="flex justify-between items-center mt-2 text-sm opacity-90">
-            <span>Iniciado: {formatTime(serviceStartTime)}</span>
-            <span>Atual: {formatTime(currentTime)}</span>
-            <span>Duração: {getElapsedTime()}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Map Area - OpenStreetMap */}
-      <div className="flex-1 relative z-0" style={{ minHeight: '400px' }}>
+    <div className="relative h-screen bg-gray-100 overflow-hidden">
+      {/* Mapa */}
+      <div className="absolute inset-0">
         <MapContainer
-          center={mapCenter}
-          zoom={14}
-          style={{ height: '100%', width: '100%', position: 'absolute' }}
-          className="z-0"
-          preferCanvas={true}
+          center={[driverPosition.lat, driverPosition.lng]}
+          zoom={15}
+          style={{ height: '100%', width: '100%' }}
+          zoomControl={false}
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maxZoom={19}
-            subdomains={['a', 'b', 'c']}
-            crossOrigin={true}
-            errorTileUrl="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
           />
           
           {/* Linha da rota */}
@@ -410,30 +651,93 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
           )}
           
           {/* Marcador do motorista */}
-          <Marker position={[driverPosition.lat, driverPosition.lng]} icon={driverIcon}>
-            <Popup>
-              <div className="text-center">
-                <p className="font-semibold">{entregador.nome}</p>
-                <p className="text-sm text-gray-600">{entregador.veiculo}</p>
-                <p className="text-xs text-gray-500">{entregador.placa}</p>
-              </div>
-            </Popup>
-          </Marker>
+          {driverPosition && driverPosition.lat && driverPosition.lng && (
+            <Marker 
+              position={[driverPosition.lat, driverPosition.lng]} 
+              icon={driverIcon}
+              key={`driver-${driverPosition.lat}-${driverPosition.lng}`}
+            >
+              <Popup>
+                <div className="text-center">
+                  <p className="font-semibold">{entregador.nome}</p>
+                  <p className="text-sm text-gray-600">{entregador.veiculo}</p>
+                  <p className="text-xs text-gray-500">{entregador.placa}</p>
+                </div>
+              </Popup>
+            </Marker>
+          )}
+          
+          {/* Marcador da origem (pickup) */}
+          {pickupLocation && pickupLocation.lat && pickupLocation.lng && (
+            <Marker 
+              position={[pickupLocation.lat, pickupLocation.lng]} 
+              icon={pickupIcon}
+              key={`pickup-${pickupLocation.lat}-${pickupLocation.lng}`}
+            >
+              <Popup>
+                <div className="text-center">
+                  <p className="font-semibold">Origem (Coleta)</p>
+                  <p className="text-sm text-gray-600">{pickupLocation.address || 'Endereço de coleta'}</p>
+                </div>
+              </Popup>
+            </Marker>
+          )}
           
           {/* Marcador do destino */}
-          <Marker position={[destination.lat, destination.lng]} icon={destinationIcon}>
-            <Popup>
-              <div className="text-center">
-                <p className="font-semibold">Destino</p>
-                <p className="text-sm text-gray-600">{destination.address}</p>
-              </div>
-            </Popup>
-          </Marker>
+          {destination && destination.lat && destination.lng && (
+            <Marker 
+              position={[destination.lat, destination.lng]} 
+              icon={destinationIcon}
+              key={`destination-${destination.lat}-${destination.lng}`}
+            >
+              <Popup>
+                <div className="text-center">
+                  <p className="font-semibold">Destino</p>
+                  <p className="text-sm text-gray-600">{destination.address || 'Endereço de destino'}</p>
+                </div>
+              </Popup>
+            </Marker>
+          )}
         </MapContainer>
       </div>
 
-      {/* Bottom Card - Informações do Prestador */}
-      <div className="bg-green-500 text-white p-4 rounded-t-3xl shadow-2xl relative z-10">
+      {/* Header */}
+      <div className="absolute top-0 left-0 right-0 bg-white shadow-md z-10 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={onBack}
+              className="flex items-center space-x-2 text-gray-600 hover:text-gray-800"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span>Voltar</span>
+            </button>
+            
+            {/* Botão de Debug Temporário */}
+            <button 
+              onClick={setupRealUsersForTracking}
+              className="bg-purple-500 text-white px-2 py-1 rounded text-xs hover:bg-purple-600 transition-colors"
+              title="Configurar usuários reais (DEBUG)"
+            >
+              👥 Debug
+            </button>
+          </div>
+          
+          <div className="text-center">
+            <h1 className="text-lg font-bold">Acompanhar Serviço</h1>
+            <p className="text-sm text-gray-600">
+              Tempo estimado: {estimatedTime > 0 ? `${estimatedTime} min` : entregador.tempoEstimado}
+            </p>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <WebSocketStatus isConnected={isWebSocketConnected} />
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Card */}
+      <div className="absolute bottom-0 left-0 right-0 bg-green-500 text-white p-4 rounded-t-3xl shadow-2xl z-10">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <img 
@@ -449,141 +753,212 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({ onBack, onServiceComp
               </div>
             </div>
           </div>
-          <div className="flex flex-col items-end space-y-1">
-            <div className="flex items-center space-x-2 bg-white bg-opacity-20 px-3 py-2 rounded-full">
-              <Clock className="w-5 h-5" />
-              <span className="font-semibold">
-                {progress >= 100 ? 'Chegou!' : 
-                  `${estimatedTime > 0 
-                    ? Math.ceil(estimatedTime * (1 - progress / 100))
-                    : Math.ceil(parseInt(entregador.tempoEstimado) * (1 - progress / 100))
-                  } Min`
-                }
-              </span>
-              <CheckCircle className="w-5 h-5 text-white" />
-            </div>
-            {progress < 100 && (
-              <span className="text-xs opacity-75">
-                Chegada prevista: {getEstimatedArrival()}
-              </span>
-            )}
+          
+          <div className="flex items-center space-x-2">
+            {/* Botão de Chamada de Vídeo */}
+            <button 
+              onClick={handleVideoCall}
+              disabled={isStartingCall || callState.isInCall}
+              className={`p-2 rounded-full transition-all ${
+                isStartingCall || callState.isInCall 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-blue-500 hover:bg-blue-600'
+              } text-white`}
+              title={
+                callState.isInCall ? 'Chamada ativa' : 
+                isStartingCall ? 'Iniciando chamada...' : 
+                'Chamada de vídeo'
+              }
+            >
+              <Video className="w-5 h-5" />
+            </button>
+            
+            {/* Botão de Chamada de Áudio */}
+            <button 
+              onClick={handleAudioCall}
+              className="bg-green-600 text-white p-2 rounded-full hover:bg-green-700 transition-all"
+              title="Chamada de áudio"
+            >
+              <PhoneCall className="w-5 h-5" />
+            </button>
+            
+            {/* Botão de Ligação Telefônica */}
+            <button 
+              onClick={callDriver}
+              className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-all"
+              title="Ligar telefone"
+            >
+              <Phone className="w-5 h-5" />
+            </button>
+
+            {/* Botão de Chat */}
+            <button 
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className="bg-green-600 text-white p-2 rounded-full hover:bg-green-700 transition-all"
+            >
+              <MessageCircle className="w-5 h-5" />
+            </button>
+            
+            {/* Botão de Finalizar Serviço */}
+            <button 
+              onClick={finishService}
+              disabled={isFinishingService}
+              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
+            >
+              {isFinishingService ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <CheckCircle className="w-5 h-5" />
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Status */}
-        <div className="bg-white bg-opacity-10 rounded-lg p-3 mb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm opacity-90">Status</p>
-              <p className="font-bold text-lg">
-                {progress >= 100 ? '🎉 Prestador chegou!' : isPaused ? '⏸️ Tracking pausado' : '🚗 Prestador em rota'}
-              </p>
-              {progress >= 100 && (
-                <div className="mt-2 space-y-1">
-                  <p className="text-sm opacity-90">
-                    ✅ Pedido finalizado! Redirecionando para avaliação...
-                  </p>
-                  <p className="text-xs opacity-75">
-                    Horário de chegada: {formatTime(currentTime)}
-                  </p>
-                  <div className="mt-2 bg-white bg-opacity-20 rounded-lg p-2">
-                    <p className="text-xs opacity-90">
-                      💾 Progresso salvo automaticamente - você pode fechar o app sem perder o acompanhamento
-                    </p>
-                  </div>
-                </div>
-              )}
-              {progress < 100 && (
-                <div className="mt-1">
-                  <div className="w-full bg-white bg-opacity-20 rounded-full h-2">
-                    <div 
-                      className="bg-white h-2 rounded-full transition-all duration-1000"
-                      style={{ width: `${progress}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <p className="text-xs opacity-75">
-                      Progresso: {Math.round(progress)}% {isPaused && '(Pausado)'}
-                    </p>
-                    <WebSocketStatus isConnected={isWebSocketConnected} />
-                  </div>
-                  {savedState && (
-                    <p className="text-xs opacity-60 mt-1">
-                      💾 Progresso salvo - continue de onde parou
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="flex flex-col space-y-2 ml-4">
-              
-              {/* Botão de Ligação Telefônica */}
-              <button 
-                onClick={() => {
-                  // Abrir discador do telefone com o número do prestador
-                  const phoneNumber = entregador.telefone.replace(/\D/g, '') // Remove caracteres não numéricos
-                  window.open(`tel:${phoneNumber}`, '_self')
-                }}
-                className="bg-blue-500 text-white px-4 py-2 rounded-full font-semibold hover:bg-blue-600 transition-all flex items-center space-x-2"
-              >
-                <Phone className="w-4 h-4" />
-                <span>Ligar</span>
-              </button>
-              
-              {/* Botão de tracking de localização */}
-              <button 
-                onClick={() => {
-                  if (isTrackingLocation) {
-                    stopLocationTracking()
-                  } else {
-                    startLocationTracking()
-                  }
-                }}
-                className={`px-4 py-2 rounded-full font-semibold transition-all flex items-center space-x-2 ${
-                  isTrackingLocation 
-                    ? 'bg-red-500 text-white hover:bg-red-600' 
-                    : 'bg-blue-500 text-white hover:bg-blue-600'
-                }`}
-              >
-                <span className="text-xs">
-                  {isTrackingLocation ? '🛑 Parar Tracking' : '📍 Iniciar Tracking'}
-                </span>
-              </button>
-              
-              {progress < 100 && (
-                <>
-                  <button
-                    onClick={toggleTracking}
-                    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
-                  >
-                    {isPaused ? 'Retomar' : 'Pausar'}
-                  </button>
-                  
-                  <button 
-                    onClick={finishService}
-                    disabled={isFinishingService}
-                    className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                  >
-                    {isFinishingService ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Finalizando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="w-4 h-4" />
-                        <span>Finalizar Serviço</span>
-                      </>
-                    )}
-                  </button>
-                </>
-              )}
-            </div>
+        {/* Progress Bar */}
+        <div className="mb-4">
+          <div className="w-full bg-white bg-opacity-20 rounded-full h-2">
+            <div 
+              className="bg-white h-2 rounded-full transition-all duration-1000"
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-xs opacity-75">
+              Progresso: {Math.round(progress)}%
+            </p>
+            <p className="text-xs opacity-75">
+              Chegada: {getEstimatedArrival()}
+            </p>
           </div>
         </div>
-
       </div>
 
+      {/* Modal do Chat */}
+      {isChatOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center z-50">
+          <div className="bg-white w-full max-w-md h-96 rounded-t-2xl flex flex-col">
+            {/* Header do Chat */}
+            <div className="bg-green-500 text-white p-4 rounded-t-2xl flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <img 
+                  src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" 
+                  alt={entregador.nome}
+                  className="w-10 h-10 rounded-full border-2 border-white"
+                />
+                <div>
+                  <h3 className="font-bold">{entregador.nome}</h3>
+                  <p className="text-xs opacity-90">Prestador</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                {/* Botões de chamada no chat */}
+                <button 
+                  onClick={handleVideoCall}
+                  className="bg-white bg-opacity-20 p-2 rounded-full hover:bg-opacity-30 transition-all"
+                >
+                  <Video className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={handleAudioCall}
+                  className="bg-white bg-opacity-20 p-2 rounded-full hover:bg-opacity-30 transition-all"
+                >
+                  <PhoneCall className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={callDriver}
+                  className="bg-white bg-opacity-20 p-2 rounded-full hover:bg-opacity-30 transition-all"
+                >
+                  <Phone className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={() => setIsChatOpen(false)}
+                  className="bg-white bg-opacity-20 p-2 rounded-full hover:bg-opacity-30 transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Área de mensagens */}
+            <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
+              {isLoadingMessages ? (
+                <div className="text-center text-gray-500 mt-8">
+                  <div className="w-8 h-8 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin mx-auto mb-2"></div>
+                  <p>Carregando mensagens...</p>
+                </div>
+              ) : chatMessages.length === 0 ? (
+                <div className="text-center text-gray-500 mt-8">
+                  <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>Inicie uma conversa com o prestador</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {chatMessages.map((message) => (
+                    <div 
+                      key={message.id}
+                      className={`flex ${message.enviado_por === 'contratante' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div 
+                        className={`max-w-xs px-4 py-2 rounded-2xl ${
+                          message.enviado_por === 'contratante' 
+                            ? 'bg-green-500 text-white' 
+                            : 'bg-white border border-gray-200 text-gray-800'
+                        }`}
+                      >
+                        <p className="text-sm">{message.mensagem}</p>
+                        <p className={`text-xs mt-1 ${
+                          message.enviado_por === 'contratante' ? 'text-green-100' : 'text-gray-500'
+                        }`}>
+                          {new Date(message.data_envio).toLocaleTimeString('pt-BR', { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Input de mensagem */}
+            <div className="p-4 border-t border-gray-200 bg-white">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  placeholder="Digite sua mensagem..."
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                <button 
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim()}
+                  className="bg-green-500 text-white p-2 rounded-full hover:bg-green-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interface de Chamada */}
+      {(callState.isInCall || callState.isIncomingCall) && (
+        <CallInterface
+          callState={callState}
+          localStream={localStream}
+          remoteStream={remoteStream}
+          onAcceptCall={acceptCall}
+          onRejectCall={rejectCall}
+          onEndCall={endCall}
+          onToggleVideo={toggleVideo}
+          onToggleAudio={toggleAudio}
+          onClose={handleCloseCall}
+        />
+      )}
     </div>
   );
 };

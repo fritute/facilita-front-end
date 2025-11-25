@@ -85,9 +85,9 @@ const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-600">
-              {notifications.filter(n => !n.read).length} não lidas
+              {notifications?.filter(n => !n.read).length || 0} não lidas
             </span>
-            {notifications.length > 0 && (
+            {notifications && notifications.length > 0 && (
               <button
                 onClick={onClearAll}
                 className="text-sm text-green-600 hover:text-green-700 font-medium"
@@ -100,7 +100,7 @@ const NotificationSidebar: React.FC<NotificationSidebarProps> = ({
 
         {/* Lista de notificações */}
         <div className="overflow-y-auto h-[calc(100vh-140px)]">
-          {notifications.length === 0 ? (
+          {!notifications || notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8">
               <Bell className="w-16 h-16 mb-4 opacity-50" />
               <p className="text-center">Nenhuma notificação</p>

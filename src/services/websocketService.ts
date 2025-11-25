@@ -21,6 +21,43 @@ interface MessageData {
   targetUserId: number
 }
 
+interface CallInitiateData {
+  servicoId: string | number
+  callerId: string | number
+  callerName: string
+  targetUserId: string | number
+  callType: 'video' | 'audio'
+}
+
+interface CallAcceptData {
+  servicoId: string | number
+  callId: string
+  callerId: string | number
+  answer: RTCSessionDescriptionInit
+}
+
+interface CallEndData {
+  servicoId: string | number
+  callId: string
+  targetUserId: string | number
+  reason: string
+}
+
+interface CallIceCandidateData {
+  servicoId: string | number
+  targetUserId: string | number
+  candidate: RTCIceCandidateInit
+  callId: string
+}
+
+interface CallToggleMediaData {
+  servicoId: string | number
+  targetUserId: string | number
+  mediaType: 'video' | 'audio'
+  enabled: boolean
+  callId: string
+}
+
 interface ReceivedMessage {
   servicoId: number
   mensagem: string
@@ -44,13 +81,14 @@ class WebSocketService {
   private maxReconnectAttempts = 5
   private reconnectDelay = 1000
 
-  // URLs do WebSocket
-  private readonly WEBSOCKET_URL = import.meta.env?.VITE_WS_URL || 'ws://localhost:3001'
+  // URLs do WebSocket - conforme documentação oficial
+  private readonly WEBSOCKET_URL = 'wss://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net'
 
   connect(): Promise<boolean> {
     return new Promise((resolve, reject) => {
       try {
         // Conectando ao WebSocket
+        console.log('🔌 WebSocketService: Conectando em:', this.WEBSOCKET_URL)
         
         this.socket = io(this.WEBSOCKET_URL, {
           transports: ['websocket'],
@@ -238,6 +276,132 @@ class WebSocketService {
   // Verificar se está conectado
   getConnectionStatus(): boolean {
     return this.isConnected && this.socket?.connected === true
+  }
+
+  // ===== MÉTODOS DE CHAMADA (WebRTC) =====
+
+  // Iniciar chamada
+  initiateCall(data: CallInitiateData) {
+    if (!this.socket || !this.isConnected) {
+      console.error('❌ WebSocket não conectado para iniciar chamada')
+      return
+    }
+
+    console.log('📞 Iniciando chamada via WebSocket:', data)
+    this.socket.emit('call:initiate', data)
+  }
+
+  // Aceitar chamada
+  acceptCall(data: CallAcceptData) {
+    if (!this.socket || !this.isConnected) {
+      console.error('❌ WebSocket não conectado para aceitar chamada')
+      return
+    }
+
+    console.log('✅ Aceitando chamada via WebSocket:', data)
+    this.socket.emit('call:accept', data)
+  }
+
+  // Rejeitar chamada
+  rejectCall(callId: string, reason: string = 'user_rejected') {
+    if (!this.socket || !this.isConnected) {
+      console.error('❌ WebSocket não conectado para rejeitar chamada')
+      return
+    }
+
+    console.log('❌ Rejeitando chamada via WebSocket:', callId)
+    this.socket.emit('call:reject', {
+      callId,
+      reason
+    })
+  }
+
+  // Encerrar chamada
+  endCall(data: CallEndData) {
+    if (!this.socket || !this.isConnected) {
+      console.error('❌ WebSocket não conectado para encerrar chamada')
+      return
+    }
+
+    console.log('📞 Encerrando chamada via WebSocket:', data)
+    this.socket.emit('call:end', data)
+  }
+
+  // Enviar ICE candidate
+  sendIceCandidate(data: CallIceCandidateData) {
+    if (!this.socket || !this.isConnected) {
+      console.error('❌ WebSocket não conectado para enviar ICE candidate')
+      return
+    }
+
+    console.log('🧊 Enviando ICE candidate via WebSocket')
+    this.socket.emit('call:ice-candidate', data)
+  }
+
+  // Alternar mídia (vídeo/áudio)
+  toggleMedia(data: CallToggleMediaData) {
+    if (!this.socket || !this.isConnected) {
+      console.error('❌ WebSocket não conectado para alternar mídia')
+      return
+    }
+
+    console.log('🎛️ Alternando mídia via WebSocket:', data)
+    this.socket.emit('call:toggle-media', data)
+  }
+
+  // Escutar eventos de chamada
+  onCallInitiated(callback: (data: any) => void) {
+    if (!this.socket) return
+
+    this.socket.on('call:initiated', callback)
+  }
+
+  onCallIncoming(callback: (data: any) => void) {
+    if (!this.socket) return
+
+    this.socket.on('call:incoming', callback)
+  }
+
+  onCallAccepted(callback: (data: any) => void) {
+    if (!this.socket) return
+
+    this.socket.on('call:accepted', callback)
+  }
+
+  onCallRejected(callback: (data: any) => void) {
+    if (!this.socket) return
+
+    this.socket.on('call:rejected', callback)
+  }
+
+  onCallEnded(callback: (data: any) => void) {
+    if (!this.socket) return
+
+    this.socket.on('call:ended', callback)
+  }
+
+  onCallFailed(callback: (data: any) => void) {
+    if (!this.socket) return
+
+    this.socket.on('call:failed', callback)
+  }
+
+  onCallCancelled(callback: (data: any) => void) {
+    if (!this.socket) return
+
+    this.socket.on('call:cancelled', callback)
+  }
+
+  onCallIceCandidate(callback: (data: any) => void) {
+    if (!this.socket) return
+
+    this.socket.on('call:ice-candidate', callback)
+  }
+
+  onCallMediaToggled(callback: (data: any) => void) {
+    if (!this.socket) return
+
+    this.socket.on('call:media-toggled', callback)
   }
 
   // Remover todos os listeners

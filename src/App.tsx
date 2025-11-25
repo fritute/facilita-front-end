@@ -14,6 +14,7 @@ import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 import { API_ENDPOINTS, API_BASE_URL } from './config/constants'
 import { handDetectionService } from './services/handDetectionService'
 import { useNotifications } from './hooks/useNotifications'
+import { notificationService } from './services/notificationService'
 import { uploadImage } from './services/uploadImageToAzure'
 import { handleProfilePhotoUpload } from './utils/profilePhotoHandler'
 //TELAS PARA TESTES E PARA MOVER
@@ -88,7 +89,7 @@ function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('landing')
   
   // Hook de notificações
-  const { notifications, showError, showWarning, showSuccess, showInfo, markAsRead, clearAll } = useNotifications()
+  const { notifications, unreadCount, loading, refreshing, markAsRead, markAllAsRead, clearAll, addNotification, refresh } = useNotifications()
 
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
@@ -648,15 +649,22 @@ function App() {
 
   // Função chamada quando o serviço é concluído automaticamente
   const handleServiceCompleted = () => {
+    console.log('🎯 handleServiceCompleted CHAMADA!')
+    console.log('🎯 Estado atual da tela:', currentScreen)
+    
     setServiceCompletionTime(new Date())
     
     // Finalizar serviço ativo no gerenciador
     ServiceTrackingManager.completeActiveService()
     
     // Redirecionar para pagamento
-    showInfo('Serviço Concluído', 'Por favor, realize o pagamento')
+    notificationService.showInfo('Serviço Concluído', 'Por favor, realize o pagamento')
+    
+    console.log('🎯 Redirecionando para payment em 500ms...')
     setTimeout(() => {
+      console.log('🎯 Executando handleScreenTransition("payment")...')
       handleScreenTransition('payment')
+      console.log('🎯 handleScreenTransition("payment") executado!')
     }, 500)
   }
 
@@ -725,7 +733,7 @@ function App() {
       }
       return null
     } catch (error) {
-      showError('Erro de CEP', 'Não foi possível buscar as informações do CEP. Verifique se o CEP está correto.')
+      notificationService.showError('Erro de CEP', 'Não foi possível buscar as informações do CEP. Verifique se o CEP está correto.')
       return null
     }
   }
@@ -796,7 +804,7 @@ function App() {
       
       setNearbyPlaces(places)
     } catch (error) {
-      showWarning('Busca de estabelecimentos', 'Não foi possível buscar estabelecimentos próximos. Mostrando dados locais.')
+      notificationService.showWarning('Busca de estabelecimentos', 'Não foi possível buscar estabelecimentos próximos. Mostrando dados locais.')
       // Fallback para dados mock se a API falhar
       setNearbyPlaces(getEstablishmentsByType(category))
     } finally {
@@ -822,12 +830,12 @@ function App() {
             
             setUserLocation({ lat, lng, address })
           } catch (error) {
-            showWarning('Localização', 'Não foi possível obter o endereço completo. Usando coordenadas.')
+            notificationService.showWarning('Localização', 'Não foi possível obter o endereço completo. Usando coordenadas.')
             setUserLocation({ lat, lng, address: `${lat.toFixed(4)}, ${lng.toFixed(4)}` })
           }
         },
         (error) => {
-          showWarning('Localização', 'Não foi possível obter sua localização. Usando localização padrão de São Paulo.')
+          notificationService.showWarning('Localização', 'Não foi possível obter sua localização. Usando localização padrão de São Paulo.')
           // Localização padrão (São Paulo)
           setUserLocation({
             lat: -23.5505,
@@ -970,10 +978,10 @@ function App() {
         
         setServiceCategories(categories)
       } else {
-        showError('Erro de categorias', 'Não foi possível carregar as categorias de serviço. Tente novamente mais tarde.')
+        notificationService.showError('Erro de categorias', 'Não foi possível carregar as categorias de serviço. Tente novamente mais tarde.')
       }
     } catch (error) {
-      showError('Erro de conexão', 'Falha ao conectar com o servidor para buscar categorias.')
+      notificationService.showError('Erro de conexão', 'Falha ao conectar com o servidor para buscar categorias.')
     } finally {
       setLoadingCategories(false)
     }
@@ -1042,7 +1050,7 @@ function App() {
         alert(`Erro ao criar serviço: ${errorData.message || 'Erro desconhecido'}`)
       }
     } catch (error) {
-      showError('Erro ao criar serviço', 'Não foi possível criar o serviço. Verifique sua conexão e tente novamente.')
+      notificationService.showError('Erro ao criar serviço', 'Não foi possível criar o serviço. Verifique sua conexão e tente novamente.')
     }
   }
 
@@ -1053,7 +1061,7 @@ function App() {
       setQrCodeUrl(qrCodeDataUrl)
       setPixCode(pixString)
     } catch (error) {
-      showError('Erro no pagamento', 'Não foi possível gerar o código de pagamento. Tente novamente.')
+      notificationService.showError('Erro no pagamento', 'Não foi possível gerar o código de pagamento. Tente novamente.')
     }
   }
 
@@ -1090,12 +1098,12 @@ function App() {
         
         return data
       } else {
-        showWarning('Pagamento', 'Sistema de pagamento temporáriamente indisponível. Usando método alternativo.')
+        notificationService.showWarning('Pagamento', 'Sistema de pagamento temporáriamente indisponível. Usando método alternativo.')
         // Fallback para o método antigo
         await generateQRCode('facilita@pagbank.com', amount)
       }
     } catch (error) {
-      showWarning('Pagamento', 'Falha na conexão com o sistema de pagamento. Usando método alternativo.')
+      notificationService.showWarning('Pagamento', 'Falha na conexão com o sistema de pagamento. Usando método alternativo.')
       // Fallback para o método antigo
       await generateQRCode('facilita@pagbank.com', amount)
     }
@@ -1262,7 +1270,7 @@ function App() {
         alert('Erro ao criar carteira. Tente novamente.')
       }
     } catch (error) {
-      showError('Erro na carteira', 'Não foi possível criar sua carteira digital. Verifique sua conexão e tente novamente.')
+      notificationService.showError('Erro na carteira', 'Não foi possível criar sua carteira digital. Verifique sua conexão e tente novamente.')
     } finally {
       setLoadingWallet(false)
     }
@@ -1499,7 +1507,7 @@ function App() {
       
     } catch (error) {
       console.error('❌ Erro ao solicitar recarga:', error)
-      showError('Erro na recarga', error instanceof Error ? error.message : 'Não foi possível gerar o código de recarga. Tente novamente.')
+      notificationService.showError('Erro na recarga', error instanceof Error ? error.message : 'Não foi possível gerar o código de recarga. Tente novamente.')
     } finally {
       setLoadingRecharge(false)
     }
@@ -1632,7 +1640,7 @@ function App() {
       setNotificationToastMessage(notificationMessage)
       
       // Mostrar notificação de sucesso
-      showSuccess('Recarga Confirmada', `R$ ${rechargeAmount.toFixed(2)} foi creditado na sua carteira`)
+      notificationService.showSuccess('Recarga Confirmada', `R$ ${rechargeAmount.toFixed(2)} foi creditado na sua carteira`)
       
       // Limpar ID do pedido armazenado
       localStorage.removeItem('currentRechargeOrderId')
@@ -1802,7 +1810,7 @@ function App() {
       const notificationMessage = `💸 Saque confirmado! R$ ${withdrawAmount.toFixed(2)} enviado para sua chave PIX.`
       useNotification('success', notificationMessage)
       
-      showSuccess('Saque Confirmado', `R$ ${withdrawAmount.toFixed(2)} foi enviado para sua chave PIX`)
+      notificationService.showSuccess('Saque Confirmado', `R$ ${withdrawAmount.toFixed(2)} foi enviado para sua chave PIX`)
       
       // 5. Fechar modal e limpar estados
       setShowWithdrawModal(false)
@@ -1928,7 +1936,7 @@ function App() {
           setNotificationToastMessage(notificationMessage)
           setShowNotificationToast(true)
           
-          showSuccess('Pagamento Confirmado (Sandbox)', `Serviço pago com sucesso! R$ ${serviceValue.toFixed(2)} debitado`)
+          notificationService.showSuccess('Pagamento Confirmado (Sandbox)', `Serviço pago com sucesso! R$ ${serviceValue.toFixed(2)} debitado`)
           
           setTimeout(() => {
             setShowNotificationToast(false)
@@ -2008,7 +2016,7 @@ function App() {
       setShowNotificationToast(true)
       
       // Adicionar notificação usando o hook
-      showSuccess('Pagamento Confirmado', `Serviço pago com sucesso! R$ ${serviceValue.toFixed(2)} debitado`)
+      notificationService.showSuccess('Pagamento Confirmado', `Serviço pago com sucesso! R$ ${serviceValue.toFixed(2)} debitado`)
       
       setTimeout(() => {
         setShowNotificationToast(false)
@@ -2543,9 +2551,9 @@ function App() {
       console.log('✅ Endereço atualizado localmente')
       
       if (coordinates) {
-        showSuccess('Endereço Atualizado', `Endereço atualizado com coordenadas (${coordinates.lat.toFixed(4)}, ${coordinates.lng.toFixed(4)})`)
+        notificationService.showSuccess('Endereço Atualizado', `Endereço atualizado com coordenadas (${coordinates.lat.toFixed(4)}, ${coordinates.lng.toFixed(4)})`)
       } else {
-        showSuccess('Endereço Atualizado', 'Seu endereço padrão foi atualizado com sucesso')
+        notificationService.showSuccess('Endereço Atualizado', 'Seu endereço padrão foi atualizado com sucesso')
       }
 
       // Tentar atualizar no backend (se houver endpoint)
@@ -3165,6 +3173,10 @@ function App() {
   }, [showAccessibilityMenu])
 
   const handleScreenTransition = (newScreen: Screen) => {
+    console.log('🎯 handleScreenTransition CHAMADA!')
+    console.log('🎯 Tela atual:', currentScreen)
+    console.log('🎯 Nova tela:', newScreen)
+    
     setIsTransitioning(true)
     
     // Reset service creation state when going to home
@@ -3193,9 +3205,12 @@ function App() {
       setSelectedCategoryId(null)
     }
     
+    console.log('🎯 Executando setTimeout para mudar tela...')
     setTimeout(() => {
+      console.log('🎯 Mudando currentScreen para:', newScreen)
       setCurrentScreen(newScreen)
       setTimeout(() => {
+        console.log('🎯 Finalizando transição...')
         setIsTransitioning(false)
       }, 50)
     }, 300)
@@ -3334,6 +3349,7 @@ function App() {
           
           // Armazenar usuário no localStorage (será atualizado com foto depois se necessário)
           localStorage.setItem('userType', user.tipo_conta) // Para uso no chat
+          localStorage.setItem('userId', user.id.toString()) // Para uso no chat e outras funcionalidades
           
           setLoggedUser(user)
           console.log('👤 Usuário logado:', user)
@@ -3658,7 +3674,7 @@ function App() {
     if (!token) {
       clearInterval(searchInterval)
       setIsSearchingProvider(false)
-      showError('Erro', 'Token não encontrado')
+      notificationService.showError('Erro', 'Token não encontrado')
       return
     }
 
@@ -3805,7 +3821,7 @@ function App() {
               console.log('   - Origem:', pickupLocation)
               console.log('   - Destino:', deliveryLocation)
               
-              showSuccess('Prestador Encontrado!', `${prestadorFormatado.nome} aceitou sua corrida!`)
+              notificationService.showSuccess('Prestador Encontrado!', `${prestadorFormatado.nome} aceitou sua corrida!`)
               setServiceStartTime(new Date())
               
               // Fazer transição para tracking imediatamente
@@ -3866,7 +3882,7 @@ function App() {
                 setSelectedDestination(deliveryLocation)
               }
               
-              showSuccess('Prestador Encontrado!', `${usuario?.nome || 'Prestador'} aceitou sua corrida!`)
+              notificationService.showSuccess('Prestador Encontrado!', `${usuario?.nome || 'Prestador'} aceitou sua corrida!`)
               setServiceStartTime(new Date())
               
               setTimeout(() => {
@@ -3885,7 +3901,7 @@ function App() {
           clearInterval(searchInterval)
           if (localPollingInterval) clearInterval(localPollingInterval)
           setIsSearchingProvider(false)
-          showError('Tempo Esgotado', 'Nenhum prestador aceitou o serviço.')
+          notificationService.showError('Tempo Esgotado', 'Nenhum prestador aceitou o serviço.')
         }
       } catch (error) {
         console.error('❌ Erro ao verificar status:', error)
@@ -4984,7 +5000,23 @@ function App() {
     clearAll()
   }
   const handleToggleNotifications = () => {
+    console.log('🔔 Toggling notifications. Current state:', isNotificationOpen)
+    console.log('📋 Current notifications:', notifications)
+    console.log('📊 Unread count:', unreadCount)
+    console.log('🔄 Loading state:', loading)
+    console.log('🔄 Refreshing state:', refreshing)
     setIsNotificationOpen(!isNotificationOpen)
+  }
+
+  // Função de teste para adicionar notificação
+  const testAddNotification = () => {
+    console.log('🧪 Testando adição de notificação...')
+    addNotification({
+      type: 'success',
+      title: 'Teste de Notificação',
+      message: 'Esta é uma notificação de teste para verificar se o sistema está funcionando.',
+      read: false
+    })
   }
 
 // Função para iniciar polling do status do serviço
@@ -5301,11 +5333,11 @@ const handleServiceCreate = async () => {
       console.log('🔍 Polling iniciado - aguardando prestador aceitar o serviço...')
       console.log('📋 ID do serviço sendo monitorado:', serviceIdString)
     } else {
-      showError('Erro', 'Não foi possível criar o serviço. Verifique os dados e tente novamente.')
+      notificationService.showError('Erro', 'Não foi possível criar o serviço. Verifique os dados e tente novamente.')
     }
   } catch (error) {
     setIsLoading(false)
-    showError('Erro', 'Erro inesperado ao criar serviço. Tente novamente.')
+    notificationService.showError('Erro', 'Erro inesperado ao criar serviço. Tente novamente.')
   }
 }
 
@@ -6655,8 +6687,18 @@ Usando ID temporário: ${tempId}`)
     const paymentSuccess = await payServiceWithWallet(serviceId)
     
     if (paymentSuccess) {
-      // Redirecionar para tela de tracking do serviço
-      handleScreenTransition('service-tracking')
+      // Limpar dados do serviço após pagamento confirmado
+      setCreatedServiceId(null)
+      setActiveServiceId(null)
+      ServiceTrackingManager.clearActiveService()
+      
+      // Mostrar mensagem de sucesso
+      showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Obrigado por usar o Facilita.')
+      
+      // Redirecionar para home após pagamento
+      setTimeout(() => {
+        handleScreenTransition('home')
+      }, 2000)
     } else {
       showError('Erro no Pagamento', 'Não foi possível processar o pagamento. Tente novamente.')
     }
@@ -6735,6 +6777,7 @@ Usando ID temporário: ${tempId}`)
       <ServiceTracking
         onBack={() => handleScreenTransition('home')}
         onServiceCompleted={handleServiceCompleted}
+        serviceId={activeServiceId || createdServiceId || undefined}
         entregador={foundDriver ? {
           nome: foundDriver.nome,
           telefone: foundDriver.telefone,
@@ -6744,7 +6787,7 @@ Usando ID temporário: ${tempId}`)
           tempoEstimado: foundDriver.tempo_estimado,
           distancia: '2.5 km' // Valor padrão
         } : entregadorData}
-        destination={selectedDestination || {
+        destination={selectedDestination || deliveryLocation || {
           address: selectedLocation || 'Endereço não especificado',
           lat: -23.55052, 
           lng: -46.63330
@@ -6752,10 +6795,11 @@ Usando ID temporário: ${tempId}`)
         driverOrigin={foundDriver?.localizacao ? {
           lat: foundDriver.localizacao.lat,
           lng: foundDriver.localizacao.lng
-        } : (driverOrigin || pickupLocation) ? {
-          lat: (driverOrigin?.lat ?? pickupLocation!.lat),
-          lng: (driverOrigin?.lng ?? pickupLocation!.lng)
-        } : { lat: -23.5324859, lng: -46.7916801 }} 
+        } : (driverOrigin || driverLocation) ? {
+          lat: (driverOrigin?.lat ?? driverLocation!.lat),
+          lng: (driverOrigin?.lng ?? driverLocation!.lng)
+        } : { lat: -23.5324859, lng: -46.7916801 }}
+        pickupLocation={pickupLocation || undefined}
       />
     )
   }

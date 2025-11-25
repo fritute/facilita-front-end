@@ -22,8 +22,16 @@ class ApiService {
     try {
       const data = await response.json()
       
+      // Debug da resposta
+      console.log('🌐 API Response:', {
+        status: response.status,
+        ok: response.ok,
+        data: data
+      });
+      
       if (!response.ok) {
         // Tratar diferentes tipos de erro
+        console.log('❌ Response não OK, status:', response.status);
         switch (response.status) {
           case 401:
             notificationService.showError('Sessão expirada', 'Faça login novamente.')
@@ -53,12 +61,25 @@ class ApiService {
         }
       }
 
+      // Verificar se o servidor retornou success: false mesmo com status 200
+      if (data.success === false) {
+        console.log('⚠️ Servidor retornou success: false com status 200');
+        // NÃO mostrar notificação automática aqui - deixar para o serviço decidir
+        return {
+          success: false,
+          error: data.message || data.error || 'Erro na operação',
+          data: data
+        }
+      }
+
+      console.log('✅ Response OK, retornando sucesso');
       return {
         success: true,
         data: data.data || data,
         message: data.message
       }
     } catch (error) {
+      console.error('❌ Erro ao processar resposta:', error);
       notificationService.showError('Erro de rede', 'Verifique sua conexão com a internet.')
       return {
         success: false,
@@ -226,6 +247,14 @@ export class FacilitaApiService extends ApiService {
     return this.get(API_ENDPOINTS.SERVICES_BY_CONTRATANTE(contratanteId))
   }
 
+  async getServicesByStatusContratante(status: string, contratanteId: string) {
+    return this.get(API_ENDPOINTS.SERVICES_BY_STATUS_CONTRATANTE(status, contratanteId))
+  }
+
+  async getServiceDetails(serviceId: string) {
+    return this.get(API_ENDPOINTS.SERVICE_DETAILS(serviceId))
+  }
+
   async getAvailableServices() {
     return this.get(`${API_ENDPOINTS.SERVICES}/disponiveis`)
   }
@@ -239,7 +268,7 @@ export class FacilitaApiService extends ApiService {
   }
 
   async confirmService(serviceId: string) {
-    return this.post(`${API_ENDPOINTS.SERVICE_BY_ID(serviceId)}/confirmar`)
+    return this.patch(API_ENDPOINTS.SERVICE_CONFIRM(serviceId))
   }
 
   // === CATEGORIAS ===
@@ -294,30 +323,34 @@ export class FacilitaApiService extends ApiService {
     return this.post(API_ENDPOINTS.PAGBANK_PAYMENT, paymentData)
   }
 
-  // === CHAT ===
+  // === CHAT - conforme documentação oficial ===
   async sendMessage(serviceId: string, messageData: any) {
-    return this.post(`${API_ENDPOINTS.SERVICES}/${serviceId}/chat/enviar`, messageData)
+    console.log('📤 API: Enviando mensagem para endpoint:', API_ENDPOINTS.CHAT_SEND_MESSAGE(serviceId));
+    console.log('📦 API: Dados da mensagem:', messageData);
+    return this.post(API_ENDPOINTS.CHAT_SEND_MESSAGE(serviceId), messageData)
   }
 
   async getMessages(serviceId: string) {
-    return this.get(`${API_ENDPOINTS.SERVICES}/${serviceId}/chat/mensagens`)
+    console.log('📥 API: Buscando mensagens do endpoint:', API_ENDPOINTS.CHAT_GET_MESSAGES(serviceId));
+    return this.get(API_ENDPOINTS.CHAT_GET_MESSAGES(serviceId))
   }
 
   async markMessagesAsRead(serviceId: string) {
-    return this.patch(`${API_ENDPOINTS.SERVICES}/${serviceId}/chat/marcar-lidas`)
+    console.log('✅ API: Marcando mensagens como lidas:', API_ENDPOINTS.CHAT_MARK_READ(serviceId));
+    return this.patch(API_ENDPOINTS.CHAT_MARK_READ(serviceId))
   }
 
   // === NOTIFICAÇÕES ===
   async getNotifications() {
-    return this.get(`${API_ENDPOINTS.SERVICES.replace('/servico', '')}/notificacao`)
+    return this.get(API_ENDPOINTS.NOTIFICATIONS)
   }
 
   async markNotificationAsRead(notificationId: string) {
-    return this.patch(`${API_ENDPOINTS.SERVICES.replace('/servico', '')}/notificacao/${notificationId}/marcar-lida`)
+    return this.patch(API_ENDPOINTS.NOTIFICATION_READ(notificationId))
   }
 
   async markAllNotificationsAsRead() {
-    return this.patch(`${API_ENDPOINTS.SERVICES.replace('/servico', '')}/notificacao/marcar-todas-lidas`)
+    return this.patch(API_ENDPOINTS.NOTIFICATIONS_READ_ALL)
   }
 }
 
