@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ArrowLeft, Star, CheckCircle, Phone, MessageCircle, X, Send, Video, PhoneCall } from 'lucide-react';
+import { ArrowLeft, Star, CheckCircle, Phone, MessageCircle, X, Send, Video, PhoneCall, CreditCard } from 'lucide-react';
 import WebSocketStatus from './WebSocketStatus';
 import useWebSocket from '../hooks/useWebSocket';
 import { API_ENDPOINTS } from '../config/constants';
@@ -65,6 +65,7 @@ if (typeof document !== 'undefined') {
 interface ServiceTrackingProps {
   onBack: () => void;
   onServiceCompleted: () => void;
+  onPaymentRequired?: () => void; // Callback para ir para tela de pagamento
   serviceId?: string;
   entregador: {
     nome: string;
@@ -93,6 +94,7 @@ interface ServiceTrackingProps {
 const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   onBack,
   onServiceCompleted,
+  onPaymentRequired,
   serviceId,
   entregador,
   destination,
@@ -117,6 +119,18 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   const [newMessage, setNewMessage] = useState('');
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isStartingCall, setIsStartingCall] = useState(false);
+  const [servicePaid, setServicePaid] = useState(false); // Controla se o serviço foi pago
+
+  // Verificar se o serviço foi pago (via localStorage) quando voltar da tela de pagamento
+  useEffect(() => {
+    const paid = localStorage.getItem('servicePaid') === 'true';
+    if (paid) {
+      console.log('✅ Serviço já foi pago - habilitando botão de finalizar');
+      setServicePaid(true);
+      // Limpar flag após ler
+      // localStorage.removeItem('servicePaid'); // Não limpar ainda, só após finalizar
+    }
+  }, []);
 
   // Hook de chamadas
   const {
@@ -256,8 +270,21 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     }
   };
 
-  // Função para finalizar serviço via API
+  // Função para ir para tela de pagamento
+  const handlePaymentClick = () => {
+    if (onPaymentRequired) {
+      onPaymentRequired();
+    }
+  };
+
+  // Função para finalizar serviço via API (só pode finalizar se foi pago)
   const finishService = async () => {
+    // Verificar se o serviço foi pago
+    if (!servicePaid) {
+      notificationService.showWarning('Pagamento Necessário', 'O serviço precisa ser pago antes de finalizar');
+      return;
+    }
+
     const currentServiceIdForFinish = getCurrentServiceId();
     if (!currentServiceIdForFinish) {
       notificationService.showError('Erro', 'ID do serviço não encontrado');
@@ -283,7 +310,10 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
 
       if (response.ok) {
         await response.json();
-        notificationService.showSuccess('Serviço Finalizado', 'Serviço finalizado com sucesso! Aguardando confirmação do contratante.');
+        notificationService.showSuccess('Serviço Finalizado', 'Serviço finalizado com sucesso!');
+        
+        // Limpar flag de pagamento
+        localStorage.removeItem('servicePaid');
         
         setProgress(100);
         setIsServiceCompleted(true);
@@ -410,6 +440,61 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       createRealRoute(driverPosition, destination);
     }
   }, [driverPosition, destination]);
+
+  // Polling para verificar status do serviço (para contratante)
+  useEffect(() => {
+    const currentServiceIdForPolling = getCurrentServiceId();
+    if (!currentServiceIdForPolling) return;
+
+    // Verificar se é contratante
+    const userType = localStorage.getItem('loggedUser');
+    let isContratante = false;
+    try {
+      const user = userType ? JSON.parse(userType) : null;
+      isContratante = user?.tipo_conta === 'CONTRATANTE';
+    } catch (e) {
+      console.error('Erro ao verificar tipo de usuário:', e);
+    }
+
+    // Só fazer polling se for contratante
+    if (!isContratante) return;
+
+    console.log('🔄 Iniciando polling de status do serviço para contratante');
+
+    const checkServiceStatus = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        const response = await fetch(API_ENDPOINTS.SERVICE_DETAILS(currentServiceIdForPolling), {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const serviceData = data.data || data;
+          
+          // Se o status mudou para FINALIZADO, redirecionar para tela de detalhes
+          if (serviceData.status === 'FINALIZADO' && !isServiceCompleted) {
+            console.log('✅ Status mudou para FINALIZADO - redirecionando contratante');
+            setIsServiceCompleted(true);
+            onServiceCompleted();
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao verificar status do serviço:', error);
+      }
+    };
+
+    // Verificar a cada 3 segundos
+    const interval = setInterval(checkServiceStatus, 3000);
+
+    // Cleanup
+    return () => clearInterval(interval);
+  }, [getCurrentServiceId, isServiceCompleted, onServiceCompleted]);
 
   // Funções de chamada
   const handleVideoCall = async () => {
@@ -756,18 +841,34 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
               <MessageCircle className="w-5 h-5" />
             </button>
             
-            {/* Botão de Finalizar Serviço */}
-            <button 
-              onClick={finishService}
-              disabled={isFinishingService}
-              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
-            >
-              {isFinishingService ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <CheckCircle className="w-5 h-5" />
-              )}
-            </button>
+            {/* Botão de Pagar Serviço (só aparece se não foi pago) */}
+            {!servicePaid && (
+              <button 
+                onClick={handlePaymentClick}
+                className="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors flex items-center space-x-2"
+              >
+                <CreditCard className="w-5 h-5" />
+                <span>Pagar</span>
+              </button>
+            )}
+            
+            {/* Botão de Finalizar Serviço (só aparece se foi pago) */}
+            {servicePaid && (
+              <button 
+                onClick={finishService}
+                disabled={isFinishingService}
+                className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center space-x-2"
+              >
+                {isFinishingService ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    <span>Finalizar</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 

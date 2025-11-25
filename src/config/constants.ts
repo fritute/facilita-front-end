@@ -68,8 +68,8 @@ export const API_ENDPOINTS = {
   
   // Serviços - Endpoints adicionais
   SERVICE_ACCEPT: (id: string) => `${API_BASE_URL}/servico/${id}/aceitar`, // POST - Prestador aceita serviço
-  SERVICE_FINISH: (id: string) => `${API_BASE_URL}/servico/${id}/finalizar`, // POST - Prestador finaliza serviço
-  SERVICE_CONFIRM: (id: string) => `${API_BASE_URL}/servico/${id}/confirmar`, // POST - Contratante confirma conclusão
+  SERVICE_FINISH: (id: string) => `${API_BASE_URL}/servico/${id}/finalizar`, // PATCH - Prestador finaliza serviço
+  SERVICE_CONFIRM: (id: string) => `${API_BASE_URL}/servico/${id}/confirmar-conclusao`, // ⚠️ PATCH OBRIGATÓRIO - Contratante confirma conclusão (requer JWT CONTRATANTE)
   SERVICES_AVAILABLE: `${API_BASE_URL}/servico/disponiveis`, // GET - Prestador busca serviços disponíveis
   SERVICES_IN_PROGRESS: (prestadorId: string) => `${API_BASE_URL}/servico/em-andamento/${prestadorId}`, // GET - Serviços em andamento do prestador
   SERVICE_DETAILS: (id: string) => `${API_BASE_URL}/servico/${id}/detalhes`, // GET - Detalhes de um pedido

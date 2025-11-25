@@ -8,6 +8,7 @@ import CompleteProfileModal from './components/CompleteProfileModal'
 import LoadingSpinner from './components/LoadingSpinner'
 import NotificationSidebar from './components/NotificationSidebar'
 import ServiceCreateScreen from './components/ServiceCreateScreen'
+import ServiceDetailsScreen from './components/ServiceDetailsScreen'
 import { PlaceData } from './services/placesService'
 import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen, ResetPasswordScreen, ServiceProviderScreen } from './screens'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
@@ -18,7 +19,7 @@ import { notificationService } from './services/notificationService'
 import { uploadImage } from './services/uploadImageToAzure'
 import { handleProfilePhotoUpload } from './utils/profilePhotoHandler'
 //TELAS PARA TESTES E PARA MOVER
-type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
+type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "profile" | "orders" | "change-password" | "wallet" | "reset-password" | "service-details"
 
 // Adicione esta interface antes da função App
 interface ServiceTrackingProps {
@@ -657,14 +658,14 @@ function App() {
     // Finalizar serviço ativo no gerenciador
     ServiceTrackingManager.completeActiveService()
     
-    // Redirecionar para pagamento
-    notificationService.showInfo('Serviço Concluído', 'Por favor, realize o pagamento')
+    // Redirecionar para tela de detalhes para confirmar conclusão
+    notificationService.showInfo('Serviço Finalizado', 'Por favor, confirme a conclusão do serviço')
     
-    console.log('🎯 Redirecionando para payment em 500ms...')
+    console.log('🎯 Redirecionando para service-details em 500ms...')
     setTimeout(() => {
-      console.log('🎯 Executando handleScreenTransition("payment")...')
-      handleScreenTransition('payment')
-      console.log('🎯 handleScreenTransition("payment") executado!')
+      console.log('🎯 Executando handleScreenTransition("service-details")...')
+      handleScreenTransition('service-details')
+      console.log('🎯 handleScreenTransition("service-details") executado!')
     }, 500)
   }
 
@@ -5920,6 +5921,8 @@ const handleServiceCreate = async () => {
       case 'EM_ANDAMENTO':
       case 'IN_PROGRESS':
         return 'bg-blue-100 text-blue-800'
+      case 'FINALIZADO':
+        return 'bg-purple-100 text-purple-800'
       case 'CONCLUIDO':
       case 'COMPLETED':
         return 'bg-green-100 text-green-800'
@@ -5940,6 +5943,8 @@ const handleServiceCreate = async () => {
       case 'EM_ANDAMENTO':
       case 'IN_PROGRESS':
         return 'Em Andamento'
+      case 'FINALIZADO':
+        return 'Aguardando Confirmação'
       case 'CONCLUIDO':
       case 'COMPLETED':
         return 'Concluído'
@@ -6693,14 +6698,17 @@ Usando ID temporário: ${tempId}`)
       ServiceTrackingManager.clearActiveService()
       
       // Mostrar mensagem de sucesso
-      showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Obrigado por usar o Facilita.')
+      notificationService.showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Voltando para o rastreamento...')
       
-      // Redirecionar para home após pagamento
+      // Marcar serviço como pago no localStorage
+      localStorage.setItem('servicePaid', 'true')
+      
+      // Redirecionar para tracking após pagamento
       setTimeout(() => {
-        handleScreenTransition('home')
-      }, 2000)
+        handleScreenTransition('service-tracking')
+      }, 1500)
     } else {
-      showError('Erro no Pagamento', 'Não foi possível processar o pagamento. Tente novamente.')
+      notificationService.showError('Erro no Pagamento', 'Não foi possível processar o pagamento. Tente novamente.')
     }
   }
 
@@ -6777,6 +6785,10 @@ Usando ID temporário: ${tempId}`)
       <ServiceTracking
         onBack={() => handleScreenTransition('home')}
         onServiceCompleted={handleServiceCompleted}
+        onPaymentRequired={() => {
+          console.log('💰 Redirecionando para tela de pagamento');
+          handleScreenTransition('payment');
+        }}
         serviceId={activeServiceId || createdServiceId || undefined}
         entregador={foundDriver ? {
           nome: foundDriver.nome,
@@ -6817,6 +6829,43 @@ Usando ID temporário: ${tempId}`)
         serviceCompletionTime={serviceCompletionTime || new Date()}
         serviceStartTime={serviceStartTime || new Date(Date.now() - 300000)} // 5 min atrás como exemplo
         serviceId={currentServiceId}
+      />
+    )
+  }
+
+  // Service Details Screen - Confirmação de conclusão
+  if (currentScreen === 'service-details') {
+    // Obter ID do serviço atual de várias fontes
+    const storedServiceId = localStorage.getItem('currentServiceId');
+    const serviceIdToUse = storedServiceId 
+      ? parseInt(storedServiceId) 
+      : (activeServiceId ? (typeof activeServiceId === 'string' ? parseInt(activeServiceId) : activeServiceId)
+      : (createdServiceId ? (typeof createdServiceId === 'string' ? parseInt(createdServiceId) : createdServiceId)
+      : 0));
+    
+    console.log('🆔 ServiceDetailsScreen - ID do serviço:', serviceIdToUse);
+    console.log('📦 Fontes:', { storedServiceId, activeServiceId, createdServiceId });
+    
+    // Se não tiver ID válido, voltar para home
+    if (!serviceIdToUse || serviceIdToUse === 0) {
+      console.error('❌ ID do serviço inválido, voltando para home');
+      notificationService.showError('Erro', 'ID do serviço não encontrado');
+      handleScreenTransition('home');
+      return null;
+    }
+    
+    return (
+      <ServiceDetailsScreen
+        serviceId={serviceIdToUse}
+        onBack={() => handleScreenTransition('service-tracking')}
+        onConfirmCompletion={(serviceId) => {
+          console.log('✅ Serviço confirmado pelo contratante:', serviceId)
+          // Após confirmação, redirecionar para avaliação
+          notificationService.showSuccess('Serviço Confirmado', 'Obrigado! Avalie o prestador.')
+          setTimeout(() => {
+            handleScreenTransition('service-rating')
+          }, 500)
+        }}
       />
     )
   }

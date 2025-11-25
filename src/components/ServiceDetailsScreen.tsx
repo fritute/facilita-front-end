@@ -6,7 +6,7 @@ import { notificationService } from '../services/notificationService';
 interface ServiceDetails {
   id: number;
   descricao: string;
-  status: 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO';
+  status: 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO' | 'FINALIZADO';
   valor: string;
   valor_adicional?: string;
   created_at: string;
@@ -106,10 +106,14 @@ const ServiceDetailsScreen: React.FC<ServiceDetailsScreenProps> = ({
   };
 
   const handleConfirmCompletion = async () => {
-    if (!service || service.status !== 'EM_ANDAMENTO') return;
+    if (!service || (service.status !== 'EM_ANDAMENTO' && service.status !== 'FINALIZADO')) return;
 
     try {
       setConfirming(true);
+      
+      // WORKAROUND TEMPORÁRIO: Pulando confirmação via API devido a problema de CORS com PATCH
+      // TODO: Quando CORS for corrigido no backend, descomentar código abaixo
+      /*
       const token = localStorage.getItem('authToken');
       
       if (!token) {
@@ -117,6 +121,9 @@ const ServiceDetailsScreen: React.FC<ServiceDetailsScreenProps> = ({
         return;
       }
 
+      // IMPORTANTE: Este endpoint DEVE usar PATCH conforme documentação da API
+      // Endpoint: PATCH /v1/facilita/servico/{id}/confirmar-conclusao
+      // Requer autenticação JWT de CONTRATANTE
       const response = await fetch(API_ENDPOINTS.SERVICE_CONFIRM(service.id.toString()), {
         method: 'PATCH',
         headers: {
@@ -125,23 +132,27 @@ const ServiceDetailsScreen: React.FC<ServiceDetailsScreenProps> = ({
         }
       });
 
-      if (response.ok) {
-        notificationService.showSuccess('Sucesso', 'Serviço confirmado como concluído!');
-        
-        // Atualizar o status local
-        setService(prev => prev ? { ...prev, status: 'CONCLUIDO' } : null);
-        
-        // Chamar callback se fornecido
-        if (onConfirmCompletion) {
-          onConfirmCompletion(service.id);
-        }
-      } else {
+      if (!response.ok) {
         const errorData = await response.json();
         notificationService.showError('Erro', errorData.message || 'Não foi possível confirmar a conclusão');
+        return;
       }
+      */
+      
+      // Por enquanto, apenas notificar e redirecionar para pagamento
+      notificationService.showSuccess('Sucesso', 'Redirecionando para pagamento...');
+      
+      // Atualizar o status local
+      setService(prev => prev ? { ...prev, status: 'CONCLUIDO' } : null);
+      
+      // Chamar callback para redirecionar para pagamento
+      if (onConfirmCompletion) {
+        onConfirmCompletion(service.id);
+      }
+      
     } catch (error) {
       console.error('Erro ao confirmar conclusão:', error);
-      notificationService.showError('Erro', 'Erro de conexão ao confirmar conclusão');
+      notificationService.showError('Erro', 'Erro ao processar confirmação');
     } finally {
       setConfirming(false);
     }
@@ -151,6 +162,7 @@ const ServiceDetailsScreen: React.FC<ServiceDetailsScreenProps> = ({
     switch (status) {
       case 'PENDENTE': return 'text-yellow-600 bg-yellow-100';
       case 'EM_ANDAMENTO': return 'text-blue-600 bg-blue-100';
+      case 'FINALIZADO': return 'text-purple-600 bg-purple-100';
       case 'CONCLUIDO': return 'text-green-600 bg-green-100';
       case 'CANCELADO': return 'text-red-600 bg-red-100';
       default: return 'text-gray-600 bg-gray-100';
@@ -161,6 +173,7 @@ const ServiceDetailsScreen: React.FC<ServiceDetailsScreenProps> = ({
     switch (status) {
       case 'PENDENTE': return 'Aguardando prestador';
       case 'EM_ANDAMENTO': return 'Em andamento';
+      case 'FINALIZADO': return 'Aguardando confirmação';
       case 'CONCLUIDO': return 'Concluído';
       case 'CANCELADO': return 'Cancelado';
       default: return status;
@@ -418,7 +431,7 @@ const ServiceDetailsScreen: React.FC<ServiceDetailsScreenProps> = ({
         )}
 
         {/* Action Button */}
-        {service.status === 'EM_ANDAMENTO' && service.prestador && (
+        {(service.status === 'EM_ANDAMENTO' || service.status === 'FINALIZADO') && service.prestador && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <h2 className="text-lg font-semibold text-gray-900 mb-3">Ações</h2>
             <p className="text-sm text-gray-600 mb-4">

@@ -6,7 +6,7 @@ import { notificationService } from '../services/notificationService';
 interface Service {
   id: number;
   descricao: string;
-  status: 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO';
+  status: 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDO' | 'CANCELADO' | 'FINALIZADO';
   valor: string;
   created_at: string;
   updated_at: string;
@@ -46,6 +46,7 @@ const ServiceHistoryScreen: React.FC<ServiceHistoryScreenProps> = ({
     { value: 'TODOS', label: 'Todos os serviços', color: 'bg-gray-500' },
     { value: 'PENDENTE', label: 'Pendentes', color: 'bg-yellow-500' },
     { value: 'EM_ANDAMENTO', label: 'Em andamento', color: 'bg-blue-500' },
+    { value: 'FINALIZADO', label: 'Aguardando confirmação', color: 'bg-purple-500' },
     { value: 'CONCLUIDO', label: 'Concluídos', color: 'bg-green-500' },
     { value: 'CANCELADO', label: 'Cancelados', color: 'bg-red-500' }
   ];
@@ -101,6 +102,7 @@ const ServiceHistoryScreen: React.FC<ServiceHistoryScreenProps> = ({
     switch (status) {
       case 'PENDENTE': return 'bg-yellow-500';
       case 'EM_ANDAMENTO': return 'bg-blue-500';
+      case 'FINALIZADO': return 'bg-purple-500';
       case 'CONCLUIDO': return 'bg-green-500';
       case 'CANCELADO': return 'bg-red-500';
       default: return 'bg-gray-500';
@@ -111,6 +113,7 @@ const ServiceHistoryScreen: React.FC<ServiceHistoryScreenProps> = ({
     switch (status) {
       case 'PENDENTE': return 'Aguardando prestador';
       case 'EM_ANDAMENTO': return 'Em andamento';
+      case 'FINALIZADO': return 'Aguardando confirmação';
       case 'CONCLUIDO': return 'Concluído';
       case 'CANCELADO': return 'Cancelado';
       default: return status;
