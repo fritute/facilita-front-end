@@ -92,13 +92,10 @@ const ServiceTrackingSimple: React.FC<SimpleTrackingProps> = ({ serviceId, entre
 
   // Funções de chamada
   const handleVideoCall = async () => {
-    console.log('🔥 INICIANDO CHAMADA DE VÍDEO - DEBUG COMPLETO');
+    console.log('🔥 INICIANDO CHAMADA DE VÍDEO');
     console.log('📊 Estado atual:', {
       isCallInitialized,
-      currentServiceId,
-      callState,
-      userId: localStorage.getItem('userId'),
-      prestadorId: localStorage.getItem('prestadorId')
+      currentServiceId
     });
     
     try {

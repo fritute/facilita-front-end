@@ -99,13 +99,6 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   driverOrigin,
   pickupLocation
 }) => {
-  // Debug dos props recebidos
-  console.log('🗺️ ServiceTracking - Props recebidos:', {
-    destination,
-    pickupLocation,
-    driverOrigin,
-    serviceId
-  });
 
   // Estados básicos
   const [driverPosition, setDriverPosition] = useState(driverOrigin || { lat: -23.5324859, lng: -46.7916801 });
@@ -143,11 +136,8 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
 
   // Função para obter ID do serviço
   const getCurrentServiceId = () => {
-    console.log('🔍 ServiceTracking - Buscando serviceId...');
-    
     // 1. Verificar prop serviceId
     if (serviceId) {
-      console.log('✅ ServiceId encontrado via prop:', serviceId);
       return serviceId;
     }
     
@@ -158,21 +148,16 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       localStorage.getItem('activeServiceId')
     ].filter(Boolean);
     
-    console.log('📊 IDs diretos encontrados:', directIds);
-    
     if (directIds.length > 0) {
-      console.log('✅ ServiceId encontrado via localStorage:', directIds[0]);
       return directIds[0];
     }
     
     // 3. Verificar currentService
     try {
       const currentService = localStorage.getItem('currentService');
-      console.log('📄 currentService raw:', currentService);
       
       if (currentService) {
         const serviceData = JSON.parse(currentService);
-        console.log('📊 serviceData parsed:', serviceData);
         
         const possibleIds = [
           serviceData.id,
@@ -181,18 +166,14 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
           serviceData.data?.id
         ].filter(Boolean);
         
-        console.log('🔍 Possíveis IDs encontrados:', possibleIds);
-        
         if (possibleIds.length > 0) {
-          console.log('✅ ServiceId encontrado via currentService:', possibleIds[0]);
           return possibleIds[0].toString();
         }
       }
     } catch (error) {
-      console.warn('⚠️ Erro ao parsear currentService:', error);
+      console.warn('Erro ao parsear dados do serviço');
     }
     
-    console.log('❌ Nenhum serviceId encontrado!');
     return null;
   };
 
@@ -241,53 +222,11 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     }
   };
 
-  // Função para configurar usuários reais (DEBUG)
-  const setupRealUsersForTracking = () => {
-    console.log('👥 ServiceTracking - Configurando usuários reais...');
-    
-    const contratante = {
-      id: 1,
-      name: 'Usuário Contratante',
-      phone: '+5511959272335',
-      type: 'contratante'
-    };
-    
-    const prestador = {
-      id: 2, 
-      name: 'Prestador Serviço',
-      phone: '+5511959272336',
-      type: 'prestador'
-    };
-    
-    // Salvar no localStorage
-    localStorage.setItem('realUserId', contratante.id.toString());
-    localStorage.setItem('realUserType', contratante.type);
-    localStorage.setItem('realUserName', contratante.name);
-    localStorage.setItem('realUserPhone', contratante.phone);
-    
-    localStorage.setItem('prestadorId', prestador.id.toString());
-    localStorage.setItem('prestadorName', prestador.name);
-    localStorage.setItem('prestadorPhone', prestador.phone);
-    
-    console.log('✅ Usuários reais configurados no ServiceTracking');
-    notificationService.showSuccess('Debug', 'Usuários reais configurados!');
-  };
-
   // Função para ligar para o prestador
   const callDriver = async () => {
-    console.log('📞 Tentativa de ligação para:', entregador.telefone);
-    console.log('📊 Estado do sistema:', {
-      isCallInitialized,
-      currentServiceId,
-      hasRealUserId: !!localStorage.getItem('realUserId')
-    });
-    
     // Se sistema não inicializado, tentar inicializar primeiro
     if (!isCallInitialized) {
-      console.log('⚠️ Sistema não inicializado, tentando inicializar...');
-      
       if (!currentServiceId) {
-        console.error('❌ Sem serviceId, não é possível inicializar');
         alert(`Sistema não disponível. Número: ${entregador.telefone}`);
         return;
       }
@@ -299,26 +238,20 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       const userId = realUserId || localStorage.getItem('userId') || '1';
       const userName = realUserName || localStorage.getItem('loggedUser') || entregador.nome;
       
-      console.log('🚀 Tentando inicializar sistema com:', { currentServiceId, userId, userName });
-      
       try {
         const initialized = await initializeCall(currentServiceId, userId, userName);
         if (initialized) {
-          console.log('✅ Sistema inicializado com sucesso!');
           // Aguardar um pouco para garantir inicialização
           await new Promise(resolve => setTimeout(resolve, 1000));
           // Tentar chamada novamente
           handleVideoCall();
         } else {
-          console.error('❌ Falha na inicialização');
           alert(`Falha no sistema de chamadas. Número: ${entregador.telefone}`);
         }
       } catch (error) {
-        console.error('❌ Erro na inicialização:', error);
         alert(`Erro no sistema. Número: ${entregador.telefone}`);
       }
     } else {
-      console.log('✅ Sistema já inicializado, iniciando chamada...');
       handleVideoCall();
     }
   };
@@ -384,14 +317,6 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
 
   // Inicializar sistema de chamadas
   useEffect(() => {
-    console.log('🔧 ServiceTracking - Verificando inicialização de chamadas...');
-    console.log('📊 Estado atual:', {
-      currentServiceId,
-      isCallInitialized,
-      hasUserId: !!localStorage.getItem('userId'),
-      hasRealUserId: !!localStorage.getItem('realUserId')
-    });
-
     if (currentServiceId && !isCallInitialized) {
       // Usar dados de usuário real se disponível
       const realUserId = localStorage.getItem('realUserId');
@@ -400,18 +325,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       const userId = realUserId || localStorage.getItem('userId') || '1';
       const userName = realUserName || localStorage.getItem('loggedUser') || entregador.nome;
       
-      console.log('🚀 Inicializando sistema de chamadas com:', {
-        serviceId: currentServiceId,
-        userId,
-        userName
-      });
-      
       initializeCall(currentServiceId, userId, userName);
-    } else {
-      console.log('❌ Não inicializando chamadas:', {
-        noServiceId: !currentServiceId,
-        alreadyInitialized: isCallInitialized
-      });
     }
   }, [currentServiceId, isCallInitialized, initializeCall, entregador.nome]);
 
@@ -573,34 +487,76 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   };
 
   const handleAudioCall = async () => {
+    // Evitar múltiplas chamadas simultâneas
+    if (isStartingCall) {
+      console.log('⚠️ Chamada já está sendo iniciada, ignorando...');
+      return;
+    }
+    
+    // Se já está em chamada, não fazer nada
+    if (callState.isInCall) {
+      console.log('⚠️ Chamada já está ativa, ignorando...');
+      return;
+    }
+    
+    console.log('🔥 ServiceTracking - INICIANDO CHAMADA DE ÁUDIO');
+    setIsStartingCall(true);
+    
     try {
+      // Usar dados de usuários reais
       const prestadorId = localStorage.getItem('prestadorId') || '2';
       
+      console.log('📊 Estado da chamada de áudio:', {
+        isCallInitialized,
+        currentServiceId,
+        prestadorId,
+        hasRealUserId: !!localStorage.getItem('realUserId')
+      });
+      
       if (!isCallInitialized) {
-        const userId = localStorage.getItem('userId');
-        const userName = localStorage.getItem('loggedUser') || entregador.nome;
+        console.log('⚠️ Sistema não inicializado, tentando inicializar...');
+        
+        // Usar dados de usuário real se disponível
+        const realUserId = localStorage.getItem('realUserId');
+        const realUserName = localStorage.getItem('realUserName');
+        
+        const userId = realUserId || localStorage.getItem('userId') || '1';
+        const userName = realUserName || localStorage.getItem('loggedUser') || entregador.nome;
         
         if (!currentServiceId || !userId) {
+          console.error('❌ Dados insuficientes:', { currentServiceId, userId });
           notificationService.showError('Chamada', 'Dados insuficientes para chamada');
           return;
         }
         
+        console.log('🚀 Inicializando com dados:', { currentServiceId, userId, userName });
+        
         const initialized = await initializeCall(currentServiceId, userId, userName);
         if (!initialized) {
-          notificationService.showError('Chamada', 'Falha na inicialização');
+          console.error('❌ Falha na inicialização');
+          notificationService.showError('Chamada', 'Falha na inicialização do sistema');
           return;
         }
         
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('✅ Sistema inicializado, aguardando...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
       
+      console.log('📞 Tentando iniciar chamada de áudio para:', prestadorId);
       const success = await startAudioCall(prestadorId);
-      if (!success) {
+      
+      if (success) {
+        console.log('✅ Chamada de áudio iniciada com sucesso!');
+        notificationService.showSuccess('Chamada', 'Chamada de áudio iniciada!');
+      } else {
+        console.error('❌ Falha ao iniciar chamada de áudio');
         notificationService.showError('Chamada', 'Falha ao iniciar chamada de áudio');
       }
     } catch (error) {
-      console.error('📞 CHAMADA ÁUDIO - Erro:', error);
-      notificationService.showError('Chamada', 'Erro inesperado na chamada');
+      console.error('❌ Erro na chamada de áudio:', error);
+      notificationService.showError('Chamada', 'Erro inesperado: ' + (error as Error).message);
+    } finally {
+      setIsStartingCall(false); // Sempre resetar o estado
     }
   };
 
@@ -713,14 +669,6 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
               <span>Voltar</span>
             </button>
             
-            {/* Botão de Debug Temporário */}
-            <button 
-              onClick={setupRealUsersForTracking}
-              className="bg-purple-500 text-white px-2 py-1 rounded text-xs hover:bg-purple-600 transition-colors"
-              title="Configurar usuários reais (DEBUG)"
-            >
-              👥 Debug
-            </button>
           </div>
           
           <div className="text-center">
@@ -776,8 +724,17 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
             {/* Botão de Chamada de Áudio */}
             <button 
               onClick={handleAudioCall}
-              className="bg-green-600 text-white p-2 rounded-full hover:bg-green-700 transition-all"
-              title="Chamada de áudio"
+              disabled={isStartingCall || callState.isInCall}
+              className={`p-2 rounded-full transition-all ${
+                isStartingCall || callState.isInCall 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-green-600 hover:bg-green-700'
+              } text-white`}
+              title={
+                callState.isInCall ? 'Chamada ativa' : 
+                isStartingCall ? 'Iniciando chamada...' : 
+                'Chamada de áudio'
+              }
             >
               <PhoneCall className="w-5 h-5" />
             </button>

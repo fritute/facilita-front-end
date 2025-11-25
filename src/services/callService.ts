@@ -46,9 +46,10 @@ class CallService {
   private callStateCallbacks: CallStateCallback[] = [];
   private localStreamCallbacks: StreamCallback[] = [];
   private remoteStreamCallbacks: StreamCallback[] = [];
+  private preventStateReset: boolean = false; // Proteção contra reset
 
   constructor() {
-    console.log('📞 CallService inicializado');
+    // CallService inicializado
   }
 
   /**
@@ -56,7 +57,6 @@ class CallService {
    */
   async initialize(servicoId: string, userId: string, userName: string): Promise<boolean> {
     try {
-      console.log('🔧 Inicializando CallService para serviço:', servicoId);
 
       // Conectar ao WebSocket se não estiver conectado
       if (!websocketService.getConnectionStatus()) {
@@ -287,14 +287,17 @@ class CallService {
       
       notificationService.showSuccess('Chamada', `${data.answererName} aceitou a chamada!`);
       
-      // Atualizar estado para chamada ativa
+      // Atualizar estado para chamada ativa COM nome real do prestador
       this.callState = {
         ...this.callState,
         isInCall: true,
         isIncomingCall: false,
-        callStartTime: new Date()
+        callStartTime: new Date(),
+        callerName: data.answererName || this.callState.callerName // Atualizar com nome real
       };
       this.notifyStateChange();
+      
+      console.log('👤 Nome do prestador atualizado via WebSocket:', data.answererName);
       
       // WebRTC será configurado pelo WebRTCManager automaticamente
       console.log('✅ WebRTC será configurado com a resposta SDP automaticamente');
@@ -313,6 +316,11 @@ class CallService {
       });
       
       notificationService.showWarning('Chamada', `${data.rejectedByName} rejeitou a chamada`);
+      
+      // Desativar proteção para permitir reset quando rejeitada
+      this.preventStateReset = false;
+      console.log('🛡️ Proteção DESATIVADA - chamada rejeitada');
+      
       this.resetCallState();
     });
 
@@ -330,6 +338,11 @@ class CallService {
       
       const durationText = data.duration ? ` (${data.duration}s)` : '';
       notificationService.showInfo('Chamada', `Chamada encerrada${durationText}`);
+      
+      // Desativar proteção para permitir reset quando encerrada
+      this.preventStateReset = false;
+      console.log('🛡️ Proteção DESATIVADA - chamada encerrada');
+      
       this.resetCallState();
     });
 
@@ -354,6 +367,11 @@ class CallService {
       }
       
       notificationService.showError('Chamada Falhou', message);
+      
+      // Desativar proteção para permitir reset em caso de falha real
+      this.preventStateReset = false;
+      console.log('🛡️ Proteção DESATIVADA devido a falha real:', data.reason);
+      
       this.resetCallState();
     });
 
@@ -367,6 +385,11 @@ class CallService {
       });
       
       notificationService.showInfo('Chamada', 'Chamada foi cancelada');
+      
+      // Desativar proteção para permitir reset quando cancelada
+      this.preventStateReset = false;
+      console.log('🛡️ Proteção DESATIVADA - chamada cancelada');
+      
       this.resetCallState();
     });
 
@@ -420,10 +443,54 @@ class CallService {
       return false;
     }
 
-    console.log('🎥 Iniciando chamada de vídeo REAL para prestador:', targetUserId);
+    console.log('🎥 Iniciando chamada de vídeo');
 
     try {
-      // 1. Atualizar estado local imediatamente para mostrar interface
+      // 1. Ativar proteção contra reset
+      this.preventStateReset = true;
+      console.log('🛡️ Proteção contra reset ATIVADA no CallService');
+      
+      // 2. Buscar nome real do prestador
+      let prestadorName = 'Prestador'; // Fallback padrão
+      
+      try {
+        // Tentar obter nome do prestador dos dados salvos
+        const entregadorData = localStorage.getItem('entregadorData');
+        const foundDriver = localStorage.getItem('foundDriver');
+        
+        if (entregadorData) {
+          const prestadorInfo = JSON.parse(entregadorData);
+          prestadorName = prestadorInfo.nome || prestadorInfo.name || prestadorName;
+        } else if (foundDriver) {
+          const driverInfo = JSON.parse(foundDriver);
+          prestadorName = driverInfo.nome || driverInfo.name || driverInfo.usuario?.nome || prestadorName;
+        }
+        
+        // Se ainda não tem nome, tentar buscar via API
+        if (prestadorName === 'Prestador') {
+          console.log('🔍 Tentando buscar nome do prestador via API...');
+          
+          // Tentar buscar do serviço atual
+          const currentService = localStorage.getItem('currentService');
+          if (currentService) {
+            try {
+              const serviceData = JSON.parse(currentService);
+              if (serviceData.prestador?.usuario?.nome) {
+                prestadorName = serviceData.prestador.usuario.nome;
+              } else if (serviceData.prestador?.nome) {
+                prestadorName = serviceData.prestador.nome;
+              }
+            } catch (error) {
+              console.warn('⚠️ Erro ao parsear dados do serviço:', error);
+            }
+          }
+        }
+        
+      } catch (error) {
+        console.warn('⚠️ Erro ao buscar nome do prestador:', error);
+      }
+      
+      // 3. Atualizar estado local imediatamente para mostrar interface
       this.callState = {
         ...this.callState,
         isInCall: true,
@@ -431,7 +498,7 @@ class CallService {
         targetUserId,
         callStartTime: new Date(),
         callId: `call-${Date.now()}`,
-        callerName: 'Prestador',
+        callerName: prestadorName,
         callerId: targetUserId
       };
       this.notifyStateChange();
@@ -572,6 +639,10 @@ class CallService {
 
     console.log('📞 Encerrando chamada atual');
 
+    // Desativar proteção para permitir reset
+    this.preventStateReset = false;
+    console.log('🛡️ Proteção DESATIVADA - permitindo reset');
+
     this.webrtcManager.endCall('user_ended');
     this.resetCallState();
   }
@@ -671,6 +742,14 @@ class CallService {
   }
 
   private resetCallState() {
+    // Se proteção ativa, não resetar estado
+    if (this.preventStateReset) {
+      console.log('🛡️ PROTEÇÃO ATIVA: Bloqueando reset do estado no CallService');
+      console.log('🚫 Reset cancelado - mantendo chamada ativa');
+      return;
+    }
+    
+    console.log('📞 Resetando estado da chamada no CallService');
     this.callState = {
       isInCall: false,
       isIncomingCall: false,

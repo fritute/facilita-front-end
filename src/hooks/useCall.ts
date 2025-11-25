@@ -30,12 +30,40 @@ export const useCall = (): UseCallReturn => {
 
     // Listener para mudanças de estado
     const removeStateListener = callService.onStateChange((newState: CallState) => {
-      // Se callService tentar resetar isInCall, manter como true para teste
+      console.log('📡 CallService tentando atualizar estado:', {
+        'newState.isInCall': newState.isInCall,
+        'forceCallActive': forceCallActive,
+        'currentState.isInCall': callState.isInCall
+      });
+      
+      // Se proteção ativa e tentando resetar isInCall, verificar se é falha real
       if (forceCallActive && !newState.isInCall) {
-        console.log('🛡️ Proteção ativa: Bloqueando reset da chamada');
-        return; // Não atualizar o estado se tentar resetar
+        // Se é uma falha real (rejected, failed, cancelled, ended), permitir reset
+        if (newState.callType === null && !newState.isIncomingCall) {
+          console.log('🛡️ FALHA REAL DETECTADA: Desativando proteção para permitir reset');
+          setForceCallActive(false);
+          // Continuar com a atualização do estado
+        } else {
+          console.log('🛡️ PROTEÇÃO ATIVA: Bloqueando reset da chamada via WebSocket');
+          console.log('🚫 Estado rejeitado:', newState);
+          return; // Não atualizar o estado se tentar resetar
+        }
       }
       
+      // Se proteção ativa e já em chamada, verificar se é reset válido
+      if (forceCallActive && callState.isInCall && !newState.isInCall) {
+        // Se todos os campos estão resetados, é provavelmente uma falha real
+        if (!newState.callType && !newState.callId && !newState.callerName) {
+          console.log('🛡️ RESET COMPLETO DETECTADO: Desativando proteção');
+          setForceCallActive(false);
+          // Continuar com a atualização do estado
+        } else {
+          console.log('🛡️ PROTEÇÃO ATIVA: Mantendo estado de chamada atual');
+          return; // Manter estado atual
+        }
+      }
+      
+      console.log('✅ Permitindo atualização do estado');
       setCallState(newState);
     });
 
@@ -226,7 +254,7 @@ export const useCall = (): UseCallReturn => {
     try {
       // Desativar proteção para permitir reset
       setForceCallActive(false);
-      console.log('🛡️ Proteção forceCallActive DESATIVADA');
+      console.log('🛡️ Proteção forceCallActive DESATIVADA no endCall');
       
       if (isInitialized) {
         callService.endCall();
