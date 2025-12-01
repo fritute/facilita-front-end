@@ -7678,7 +7678,13 @@ Usando ID temporário: ${tempId}`)
           <div className="flex justify-center mb-8">
             <div className="relative">
               <div className="w-24 h-24 bg-gray-300 rounded-full flex items-center justify-center overflow-hidden">
-                {loggedUser?.foto ? (
+                {loggedUser?.foto_perfil ? (
+                  <img 
+                    src={loggedUser.foto_perfil} 
+                    alt="Perfil" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : loggedUser?.foto && !(loggedUser.foto instanceof File) ? (
                   <img 
                     src={loggedUser.foto} 
                     alt="Perfil" 
@@ -8382,7 +8388,13 @@ Usando ID temporário: ${tempId}`)
                       alt="Foto do perfil" 
                       className="w-full h-full object-cover"
                     />
-                  ) : loggedUser?.foto ? (
+                  ) : loggedUser?.foto_perfil ? (
+                    <img 
+                      src={loggedUser.foto_perfil} 
+                      alt="Foto do perfil" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : loggedUser?.foto && !(loggedUser.foto instanceof File) ? (
                     <img 
                       src={loggedUser.foto} 
                       alt="Foto do perfil" 
@@ -8976,7 +8988,13 @@ Usando ID temporário: ${tempId}`)
             <div className="text-center mb-8">
               <div className="relative inline-block mb-4">
                 <div className="w-24 h-24 bg-blue-200 rounded-full flex items-center justify-center mx-auto overflow-hidden">
-                  {profileData.foto && profileData.foto instanceof File ? (
+                  {profileData.foto_perfil ? (
+                    <img 
+                      src={profileData.foto_perfil} 
+                      alt="Foto do perfil" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : profileData.foto && profileData.foto instanceof File ? (
                     <img 
                       src={URL.createObjectURL(profileData.foto)} 
                       alt="Foto do perfil" 

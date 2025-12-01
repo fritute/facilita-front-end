@@ -96,6 +96,10 @@ export const API_ENDPOINTS = {
   CHAT_SEND_MESSAGE: (serviceId: string) => `${API_BASE_URL}/chat/${serviceId}/mensagem`, // POST - Enviar mensagem
   CHAT_GET_MESSAGES: (serviceId: string) => `${API_BASE_URL}/chat/${serviceId}/mensagens`, // GET - Buscar mensagens
   CHAT_MARK_READ: (serviceId: string) => `${API_BASE_URL}/chat/${serviceId}/mensagens/marcar-lidas`, // PATCH - Marcar como lidas
+  
+  // Videochamada - conforme documentação oficial
+  VIDEO_CALL: `${API_BASE_URL}/chamada/video`, // POST - Criar videochamada
+  VOICE_CALL: `${API_BASE_URL}/chamada/voz`, // POST - Criar chamada de voz
 }
 
 // OpenStreetMap

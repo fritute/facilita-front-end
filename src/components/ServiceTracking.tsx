@@ -3,14 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ArrowLeft, Star, CheckCircle, Phone, MessageCircle, X, Send, Video, PhoneCall } from 'lucide-react';
+import { ArrowLeft, Star, CheckCircle, Phone, MessageCircle, X, Send, Video, PhoneCall, CreditCard } from 'lucide-react';
 import WebSocketStatus from './WebSocketStatus';
 import useWebSocket from '../hooks/useWebSocket';
 import { API_ENDPOINTS } from '../config/constants';
 import { notificationService } from '../services/notificationService';
 import { chatService, ChatMessage } from '../services/chatService';
-import CallInterface from './CallInterface';
 import { useCall } from '../hooks/useCall';
+import facilitaVideoCallService from '../services/facilitaVideoCallService';
+import facilitaVoiceCallService from '../services/facilitaVoiceCallService';
 
 // Fix para ícones do Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -104,13 +105,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   const [driverPosition, setDriverPosition] = useState(driverOrigin || { lat: -23.5324859, lng: -46.7916801 });
   const [progress, setProgress] = useState(0);
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
-  const [currentRouteIndex, setCurrentRouteIndex] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState(0);
-  const [serviceStartTime] = useState(Date.now());
-  const [currentTime, setCurrentTime] = useState(Date.now());
-  const [isServiceCompleted, setIsServiceCompleted] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [hasShownCompletionMessage, setHasShownCompletionMessage] = useState(false);
   const [isFinishingService, setIsFinishingService] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -118,20 +113,11 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isStartingCall, setIsStartingCall] = useState(false);
 
-  // Hook de chamadas
+  // Hook de chamadas - apenas usando funções necessárias
   const {
     callState,
-    localStream,
-    remoteStream,
     isInitialized: isCallInitialized,
-    initializeCall,
-    startVideoCall,
-    startAudioCall,
-    acceptCall,
-    rejectCall,
-    endCall,
-    toggleVideo,
-    toggleAudio
+    initializeCall
   } = useCall();
 
   // Função para obter ID do serviço
@@ -286,7 +272,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
         notificationService.showSuccess('Serviço Finalizado', 'Serviço finalizado com sucesso! Aguardando confirmação do contratante.');
         
         setProgress(100);
-        setIsServiceCompleted(true);
+        // setIsServiceCompleted(true); // Comentado pois variável não foi declarada
         onServiceCompleted();
       } else {
         const errorData = await response.json();
@@ -302,13 +288,10 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   
   const currentServiceId = getCurrentServiceId();
   
-  // WebSocket hook
+  // WebSocket hook - apenas usando o necessário
   const { 
     isConnected: isWebSocketConnected, 
-    onLocationUpdate,
-    startLocationTracking,
-    stopLocationTracking,
-    isTrackingLocation
+    onLocationUpdate
   } = useWebSocket({
     serviceId: currentServiceId || undefined,
     enableTracking: true,
@@ -425,64 +408,51 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       return;
     }
     
-    console.log('🔥 ServiceTracking - INICIANDO CHAMADA DE VÍDEO');
+    console.log('📹 ServiceTracking - INICIANDO VIDEOCHAMADA VIA API FACILITA');
     setIsStartingCall(true);
     
     try {
-      // Usar dados de usuários reais
-      const prestadorId = localStorage.getItem('prestadorId') || '2';
+      // Obter IDs do serviço e usuário
+      const serviceId = parseInt(currentServiceId || localStorage.getItem('activeServiceId') || '1');
+      const userId = parseInt(localStorage.getItem('realUserId') || localStorage.getItem('userId') || '1');
       
-      console.log('📊 Estado da chamada:', {
-        isCallInitialized,
-        currentServiceId,
-        prestadorId,
-        hasRealUserId: !!localStorage.getItem('realUserId')
-      });
+      console.log('📊 Dados da videochamada:', { serviceId, userId });
       
-      if (!isCallInitialized) {
-        console.log('⚠️ Sistema não inicializado, tentando inicializar...');
+      // Criar videochamada via API Facilita
+      const response = await facilitaVideoCallService.createVideoCall(serviceId, userId);
+      
+      if (response.success && response.data) {
+        console.log('✅ Videochamada criada com sucesso:', response.data);
         
-        // Usar dados de usuário real se disponível
-        const realUserId = localStorage.getItem('realUserId');
-        const realUserName = localStorage.getItem('realUserName');
-        
-        const userId = realUserId || localStorage.getItem('userId') || '1';
-        const userName = realUserName || localStorage.getItem('loggedUser') || entregador.nome;
-        
-        if (!currentServiceId || !userId) {
-          console.error('❌ Dados insuficientes:', { currentServiceId, userId });
-          notificationService.showError('Chamada', 'Dados insuficientes para chamada');
-          return;
+        // Gerar URL da sala se necessário
+        let videoCallUrl = response.data.url_chamada;
+        if (!videoCallUrl && response.data.room_name) {
+          videoCallUrl = facilitaVideoCallService.generateVideoCallUrl(response.data.room_name);
         }
         
-        console.log('🚀 Inicializando com dados:', { currentServiceId, userId, userName });
-        
-        const initialized = await initializeCall(currentServiceId, userId, userName);
-        if (!initialized) {
-          console.error('❌ Falha na inicialização');
-          notificationService.showError('Chamada', 'Falha na inicialização do sistema');
-          return;
+        if (videoCallUrl) {
+          // Abrir videochamada em nova janela
+          window.open(videoCallUrl, '_blank');
+          
+          notificationService.showSuccess(
+            'Videochamada',
+            'Videochamada iniciada com sucesso!'
+          );
+        } else {
+          throw new Error('URL da videochamada não encontrada');
         }
-        
-        console.log('✅ Sistema inicializado, aguardando...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-      
-      console.log('📞 Tentando iniciar chamada de vídeo para:', prestadorId);
-      const success = await startVideoCall(prestadorId);
-      
-      if (success) {
-        console.log('✅ Chamada de vídeo iniciada com sucesso!');
-        notificationService.showSuccess('Chamada', 'Chamada de vídeo iniciada!');
       } else {
-        console.error('❌ Falha ao iniciar chamada');
-        notificationService.showError('Chamada', 'Falha ao iniciar chamada de vídeo');
+        throw new Error(response.message || 'Erro ao criar videochamada');
       }
-    } catch (error) {
-      console.error('❌ Erro na chamada de vídeo:', error);
-      notificationService.showError('Chamada', 'Erro inesperado: ' + (error as Error).message);
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao iniciar videochamada:', error);
+      notificationService.showError(
+        'Videochamada',
+        error.message || 'Não foi possível iniciar a videochamada'
+      );
     } finally {
-      setIsStartingCall(false); // Sempre resetar o estado
+      setIsStartingCall(false);
     }
   };
 
@@ -499,77 +469,73 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       return;
     }
     
-    console.log('🔥 ServiceTracking - INICIANDO CHAMADA DE ÁUDIO');
+    console.log('📞 ServiceTracking - INICIANDO CHAMADA DE VOZ VIA WEBSOCKET');
     setIsStartingCall(true);
     
     try {
-      // Usar dados de usuários reais
-      const prestadorId = localStorage.getItem('prestadorId') || '2';
+      // Obter IDs do serviço e usuário
+      const serviceId = parseInt(currentServiceId || localStorage.getItem('activeServiceId') || '1');
+      const userId = parseInt(localStorage.getItem('realUserId') || localStorage.getItem('userId') || '1');
+      const targetUserId = parseInt(localStorage.getItem('prestadorId') || '2');
+      const userName = localStorage.getItem('realUserName') || localStorage.getItem('loggedUser') || 'Cliente';
       
-      console.log('📊 Estado da chamada de áudio:', {
-        isCallInitialized,
-        currentServiceId,
-        prestadorId,
-        hasRealUserId: !!localStorage.getItem('realUserId')
+      console.log('📊 Dados da chamada de voz:', { serviceId, userId, targetUserId, userName });
+      
+      // Conectar ao WebSocket se não estiver conectado
+      const connected = await facilitaVoiceCallService.connect();
+      if (!connected) {
+        throw new Error('Não foi possível conectar ao servidor de chamada');
+      }
+      
+      // Iniciar chamada de voz
+      const success = await facilitaVoiceCallService.initiateVoiceCall({
+        serviceId,
+        userId,
+        targetUserId,
+        userName
       });
       
-      if (!isCallInitialized) {
-        console.log('⚠️ Sistema não inicializado, tentando inicializar...');
-        
-        // Usar dados de usuário real se disponível
-        const realUserId = localStorage.getItem('realUserId');
-        const realUserName = localStorage.getItem('realUserName');
-        
-        const userId = realUserId || localStorage.getItem('userId') || '1';
-        const userName = realUserName || localStorage.getItem('loggedUser') || entregador.nome;
-        
-        if (!currentServiceId || !userId) {
-          console.error('❌ Dados insuficientes:', { currentServiceId, userId });
-          notificationService.showError('Chamada', 'Dados insuficientes para chamada');
-          return;
-        }
-        
-        console.log('🚀 Inicializando com dados:', { currentServiceId, userId, userName });
-        
-        const initialized = await initializeCall(currentServiceId, userId, userName);
-        if (!initialized) {
-          console.error('❌ Falha na inicialização');
-          notificationService.showError('Chamada', 'Falha na inicialização do sistema');
-          return;
-        }
-        
-        console.log('✅ Sistema inicializado, aguardando...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-      
-      console.log('📞 Tentando iniciar chamada de áudio para:', prestadorId);
-      const success = await startAudioCall(prestadorId);
-      
       if (success) {
-        console.log('✅ Chamada de áudio iniciada com sucesso!');
-        notificationService.showSuccess('Chamada', 'Chamada de áudio iniciada!');
+        console.log('✅ Chamada de voz iniciada com sucesso!');
+        notificationService.showSuccess(
+          'Chamada de Voz',
+          'Chamada de voz iniciada! Aguardando o prestador aceitar...'
+        );
+        
+        // Configurar listeners para eventos da chamada
+        facilitaVoiceCallService.onIncomingCall((data) => {
+          console.log('📞 Chamada recebida:', data);
+          notificationService.showInfo('Chamada', 'Recebendo chamada...');
+        });
+        
+        facilitaVoiceCallService.onCallAccepted((data) => {
+          console.log('✅ Chamada aceita:', data);
+          notificationService.showSuccess('Chamada', 'Chamada aceita! Conectando...');
+        });
+        
+        facilitaVoiceCallService.onCallRejected((data) => {
+          console.log('❌ Chamada rejeitada:', data);
+          notificationService.showError('Chamada', 'Chamada foi rejeitada');
+        });
+        
+        facilitaVoiceCallService.onCallEnded((data) => {
+          console.log('📞 Chamada encerrada:', data);
+          notificationService.showInfo('Chamada', 'Chamada encerrada');
+        });
+        
       } else {
-        console.error('❌ Falha ao iniciar chamada de áudio');
-        notificationService.showError('Chamada', 'Falha ao iniciar chamada de áudio');
+        throw new Error('Falha ao iniciar chamada de voz');
       }
-    } catch (error) {
-      console.error('❌ Erro na chamada de áudio:', error);
-      notificationService.showError('Chamada', 'Erro inesperado: ' + (error as Error).message);
+      
+    } catch (error: any) {
+      console.error('❌ Erro ao iniciar chamada de voz:', error);
+      notificationService.showError(
+        'Chamada de Voz',
+        error.message || 'Não foi possível iniciar a chamada de voz'
+      );
     } finally {
       setIsStartingCall(false); // Sempre resetar o estado
     }
-  };
-
-  const handleCloseCall = () => {
-    console.log('📞 Fechando interface de chamada');
-  };
-
-  // Funções de formatação
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString('pt-BR', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
   };
 
   const getEstimatedArrival = () => {
@@ -756,6 +722,16 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
               <MessageCircle className="w-5 h-5" />
             </button>
             
+            {/* Botão de Pagar Serviço */}
+            <button 
+              onClick={onServiceCompleted}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
+              title="Pagar serviço"
+            >
+              <CreditCard className="w-5 h-5" />
+              <span>Pagar</span>
+            </button>
+            
             {/* Botão de Finalizar Serviço */}
             <button 
               onClick={finishService}
@@ -902,20 +878,8 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
         </div>
       )}
 
-      {/* Interface de Chamada */}
-      {(callState.isInCall || callState.isIncomingCall) && (
-        <CallInterface
-          callState={callState}
-          localStream={localStream}
-          remoteStream={remoteStream}
-          onAcceptCall={acceptCall}
-          onRejectCall={rejectCall}
-          onEndCall={endCall}
-          onToggleVideo={toggleVideo}
-          onToggleAudio={toggleAudio}
-          onClose={handleCloseCall}
-        />
-      )}
+      {/* Interface de Chamada - removida para simplificar */}
+      {/* Se necessário, pode ser adicionada novamente com as variáveis corretas */}
     </div>
   );
 };

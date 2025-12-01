@@ -340,6 +340,19 @@ export class FacilitaApiService extends ApiService {
     return this.patch(API_ENDPOINTS.CHAT_MARK_READ(serviceId))
   }
 
+  // === VIDEOCHAMADA ===
+  async createVideoCall(callData: any) {
+    console.log('📹 API: Criando videochamada:', API_ENDPOINTS.VIDEO_CALL);
+    console.log('📦 API: Dados da chamada:', callData);
+    return this.post(API_ENDPOINTS.VIDEO_CALL, callData)
+  }
+
+  async createVoiceCall(callData: any) {
+    console.log('📞 API: Criando chamada de voz:', API_ENDPOINTS.VOICE_CALL);
+    console.log('📦 API: Dados da chamada:', callData);
+    return this.post(API_ENDPOINTS.VOICE_CALL, callData)
+  }
+
   // === NOTIFICAÇÕES ===
   async getNotifications() {
     return this.get(API_ENDPOINTS.NOTIFICATIONS)
