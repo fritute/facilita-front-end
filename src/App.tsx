@@ -1,5 +1,59 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowLeft, Camera, MapPin, Search, Star, Clock, CreditCard, Home, FileText, User as UserIconLucide, ShoppingCart, Package, Sun, Moon, Bell, Menu, VideoOff, Hand } from 'lucide-react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { 
+  Mail, 
+  Lock, 
+  Eye, 
+  EyeOff, 
+  User, 
+  Phone, 
+  ArrowLeft, 
+  Camera, 
+  MapPin, 
+  Search, 
+  Star, 
+  Clock, 
+  CreditCard, 
+  Home, 
+  FileText, 
+  User as UserIconLucide, 
+  ShoppingCart, 
+  Package, 
+  Sun, 
+  Moon, 
+  Bell, 
+  Menu, 
+  VideoOff, 
+  Hand, 
+  Map, 
+  Car, 
+  Wrench, 
+  Briefcase, 
+  Stethoscope, 
+  Pizza, 
+  Gift, 
+  Shirt, 
+  Navigation, 
+  MessageCircle, 
+  CheckCircle, 
+  X, 
+  UserCircle, 
+  Settings, 
+  LogOut, 
+  Filter, 
+  Plus, 
+  Minus, 
+  Trash2, 
+  Edit2, 
+  Save, 
+  XCircle, 
+  AlertCircle, 
+  TrendingUp, 
+  DollarSign, 
+  Heart, 
+  Share2, 
+  Download, 
+  Upload 
+} from 'lucide-react'
 import QRCode from 'qrcode'
 import LocationMap from './LocationMap'
 import ServiceTracking from './components/ServiceTracking'
@@ -9,14 +63,21 @@ import LoadingSpinner from './components/LoadingSpinner'
 import NotificationSidebar from './components/NotificationSidebar'
 import ServiceCreateScreen from './components/ServiceCreateScreen'
 import { PlaceData } from './services/placesService'
-import { HomeScreen, WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen, ResetPasswordScreen, ServiceProviderScreen } from './screens'
+import { WalletScreen, ProfileScreen, AccountTypeScreen, LandingScreen, ResetPasswordScreen, ServiceProviderScreen } from './screens'
 import { ServiceTrackingManager } from './utils/serviceTrackingUtils'
 import { API_ENDPOINTS, API_BASE_URL } from './config/constants'
 import { handDetectionService } from './services/handDetectionService'
 import { useNotifications } from './hooks/useNotifications'
 import { notificationService } from './services/notificationService'
-import { uploadImage } from './services/uploadImageToAzure'
 import { handleProfilePhotoUpload } from './utils/profilePhotoHandler'
+import undrawMedicine from './src/assets/images/undraw_medicine_hqqg 2.png'
+import marketRemovebg from './src/assets/images/market-removebg-preview 1.png'
+import undrawDelivery from './src/assets/images/undraw_delivery-truck_mjui 4.png'
+import undrawShoppingApp from './src/assets/images/undraw_shopping-app_b80f 2.png'
+import undrawChef from './src/assets/images/undraw_chef_yoa7.png'
+import undrawGifts from './src/assets/images/undraw_gifts_4gy3.png'
+import undrawUrbanDesign from './src/assets/images/undraw_urban-design_tz8n 2.png'
+import undrawShoppingSpree from './src/assets/images/undraw_shopping-spree_h07u.png'
 //TELAS PARA TESTES E PARA MOVER
 type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
 
@@ -668,6 +729,35 @@ function App() {
     }, 500)
   }
 
+  // Função chamada quando o pagamento é confirmado
+  const handlePaymentConfirmed = () => {
+    console.log('💳 Pagamento confirmado! Voltando para tracking...')
+    
+    // Mostrar mensagem de sucesso
+    showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Obrigado por usar o Facilita.')
+    
+    // Voltar para tela de tracking (onde o botão Pagar vai desaparecer)
+    setTimeout(() => {
+      handleScreenTransition('service-tracking')
+      console.log('🔄 Voltando para service-tracking após pagamento')
+    }, 2000)
+  }
+
+  // Função chamada quando o serviço é FINALMENTE concluído (após pagamento)
+  const handleServiceFinalized = () => {
+    console.log('🎯 Serviço finalizado após pagamento!')
+    
+    // Limpar dados do serviço
+    setCreatedServiceId(null)
+    setActiveServiceId(null)
+    ServiceTrackingManager.clearActiveService()
+    
+    // Redirecionar para home
+    setTimeout(() => {
+      handleScreenTransition('home')
+    }, 2000)
+  }
+
   // Função para limpar serviços antigos na inicialização
   const cleanupOldServices = () => {
     const activeService = ServiceTrackingManager.loadActiveService()
@@ -861,7 +951,7 @@ function App() {
       name: 'Farmácia', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src="/src/assets/images/undraw_medicine_hqqg 2.png" alt="Farmácia" className="w-full h-full object-contain" />
+          <img src={undrawMedicine} alt="Farmácia" className="w-full h-full object-contain" />
         </div>
       )
     },
@@ -870,7 +960,7 @@ function App() {
       name: 'Mercado', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src="/src/assets/images/market-removebg-preview 1.png" alt="Mercado" className="w-full h-full object-contain" />
+          <img src={marketRemovebg} alt="Mercado" className="w-full h-full object-contain" />
         </div>
       )
     },
@@ -879,7 +969,7 @@ function App() {
       name: 'Correios', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src="/src/assets/images/undraw_delivery-truck_mjui 4.png" alt="Correios" className="w-full h-full object-contain" />
+          <img src={undrawDelivery} alt="Correios" className="w-full h-full object-contain" />
         </div>
       )
     },
@@ -888,7 +978,7 @@ function App() {
       name: 'Shopping', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src="/src/assets/images/undraw_shopping-app_b80f 2.png" alt="Shopping" className="w-full h-full object-contain" />
+          <img src={undrawShoppingApp} alt="Shopping" className="w-full h-full object-contain" />
         </div>
       )
     },
@@ -897,7 +987,7 @@ function App() {
       name: 'Restaurante', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src="/src/assets/images/undraw_chef_yoa7.png" alt="Restaurante" className="w-full h-full object-contain" />
+          <img src={undrawChef} alt="Restaurante" className="w-full h-full object-contain" />
         </div>
       )
     },
@@ -906,7 +996,7 @@ function App() {
       name: 'Presentes', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src="/src/assets/images/undraw_gifts_4gy3.png" alt="Presentes" className="w-full h-full object-contain" />
+          <img src={undrawGifts} alt="Presentes" className="w-full h-full object-contain" />
         </div>
       )
     },
@@ -915,7 +1005,7 @@ function App() {
       name: 'Serviços', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src="/src/assets/images/undraw_urban-design_tz8n 2.png" alt="Serviços" className="w-full h-full object-contain" />
+          <img src={undrawUrbanDesign} alt="Serviços" className="w-full h-full object-contain" />
         </div>
       )
     },
@@ -924,7 +1014,7 @@ function App() {
       name: 'Compras', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src="/src/assets/images/undraw_shopping-spree_h07u.png" alt="Compras" className="w-full h-full object-contain" />
+          <img src={undrawShoppingSpree} alt="Compras" className="w-full h-full object-contain" />
         </div>
       )
     }
@@ -5387,10 +5477,6 @@ const handleServiceCreate = async () => {
       console.warn('⚠️ Não foi possível obter id_localizacao, usando padrão: 1')
       return 1
     } catch (error) {
-      console.warn('⚠️ Erro ao obter id_localizacao:', error)
-      return 1 // ID fixo como fallback
-    }
-  }
 
   // Função para obter ID do contratante
   const getContratanteId = async () => {
@@ -6687,18 +6773,8 @@ Usando ID temporário: ${tempId}`)
     const paymentSuccess = await payServiceWithWallet(serviceId)
     
     if (paymentSuccess) {
-      // Limpar dados do serviço após pagamento confirmado
-      setCreatedServiceId(null)
-      setActiveServiceId(null)
-      ServiceTrackingManager.clearActiveService()
-      
-      // Mostrar mensagem de sucesso
-      showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Obrigado por usar o Facilita.')
-      
-      // Redirecionar para home após pagamento
-      setTimeout(() => {
-        handleScreenTransition('home')
-      }, 2000)
+      // Usar a função centralizada para pagamento confirmado
+      handlePaymentConfirmed()
     } else {
       showError('Erro no Pagamento', 'Não foi possível processar o pagamento. Tente novamente.')
     }
@@ -6777,6 +6853,7 @@ Usando ID temporário: ${tempId}`)
       <ServiceTracking
         onBack={() => handleScreenTransition('home')}
         onServiceCompleted={handleServiceCompleted}
+        onServiceFinalized={handleServiceFinalized}
         serviceId={activeServiceId || createdServiceId || undefined}
         entregador={foundDriver ? {
           nome: foundDriver.nome,
@@ -10736,12 +10813,7 @@ Usando ID temporário: ${tempId}`)
 
       {/* Modal Flutuante - Motorista Encontrado */}
       {/* Modais e indicadores removidos - fluxo simplificado */}
-      {/* Prestador aceita pelo celular -> vai direto para pagamento
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Prestador aceita pelo celular -> vai direto para pagamento */}
       
       {/* Animações CSS */}
       <style>{`

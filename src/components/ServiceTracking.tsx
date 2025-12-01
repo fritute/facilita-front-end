@@ -66,6 +66,7 @@ if (typeof document !== 'undefined') {
 interface ServiceTrackingProps {
   onBack: () => void;
   onServiceCompleted: () => void;
+  onServiceFinalized?: () => void;
   serviceId?: string;
   entregador: {
     nome: string;
@@ -94,6 +95,7 @@ interface ServiceTrackingProps {
 const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   onBack,
   onServiceCompleted,
+  onServiceFinalized,
   serviceId,
   entregador,
   destination,
@@ -106,6 +108,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   const [progress, setProgress] = useState(0);
   const [routeCoordinates, setRouteCoordinates] = useState<[number, number][]>([]);
   const [estimatedTime, setEstimatedTime] = useState(0);
+  const [isServicePaid, setIsServicePaid] = useState(false);
   const [isFinishingService, setIsFinishingService] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -273,7 +276,14 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
         
         setProgress(100);
         // setIsServiceCompleted(true); // Comentado pois variável não foi declarada
-        onServiceCompleted();
+        
+        // Se o serviço já foi pago, finaliza completamente
+        if (isServicePaid && onServiceFinalized) {
+          onServiceFinalized();
+        } else {
+          // Se não foi pago, apenas completa para pagamento
+          onServiceCompleted();
+        }
       } else {
         const errorData = await response.json();
         notificationService.showError('Erro', errorData.message || 'Não foi possível finalizar o serviço');
@@ -722,15 +732,20 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
               <MessageCircle className="w-5 h-5" />
             </button>
             
-            {/* Botão de Pagar Serviço */}
-            <button 
-              onClick={onServiceCompleted}
-              className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
-              title="Pagar serviço"
-            >
-              <CreditCard className="w-5 h-5" />
-              <span>Pagar</span>
-            </button>
+            {/* Botão de Pagar Serviço - apenas se não foi pago */}
+            {!isServicePaid && (
+              <button 
+                onClick={() => {
+                  setIsServicePaid(true);
+                  onServiceCompleted();
+                }}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
+                title="Pagar serviço"
+              >
+                <CreditCard className="w-5 h-5" />
+                <span>Pagar</span>
+              </button>
+            )}
             
             {/* Botão de Finalizar Serviço */}
             <button 
