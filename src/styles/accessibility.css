@@ -1,0 +1,135 @@
+/* Estilos de Acessibilidade */
+
+/* Leitor de voz */
+.voice-reader-active * {
+  cursor: help !important;
+}
+
+.voice-reader-hover {
+  outline: 3px solid #3b82f6 !important;
+  outline-offset: 2px !important;
+  background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Letras grandes */
+.large-font {
+  font-size: 120% !important;
+}
+
+.large-font h1 { font-size: 3rem !important; }
+.large-font h2 { font-size: 2.5rem !important; }
+.large-font h3 { font-size: 2rem !important; }
+.large-font p, .large-font span, .large-font div { font-size: 1.25rem !important; }
+.large-font button { font-size: 1.25rem !important; padding: 0.75rem 1.5rem !important; }
+
+/* Alto contraste */
+.high-contrast {
+  filter: contrast(1.5) !important;
+}
+
+.high-contrast * {
+  border-color: #000 !important;
+}
+
+.high-contrast button,
+.high-contrast a {
+  background-color: #000 !important;
+  color: #fff !important;
+  border: 2px solid #fff !important;
+}
+
+.high-contrast input,
+.high-contrast textarea {
+  background-color: #fff !important;
+  color: #000 !important;
+  border: 3px solid #000 !important;
+}
+
+/* Indicador de foco melhorado */
+.enhanced-focus *:focus {
+  outline: 4px solid #ff6b00 !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 6px rgba(255, 107, 0, 0.3) !important;
+}
+
+.enhanced-focus button:focus,
+.enhanced-focus a:focus {
+  transform: scale(1.05);
+  transition: transform 0.2s;
+}
+
+/* Movimento reduzido */
+.reduced-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Skip links */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #000;
+  color: #fff;
+  padding: 8px;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* Indicadores visuais */
+[aria-hidden="true"] {
+  opacity: 0.5;
+}
+
+[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Melhorias de contraste */
+::selection {
+  background-color: #3b82f6;
+  color: #fff;
+}
+
+/* Tooltips acessíveis */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #000;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 1000;
+  font-size: 14px;
+}
+
+/* Modo escuro acessível */
+@media (prefers-color-scheme: dark) {
+  .high-contrast {
+    background-color: #000 !important;
+    color: #fff !important;
+  }
+}
+
+/* Preferência de movimento reduzido do sistema */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
