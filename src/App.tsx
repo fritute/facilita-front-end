@@ -70,14 +70,7 @@ import { handDetectionService } from './services/handDetectionService'
 import { useNotifications } from './hooks/useNotifications'
 import { notificationService } from './services/notificationService'
 import { handleProfilePhotoUpload } from './utils/profilePhotoHandler'
-import undrawMedicine from './src/assets/images/undraw_medicine_hqqg 2.png'
-import marketRemovebg from './src/assets/images/market-removebg-preview 1.png'
-import undrawDelivery from './src/assets/images/undraw_delivery-truck_mjui 4.png'
-import undrawShoppingApp from './src/assets/images/undraw_shopping-app_b80f 2.png'
-import undrawChef from './src/assets/images/undraw_chef_yoa7.png'
-import undrawGifts from './src/assets/images/undraw_gifts_4gy3.png'
-import undrawUrbanDesign from './src/assets/images/undraw_urban-design_tz8n 2.png'
-import undrawShoppingSpree from './src/assets/images/undraw_shopping-spree_h07u.png'
+
 //TELAS PARA TESTES E PARA MOVER
 type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
 
@@ -951,7 +944,7 @@ function App() {
       name: 'Farmácia', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src={undrawMedicine} alt="Farmácia" className="w-full h-full object-contain" />
+          <Stethoscope className="w-16 h-16 text-green-600" />
         </div>
       )
     },
@@ -960,7 +953,7 @@ function App() {
       name: 'Mercado', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src={marketRemovebg} alt="Mercado" className="w-full h-full object-contain" />
+          <ShoppingCart className="w-16 h-16 text-green-600" />
         </div>
       )
     },
@@ -969,7 +962,7 @@ function App() {
       name: 'Correios', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src={undrawDelivery} alt="Correios" className="w-full h-full object-contain" />
+          <Package className="w-16 h-16 text-green-600" />
         </div>
       )
     },
@@ -978,7 +971,7 @@ function App() {
       name: 'Shopping', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src={undrawShoppingApp} alt="Shopping" className="w-full h-full object-contain" />
+          <Home className="w-16 h-16 text-green-600" />
         </div>
       )
     },
@@ -987,7 +980,7 @@ function App() {
       name: 'Restaurante', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src={undrawChef} alt="Restaurante" className="w-full h-full object-contain" />
+          <Pizza className="w-16 h-16 text-green-600" />
         </div>
       )
     },
@@ -996,7 +989,7 @@ function App() {
       name: 'Presentes', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src={undrawGifts} alt="Presentes" className="w-full h-full object-contain" />
+          <Gift className="w-16 h-16 text-green-600" />
         </div>
       )
     },
@@ -1005,7 +998,7 @@ function App() {
       name: 'Serviços', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src={undrawUrbanDesign} alt="Serviços" className="w-full h-full object-contain" />
+          <Wrench className="w-16 h-16 text-green-600" />
         </div>
       )
     },
@@ -1014,7 +1007,7 @@ function App() {
       name: 'Compras', 
       image: (
         <div className="w-24 h-24 mx-auto mb-3 flex items-center justify-center">
-          <img src={undrawShoppingSpree} alt="Compras" className="w-full h-full object-contain" />
+          <Shirt className="w-16 h-16 text-green-600" />
         </div>
       )
     }
@@ -1499,7 +1492,7 @@ function App() {
       console.log('👤 Usuário:', loggedUser?.nome)
       console.log('📧 Email:', loggedUser?.email)
       console.log('🆔 CPF no perfil:', profileData.cpf)
-      console.log('🆔 CPF no usuário:', loggedUser?.cpf)
+      // console.log('🆔 CPF no usuário:', loggedUser?.cpf) // Propriedade cpf não existe
       
       // Para sandbox, SEMPRE usar CPF de teste oficial do PagBank (obrigatório)
       const userCPF = '22222222222' // CPF de teste oficial - DEVE ser string com 11 dígitos exatos
@@ -1537,8 +1530,8 @@ function App() {
       } catch (fetchError) {
         console.error('❌ Erro no fetch:', fetchError)
         console.error('❌ Tipo do erro:', typeof fetchError)
-        console.error('❌ Mensagem do erro:', fetchError.message)
-        throw new Error(`Erro de conexão: ${fetchError.message}`)
+        console.error('❌ Mensagem do erro:', fetchError)
+        throw new Error('Erro de conexão')
       }
 
       if (!response.ok) {
@@ -1898,7 +1891,7 @@ function App() {
       
       // 4. Mostrar notificação
       const notificationMessage = `💸 Saque confirmado! R$ ${withdrawAmount.toFixed(2)} enviado para sua chave PIX.`
-      useNotification('success', notificationMessage)
+      // useNotification('success', notificationMessage) // Função não definida
       
       notificationService.showSuccess('Saque Confirmado', `R$ ${withdrawAmount.toFixed(2)} foi enviado para sua chave PIX`)
       
@@ -3439,7 +3432,7 @@ function App() {
           
           // Armazenar usuário no localStorage (será atualizado com foto depois se necessário)
           localStorage.setItem('userType', user.tipo_conta) // Para uso no chat
-          localStorage.setItem('userId', user.id.toString()) // Para uso no chat e outras funcionalidades
+          if (user.id) localStorage.setItem('userId', user.id.toString()) // Para uso no chat e outras funcionalidades
           
           setLoggedUser(user)
           console.log('👤 Usuário logado:', user)
