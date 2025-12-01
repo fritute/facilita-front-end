@@ -349,10 +349,14 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
 
         if (response.ok) {
           const serviceData = await response.json();
+          console.log('📊 Status atual do serviço:', serviceData.data?.status || serviceData.status);
           
-          // Se o serviço foi concluído pelo prestador (status 'concluido' ou 'finalizado')
-          if (serviceData.status === 'concluido' || serviceData.status === 'finalizado' || serviceData.status === 'completed') {
-            console.log('🎯 Serviço concluído pelo prestador detectado via polling!');
+          // Verificar se é a estrutura completa da API ou apenas o data
+          const status = serviceData.data?.status || serviceData.status;
+          
+          // Se o serviço foi finalizado pelo prestador
+          if (status === 'FINALIZADO' || status === 'finalizado' || status === 'concluido' || status === 'completed') {
+            console.log('🎯 Serviço finalizado pelo prestador detectado via polling!', status);
             onServiceCompleted();
           }
         }
@@ -496,12 +500,31 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
         
         // Iniciar videochamada WebRTC real
         console.log('🎥 Iniciando videochamada WebRTC...');
+        console.log('📊 Debug - Estado da chamada antes:', callState);
+        console.log('📊 Debug - Call initialized:', isCallInitialized);
         
         // Obter ID do prestador para a chamada
-        const prestadorId = localStorage.getItem('prestadorId') || '2';
+        const prestadorId = localStorage.getItem('prestadorId') || localStorage.getItem('realUserId') || '2';
+        console.log('👤 ID do prestador para videochamada:', prestadorId);
+        
+        // Verificar se o sistema de chamadas está inicializado
+        if (!isCallInitialized) {
+          console.log('⚠️ Sistema de chamadas não inicializado, tentando inicializar...');
+          const userId = localStorage.getItem('realUserId') || localStorage.getItem('userId') || '1';
+          const userName = localStorage.getItem('realUserName') || localStorage.getItem('loggedUser') || 'Usuário';
+          
+          const initSuccess = await initializeCall(currentServiceId, userId, userName);
+          if (!initSuccess) {
+            throw new Error('Não foi possível inicializar o sistema de chamadas');
+          }
+        }
         
         // Iniciar videochamada usando o sistema WebRTC
+        console.log('🚀 Chamando startVideoCall...');
         const videoCallSuccess = await startVideoCall(prestadorId);
+        
+        console.log('📊 Resultado da videochamada:', videoCallSuccess);
+        console.log('📊 Estado da chamada depois:', callState);
         
         if (videoCallSuccess) {
           console.log('✅ Videochamada WebRTC iniciada com sucesso!');

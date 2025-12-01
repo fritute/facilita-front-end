@@ -66,10 +66,16 @@ class CallService {
           return false;
         }
 
+        // Detectar tipo de usuário automaticamente
+        const userType = localStorage.getItem('userType') || 'CONTRATANTE';
+        const normalizedUserType = userType.toLowerCase() === 'prestador' ? 'prestador' : 'contratante';
+        
+        console.log('🔐 Autenticando usuário para chamadas:', { userId, userType: normalizedUserType, userName });
+        
         // Autenticar usuário
         await websocketService.authenticateUser({
           userId: parseInt(userId),
-          userType: 'contratante', // ou 'prestador' baseado no tipo do usuário
+          userType: normalizedUserType as 'contratante' | 'prestador',
           userName
         });
 
