@@ -12,6 +12,7 @@ import { chatService, ChatMessage } from '../services/chatService';
 import { useCall } from '../hooks/useCall';
 import facilitaVideoCallService from '../services/facilitaVideoCallService';
 import facilitaVoiceCallService from '../services/facilitaVoiceCallService';
+import CallInterface from './CallInterface';
 
 // Fix para ícones do Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -115,13 +116,20 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   const [newMessage, setNewMessage] = useState('');
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isStartingCall, setIsStartingCall] = useState(false);
-  const [videoCallData, setVideoCallData] = useState<{sala: string, token: string} | null>(null);
 
   // Hook de chamadas - apenas usando funções necessárias
   const {
     callState,
     isInitialized: isCallInitialized,
-    initializeCall
+    initializeCall,
+    startVideoCall,
+    localStream,
+    remoteStream,
+    acceptCall,
+    rejectCall,
+    endCall,
+    toggleVideo,
+    toggleAudio
   } = useCall();
 
   // Função para obter ID do serviço
@@ -323,6 +331,46 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     }
   }, [currentServiceId, isCallInitialized, initializeCall, entregador.nome]);
 
+  // Verificar periodicamente se o serviço foi concluído pelo prestador
+  useEffect(() => {
+    if (!currentServiceId) return;
+
+    const checkServiceStatus = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        const response = await fetch(`${API_ENDPOINTS.SERVICES}/${currentServiceId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const serviceData = await response.json();
+          
+          // Se o serviço foi concluído pelo prestador (status 'concluido' ou 'finalizado')
+          if (serviceData.status === 'concluido' || serviceData.status === 'finalizado' || serviceData.status === 'completed') {
+            console.log('🎯 Serviço concluído pelo prestador detectado via polling!');
+            onServiceCompleted();
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao verificar status do serviço:', error);
+      }
+    };
+
+    // Verificar a cada 5 segundos
+    const statusInterval = setInterval(checkServiceStatus, 5000);
+    
+    // Verificar uma vez imediatamente
+    checkServiceStatus();
+
+    // Limpar interval quando componente desmonta ou currentServiceId muda
+    return () => clearInterval(statusInterval);
+  }, [currentServiceId, onServiceCompleted]);
+
   // Conectar ao WebSocket do chat quando necessário
   useEffect(() => {
     if (isChatOpen && currentServiceId) {
@@ -446,24 +494,23 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
         
         console.log('🌐 URL final da videochamada:', videoCallUrl);
         
-        if (response.data.sala && response.data.token) {
-          // Videochamada criada com sucesso - mostrar modal com dados
-          console.log('✅ Videochamada configurada:', {
-            sala: response.data.sala,
-            token: response.data.token
-          });
-          
-          setVideoCallData({
-            sala: response.data.sala,
-            token: response.data.token
-          });
-          
+        // Iniciar videochamada WebRTC real
+        console.log('🎥 Iniciando videochamada WebRTC...');
+        
+        // Obter ID do prestador para a chamada
+        const prestadorId = localStorage.getItem('prestadorId') || '2';
+        
+        // Iniciar videochamada usando o sistema WebRTC
+        const videoCallSuccess = await startVideoCall(prestadorId);
+        
+        if (videoCallSuccess) {
+          console.log('✅ Videochamada WebRTC iniciada com sucesso!');
           notificationService.showSuccess(
             'Videochamada',
-            `Sala "${response.data.sala}" criada com sucesso!`
+            'Videochamada iniciada! Aguardando o prestador aceitar...'
           );
         } else {
-          throw new Error('Dados da videochamada não encontrados');
+          throw new Error('Não foi possível iniciar a videochamada WebRTC');
         }
       } else {
         throw new Error(response.message || 'Erro ao criar videochamada');
@@ -907,84 +954,21 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
         </div>
       )}
 
-      {/* Modal de Videochamada */}
-      {videoCallData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">
-                Videochamada Configurada
-              </h3>
-              <button
-                onClick={() => setVideoCallData(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-center mb-2">
-                  <Video className="w-5 h-5 text-green-600 mr-2" />
-                  <span className="text-green-800 font-medium">
-                    Sala de videochamada criada!
-                  </span>
-                </div>
-                
-                <div className="space-y-3 mt-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Sala:
-                    </label>
-                    <div className="bg-gray-100 p-2 rounded border text-sm font-mono">
-                      {videoCallData.sala}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Token:
-                    </label>
-                    <div className="bg-gray-100 p-2 rounded border text-xs font-mono break-all">
-                      {videoCallData.token}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="mt-4 text-sm text-gray-600">
-                  <p className="mb-2">
-                    <strong>Instruções:</strong>
-                  </p>
-                  <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Use estes dados para conectar no aplicativo de videochamada</li>
-                    <li>Compartilhe a sala com o prestador de serviço</li>
-                    <li>O token é necessário para autenticação</li>
-                  </ul>
-                </div>
-              </div>
-              
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(`Sala: ${videoCallData.sala}\nToken: ${videoCallData.token}`);
-                    alert('Dados copiados para a área de transferência!');
-                  }}
-                  className="flex-1 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition-colors text-sm"
-                >
-                  Copiar Dados
-                </button>
-                <button
-                  onClick={() => setVideoCallData(null)}
-                  className="flex-1 bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600 transition-colors text-sm"
-                >
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Interface de Videochamada WebRTC */}
+      <CallInterface
+        callState={callState}
+        localStream={localStream}
+        remoteStream={remoteStream}
+        onAcceptCall={acceptCall}
+        onRejectCall={rejectCall}
+        onEndCall={endCall}
+        onToggleVideo={toggleVideo}
+        onToggleAudio={toggleAudio}
+        onClose={() => {
+          // Função para minimizar a chamada (opcional)
+          console.log('📱 Minimizar chamada solicitado');
+        }}
+      />
 
       {/* Interface de Chamada - removida para simplificar */}
       {/* Se necessário, pode ser adicionada novamente com as variáveis corretas */}
