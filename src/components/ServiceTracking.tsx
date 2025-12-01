@@ -433,12 +433,17 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       
       if (response.success && response.data) {
         console.log('✅ Videochamada criada com sucesso:', response.data);
+        console.log('🔍 Debug campos da resposta:', {
+          url_chamada: response.data.url_chamada,
+          room_name: response.data.room_name,
+          sala: response.data.sala,
+          token: response.data.token
+        });
         
-        // Gerar URL da sala se necessário
+        // Usar a URL da videochamada diretamente da resposta da API
         let videoCallUrl = response.data.url_chamada;
-        if (!videoCallUrl && response.data.room_name) {
-          videoCallUrl = facilitaVideoCallService.generateVideoCallUrl(response.data.room_name);
-        }
+        
+        console.log('🌐 URL final da videochamada:', videoCallUrl);
         
         if (videoCallUrl) {
           // Abrir videochamada em nova janela

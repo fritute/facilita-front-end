@@ -7,6 +7,8 @@ export interface FacilitaVideoCallResponse {
     url_chamada?: string
     room_name?: string
     token_acesso?: string
+    sala?: string
+    token?: string
   }
   message?: string
 }
@@ -26,17 +28,40 @@ class FacilitaVideoCallService {
         usuarioId: userId
       }
 
-      const response = await facilitaApi.createVideoCall(requestData) as FacilitaVideoCallResponse
+      const response = await facilitaApi.createVideoCall(requestData)
+      console.log('📥 Resposta bruta da API:', response)
       
-      if (response.success) {
-        console.log('✅ Videochamada criada com sucesso:', response.data)
-        return response
-      } else {
-        console.error('❌ Erro ao criar videochamada:', response.message)
-        return {
-          success: false,
-          message: response.message || 'Erro ao criar videochamada'
+      // Se a resposta já tem a estrutura esperada
+      if (response && typeof response === 'object') {
+        // Se a resposta tem sucesso explícito
+        if (response.success || response.data || response.sala) {
+          // Normalizar a resposta para nossa estrutura
+          const sala = response.sala || response.data?.sala
+          const token = response.token || response.data?.token
+          
+          const normalizedResponse: FacilitaVideoCallResponse = {
+            success: true,
+            data: {
+              // Mapear diferentes campos possíveis
+              sala: sala,
+              token: token,
+              // Gerar URL correta usando a sala e token
+              url_chamada: sala ? `https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/chamada/video?sala=${sala}&token=${token}` : (response.url_chamada || response.data?.url_chamada),
+              room_name: response.room_name || response.data?.room_name,
+              id_chamada: response.id_chamada || response.data?.id_chamada,
+              token_acesso: response.token_acesso || response.data?.token_acesso
+            }
+          }
+          console.log('✅ Resposta normalizada:', normalizedResponse)
+          return normalizedResponse
         }
+      }
+      
+      // Se chegou aqui, a resposta não tem a estrutura esperada
+      console.error('❌ Estrutura de resposta inesperada:', response)
+      return {
+        success: false,
+        message: 'Estrutura de resposta inválida'
       }
     } catch (error: any) {
       console.error('❌ Erro na chamada da API de videochamada:', error)
@@ -77,9 +102,14 @@ class FacilitaVideoCallService {
     }
   }
 
-  // Método para gerar URL de videochamada se a API retornar room_name
+  // Método para gerar URL de videochamada usando a API do Facilita
   generateVideoCallUrl(roomName: string): string {
-    return `https://facilita-app.daily.co/${roomName}`
+    return `https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/chamada/video/${roomName}`
+  }
+
+  // Método para gerar URL de videochamada a partir do campo 'sala' usando a API do Facilita
+  generateVideoCallUrlFromSala(sala: string): string {
+    return `https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/chamada/video/${sala}`
   }
 
   // Método para validar se a resposta da API contém os dados necessários
@@ -87,7 +117,7 @@ class FacilitaVideoCallService {
     return !!(
       response.success &&
       response.data &&
-      (response.data.url_chamada || response.data.room_name)
+      (response.data.url_chamada || response.data.room_name || response.data.sala)
     )
   }
 }

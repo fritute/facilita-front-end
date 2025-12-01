@@ -711,28 +711,26 @@ function App() {
     // Finalizar serviço ativo no gerenciador
     ServiceTrackingManager.completeActiveService()
     
-    // Redirecionar para pagamento
-    notificationService.showInfo('Serviço Concluído', 'Por favor, realize o pagamento')
+    // Redirecionar para tela de serviço confirmado (conclusão)
+    notificationService.showInfo('Serviço Concluído', 'O prestador finalizou o serviço!')
     
-    console.log('🎯 Redirecionando para payment em 500ms...')
+    console.log('🎯 Redirecionando para service-confirmed...')
     setTimeout(() => {
-      console.log('🎯 Executando handleScreenTransition("payment")...')
-      handleScreenTransition('payment')
-      console.log('🎯 handleScreenTransition("payment") executado!')
-    }, 500)
+      handleScreenTransition('service-confirmed')
+    }, 1000)
   }
 
   // Função chamada quando o pagamento é confirmado
   const handlePaymentConfirmed = () => {
-    console.log('💳 Pagamento confirmado! Voltando para tracking...')
+    console.log('💳 Pagamento confirmado! Indo para avaliação...')
     
     // Mostrar mensagem de sucesso
-    notificationService.showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Obrigado por usar o Facilita.')
+    notificationService.showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Agora avalie o prestador.')
     
-    // Voltar para tela de tracking (onde o botão Pagar vai desaparecer)
+    // Ir para tela de avaliação
     setTimeout(() => {
-      handleScreenTransition('service-tracking')
-      console.log('🔄 Voltando para service-tracking após pagamento')
+      handleScreenTransition('service-rating')
+      console.log('🔄 Indo para service-rating após pagamento')
     }, 2000)
   }
 
@@ -7248,8 +7246,8 @@ Usando ID temporário: ${tempId}`)
           ← Voltar
         </button>
 
-        <h2 className={`text-2xl font-bold ${themeClasses.text} mb-2`}>Serviço Confirmado</h2>
-        <p className={`${themeClasses.textSecondary} mb-2`}>Obrigado por escolher a Facilita</p>
+        <h2 className={`text-2xl font-bold ${themeClasses.text} mb-2`}>Serviço Concluído</h2>
+        <p className={`${themeClasses.textSecondary} mb-2`}>O prestador finalizou seu serviço com sucesso!</p>
         {createdServiceId && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 w-full max-w-md">
             <p className={`text-sm font-medium mb-2 ${
@@ -7325,17 +7323,30 @@ Usando ID temporário: ${tempId}`)
         {/* Botões */}
         <div className="mt-8 space-y-3 w-full max-w-md">
           <button
-            onClick={() => handleScreenTransition('service-tracking')}
+            onClick={() => {
+              console.log('🎯 Indo para pagamento...')
+              handleScreenTransition('payment')
+            }}
+            className="w-full px-6 py-3 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 transition-colors"
+          >
+            Realizar Pagamento
+          </button>
+          
+          <button
+            onClick={() => {
+              console.log('🎯 Indo para avaliação...')
+              handleScreenTransition('service-rating')
+            }}
             className="w-full px-6 py-3 rounded-lg bg-green-500 text-white font-semibold hover:bg-green-600 transition-colors"
           >
-            Acompanhar Pedido
+            Avaliar Serviço
           </button>
           
           <button
             onClick={() => handleScreenTransition('home')}
             className="w-full px-6 py-3 rounded-lg bg-gray-500 text-white font-semibold hover:bg-gray-600 transition-colors"
           >
-            Voltar ao Início
+            Pular e Voltar ao Início
           </button>
         </div>
       </div>
