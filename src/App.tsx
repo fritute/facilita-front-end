@@ -734,7 +734,7 @@ function App() {
     console.log('💳 Pagamento confirmado! Voltando para tracking...')
     
     // Mostrar mensagem de sucesso
-    showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Obrigado por usar o Facilita.')
+    notificationService.showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Obrigado por usar o Facilita.')
     
     // Voltar para tela de tracking (onde o botão Pagar vai desaparecer)
     setTimeout(() => {
@@ -5477,6 +5477,10 @@ const handleServiceCreate = async () => {
       console.warn('⚠️ Não foi possível obter id_localizacao, usando padrão: 1')
       return 1
     } catch (error) {
+      console.error('❌ Erro ao obter id_localizacao:', error)
+      return 1
+    }
+  }
 
   // Função para obter ID do contratante
   const getContratanteId = async () => {
@@ -6304,19 +6308,19 @@ const handleServiceCreate = async () => {
       // Validações antes de enviar
       if (!payload.id_contratante || isNaN(payload.id_contratante)) {
         console.error('❌ ID do contratante inválido:', payload.id_contratante)
-        showError('Erro de Validação', 'ID do contratante não encontrado. Faça login novamente.')
+        notificationService.showError('Erro de Validação', 'ID do contratante não encontrado. Faça login novamente.')
         return false
       }
 
       if (!payload.descricao || payload.descricao.length < 3) {
         console.error('❌ Descrição inválida:', payload.descricao)
-        showError('Erro de Validação', 'Descrição do serviço deve ter pelo menos 3 caracteres.')
+        notificationService.showError('Erro de Validação', 'Descrição do serviço deve ter pelo menos 3 caracteres.')
         return false
       }
 
       if (!payload.origem_endereco || !payload.destino_endereco) {
         console.error('❌ Endereços inválidos:', { origem: payload.origem_endereco, destino: payload.destino_endereco })
-        showError('Erro de Validação', 'Endereços de origem e destino são obrigatórios.')
+        notificationService.showError('Erro de Validação', 'Endereços de origem e destino são obrigatórios.')
         return false
       }
 
@@ -6327,7 +6331,7 @@ const handleServiceCreate = async () => {
           destino_lat: payload.destino_lat,
           destino_lng: payload.destino_lng
         })
-        showError('Erro de Validação', 'Coordenadas geográficas inválidas.')
+        notificationService.showError('Erro de Validação', 'Coordenadas geográficas inválidas.')
         return false
       }
 
@@ -6704,10 +6708,10 @@ Usando ID temporário: ${tempId}`)
             errorMessage = errorData.message || 'Erro ao processar sua solicitação.'
           }
           
-          showError('Erro ao criar serviço', errorMessage)
+          notificationService.showError('Erro ao criar serviço', errorMessage)
         } catch (parseError) {
           // Se não conseguir parsear o erro, mostrar mensagem genérica
-          showError('Erro ao criar serviço', 'Não foi possível processar sua solicitação. Tente novamente.')
+          notificationService.showError('Erro ao criar serviço', 'Não foi possível processar sua solicitação. Tente novamente.')
         }
         
         return false
@@ -6717,7 +6721,7 @@ Usando ID temporário: ${tempId}`)
       
       // Verificar se é erro de sessão expirada
       if (error instanceof Error && error.message.includes('sessão expirou')) {
-        showError('Sessão Expirada', 'Sua sessão expirou. Faça login novamente.')
+        notificationService.showError('Sessão Expirada', 'Sua sessão expirou. Faça login novamente.')
         setCurrentScreen('login')
         return false
       }
@@ -6728,7 +6732,7 @@ Usando ID temporário: ${tempId}`)
           error.message.includes('Token não encontrado') ||
           error.message.includes('Acesso negado: Token')
       )) {
-        showError('Sessão Expirada', 'Sua sessão expirou. Por favor, faça login novamente.')
+        notificationService.showError('Sessão Expirada', 'Sua sessão expirou. Por favor, faça login novamente.')
         localStorage.removeItem('authToken')
         localStorage.removeItem('loggedUser')
         setLoggedUser(null)
@@ -6741,9 +6745,9 @@ Usando ID temporário: ${tempId}`)
         showWarning('Perfil Incompleto', 'Complete seu perfil de contratante antes de criar serviços.')
         setShowCompleteProfileModal(true)
       } else if (error instanceof TypeError && error.message.includes('fetch')) {
-        showError('Erro de Conexão', 'Verifique sua internet e tente novamente.')
+        notificationService.showError('Erro de Conexão', 'Verifique sua internet e tente novamente.')
       } else {
-        showError('Erro', 'Não foi possível criar o serviço. Tente novamente.')
+        notificationService.showError('Erro', 'Não foi possível criar o serviço. Tente novamente.')
       }
       
       return false
@@ -7418,7 +7422,7 @@ Usando ID temporário: ${tempId}`)
           })
           
           // Mostrar feedback para o usuário
-          showSuccess('Destino Atualizado', `${place.name} foi definido como destino`)
+          notificationService.showSuccess('Destino Atualizado', `${place.name} foi definido como destino`)
         }}
         onOriginPlaceSelect={(place: PlaceData) => {
           console.log('🏪 Estabelecimento selecionado como ORIGEM:', place.name)
@@ -7434,7 +7438,7 @@ Usando ID temporário: ${tempId}`)
           })
           
           // Mostrar feedback para o usuário
-          showSuccess('Origem Atualizada', `${place.name} foi definido como origem`)
+          notificationService.showSuccess('Origem Atualizada', `${place.name} foi definido como origem`)
         }}
         calculateDistance={calculateDistance}
         calculatePrice={calculatePrice}
@@ -8392,8 +8396,7 @@ Usando ID temporário: ${tempId}`)
             file,
             loggedUser,
             setLoggedUser,
-            showSuccess,
-            showError
+            notificationService.showError
           )
           
           if (success) {
@@ -10912,8 +10915,6 @@ Usando ID temporário: ${tempId}`)
       `}</style>
     </div>
   )
-  
 }
-
 
 export default App
