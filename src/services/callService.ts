@@ -517,7 +517,7 @@ class CallService {
         console.log('✅ Chamada WebRTC iniciada com sucesso');
         
         // 3. Enviar sinal via WebSocket para o prestador (conforme documentação)
-        if (websocketService.isConnected()) {
+        if (websocketService.getConnectionStatus()) {
           console.log('📡 Enviando convite de chamada via WebSocket...');
           
           const currentServiceId = localStorage.getItem('currentServiceId');

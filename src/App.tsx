@@ -6849,6 +6849,7 @@ Usando ID temporário: ${tempId}`)
         onBack={() => handleScreenTransition('home')}
         onServiceCompleted={handleServiceCompleted}
         onServiceFinalized={handleServiceFinalized}
+        onOpenPayment={() => handleScreenTransition('payment')}
         serviceId={activeServiceId || createdServiceId || undefined}
         entregador={foundDriver ? {
           nome: foundDriver.nome,

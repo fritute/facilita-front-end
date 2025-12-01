@@ -68,6 +68,7 @@ interface ServiceTrackingProps {
   onBack: () => void;
   onServiceCompleted: () => void;
   onServiceFinalized?: () => void;
+  onOpenPayment?: () => void;
   serviceId?: string;
   entregador: {
     nome: string;
@@ -97,6 +98,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   onBack,
   onServiceCompleted,
   onServiceFinalized,
+  onOpenPayment,
   serviceId,
   entregador,
   destination,
@@ -817,11 +819,11 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
             </button>
             
             {/* Botão de Pagar Serviço - apenas se não foi pago */}
-            {!isServicePaid && (
+            {!isServicePaid && onOpenPayment && (
               <button 
                 onClick={() => {
-                  setIsServicePaid(true);
-                  onServiceCompleted();
+                  console.log('💳 Abrindo tela de pagamento durante tracking...');
+                  onOpenPayment();
                 }}
                 className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center space-x-2"
                 title="Pagar serviço"
