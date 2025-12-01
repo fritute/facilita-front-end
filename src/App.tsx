@@ -722,16 +722,16 @@ function App() {
 
   // Função chamada quando o pagamento é confirmado
   const handlePaymentConfirmed = () => {
-    console.log('💳 Pagamento confirmado! Indo para avaliação...')
+    console.log('💳 Pagamento confirmado! Voltando para tracking simples...')
     
     // Mostrar mensagem de sucesso
-    notificationService.showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso! Agora avalie o prestador.')
+    notificationService.showSuccess('Pagamento Confirmado', 'Serviço pago com sucesso!')
     
-    // Ir para tela de avaliação
+    // Voltar para tracking simples
     setTimeout(() => {
-      handleScreenTransition('service-rating')
-      console.log('🔄 Indo para service-rating após pagamento')
-    }, 2000)
+      handleScreenTransition('service-tracking')
+      console.log('🔄 Voltando para service-tracking após pagamento')
+    }, 1500)
   }
 
   // Função chamada quando o serviço é FINALMENTE concluído (após pagamento)
@@ -7324,12 +7324,12 @@ Usando ID temporário: ${tempId}`)
         <div className="mt-8 space-y-3 w-full max-w-md">
           <button
             onClick={() => {
-              console.log('🎯 Indo para pagamento...')
+              console.log('🎯 Abrindo tela de pagamento...')
               handleScreenTransition('payment')
             }}
             className="w-full px-6 py-3 rounded-lg bg-blue-500 text-white font-semibold hover:bg-blue-600 transition-colors"
           >
-            Realizar Pagamento
+            Pagar R$ {(servicePrice > 0 ? servicePrice : 119.99).toFixed(2)}
           </button>
           
           <button
