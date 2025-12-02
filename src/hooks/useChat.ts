@@ -26,8 +26,13 @@ export function useChat(userId: number, userType: string, userName: string, serv
     servicoId
   });
 
-  // Função para buscar mensagens via HTTP (fallback)
+  // Função para buscar mensagens via HTTP (DESABILITADA - endpoint 404)
   const fetchMessagesHTTP = async () => {
+    console.log('🙅 [HTTP] HTTP polling desabilitado - endpoint retorna 404');
+    // Não fazer nada por enquanto, focar no Socket.IO
+    return;
+    
+    /* CÓDIGO ORIGINAL COMENTADO - ENDPOINT RETORNA 404
     try {
       const token = localStorage.getItem('authToken');
       const response = await fetch(`https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/servico/${servicoId}/mensagem`, {
@@ -41,27 +46,12 @@ export function useChat(userId: number, userType: string, userName: string, serv
       if (response.ok) {
         const data = await response.json();
         console.log('📥 [HTTP FALLBACK] Mensagens recebidas:', data);
-        
-        if (data.success && Array.isArray(data.mensagens)) {
-          const httpMessages: Message[] = data.mensagens.map((msg: any) => ({
-            servicoId: parseInt(servicoId.toString()),
-            mensagem: msg.mensagem || msg.message || '',
-            sender: msg.enviado_por === 'contratante' ? 'contratante' : 'prestador',
-            timestamp: msg.data_envio || msg.created_at || new Date().toISOString(),
-            userInfo: {
-              userId: msg.enviado_por === 'contratante' ? userId : 999,
-              userType: msg.enviado_por || 'prestador',
-              userName: msg.enviado_por === 'contratante' ? userName : 'Prestador'
-            }
-          }));
-          
-          setMessages(httpMessages);
-          console.log(`📝 [HTTP] ${httpMessages.length} mensagens carregadas`);
-        }
+        // ... resto do código
       }
     } catch (error) {
       console.error('❌ [HTTP FALLBACK] Erro ao buscar mensagens:', error);
     }
+    */
   };
 
   useEffect(() => {
@@ -101,38 +91,58 @@ export function useChat(userId: number, userType: string, userName: string, serv
       setIsConnected(false);
     });
 
-    // Receber mensagens em tempo real
+    // Receber mensagens em tempo real - MÚLTIPLOS LISTENERS
     newSocket.on("receive_message", (msg: Message) => {
-      console.log("📥 MENSAGEM RECEBIDA DO SERVIDOR:", {
-        servicoId: msg.servicoId,
-        mensagem: msg.mensagem,
-        sender: msg.sender,
-        userInfo: msg.userInfo
-      });
-      
-      // Adicionar mensagem recebida à lista
+      console.log("📥 [RECEIVE_MESSAGE] Mensagem recebida:", msg);
+      processIncomingMessage(msg);
+    });
+    
+    // Listener adicional para new_message (que aparece nos logs)
+    newSocket.on("new_message", (msg: any) => {
+      console.log("📥 [NEW_MESSAGE] Mensagem recebida:", msg);
+      // Converter formato se necessário
+      const convertedMsg: Message = {
+        servicoId: msg.servicoId || servicoId,
+        mensagem: msg.mensagem || msg.message || msg.texto || '',
+        sender: msg.sender || (msg.enviado_por === 'prestador' ? 'prestador' : 'contratante'),
+        timestamp: msg.timestamp || msg.data_envio || new Date().toISOString(),
+        userInfo: msg.userInfo || {
+          userId: msg.userId || 999,
+          userType: msg.userType || 'prestador',
+          userName: msg.userName || 'Prestador'
+        }
+      };
+      processIncomingMessage(convertedMsg);
+    });
+    
+    // Função para processar mensagens recebidas
+    const processIncomingMessage = (msg: Message) => {
       const newMessage: Message = {
         ...msg,
         timestamp: msg.timestamp || new Date().toISOString()
       };
+      
+      console.log("📝 [PROCESS] Processando mensagem:", newMessage);
       
       setMessages(prev => {
         // Evitar duplicatas
         const exists = prev.some(m => 
           m.mensagem === newMessage.mensagem && 
           m.sender === newMessage.sender &&
-          Math.abs(new Date(m.timestamp || 0).getTime() - new Date(newMessage.timestamp || 0).getTime()) < 1000
+          Math.abs(new Date(m.timestamp || 0).getTime() - new Date(newMessage.timestamp || 0).getTime()) < 3000
         );
         
         if (exists) {
-          console.log("📝 Mensagem duplicada, ignorando");
+          console.log("📝 [PROCESS] Mensagem duplicada, ignorando");
           return prev;
         }
         
-        console.log("📝 Adicionando nova mensagem à lista");
-        return [...prev, newMessage];
+        console.log("📝 [PROCESS] ✅ Adicionando nova mensagem à lista!");
+        const updatedMessages = [...prev, newMessage];
+        console.log("📚 [PROCESS] Total de mensagens agora:", updatedMessages.length);
+        return updatedMessages;
       });
-    });
+    };
 
     // Eventos de erro
     newSocket.on("connect_error", (error) => {
@@ -161,29 +171,16 @@ export function useChat(userId: number, userType: string, userName: string, serv
     };
   }, [userId, userType, userName, servicoId]);
   
-  // Polling HTTP agressivo para garantir recebimento de mensagens
+  // HTTP Polling DESABILITADO - endpoint retorna 404
   useEffect(() => {
-    if (!servicoId || servicoId === 0) return;
+    console.log('🙅 [POLLING] HTTP polling desabilitado - focando no Socket.IO que funciona');
+    console.log('🔎 [DEBUG] ServiceId atual:', servicoId);
     
-    // Buscar mensagens imediatamente
-    fetchMessagesHTTP();
-    
-    // Polling mais frequente: a cada 2 segundos
-    const interval = setInterval(() => {
-      console.log('🔄 [POLLING] Buscando mensagens via HTTP...');
-      fetchMessagesHTTP();
-    }, 2000);
-    
-    // Polling adicional focado apenas em mensagens do prestador
-    const prestadorPolling = setInterval(() => {
-      console.log('👨‍🔧 [PRESTADOR POLLING] Verificando mensagens do prestador...');
-      fetchMessagesHTTP();
-    }, 1500);
+    // Não fazer polling HTTP por enquanto
+    // O Socket.IO já está recebendo eventos 'new_message'
     
     return () => {
-      clearInterval(interval);
-      clearInterval(prestadorPolling);
-      console.log('🛑 [POLLING] Parando todos os pollings HTTP');
+      console.log('📋 [CLEANUP] Limpeza do useEffect de polling');
     };
   }, [servicoId]);
 
@@ -212,7 +209,10 @@ export function useChat(userId: number, userType: string, userName: string, serv
       socket.emit("send_message", messageData);
     }
     
-    // SEMPRE enviar via HTTP como backup
+    // HTTP backup DESABILITADO - endpoint retorna 404
+    console.log("🙅 [HTTP] Backup HTTP desabilitado - usando apenas Socket.IO");
+    
+    /* HTTP BACKUP COMENTADO - ENDPOINT 404
     try {
       const token = localStorage.getItem('authToken');
       const httpPayload = {
@@ -221,26 +221,11 @@ export function useChat(userId: number, userType: string, userName: string, serv
         enviado_por: userType,
         id_servico: servicoId
       };
-      
-      console.log("📤 [HTTP] Enviando via HTTP:", httpPayload);
-      
-      const response = await fetch(`https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/servico/${servicoId}/mensagem`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(httpPayload)
-      });
-      
-      if (response.ok) {
-        console.log("✅ [HTTP] Mensagem enviada com sucesso via HTTP");
-      } else {
-        console.error("❌ [HTTP] Erro ao enviar via HTTP:", response.status);
-      }
+      // ... resto do código HTTP
     } catch (error) {
-      console.error("❌ [HTTP] Erro de rede ao enviar:", error);
+      console.error('❌ [HTTP] Erro de rede ao enviar:', error);
     }
+    */
     
     // Adicionar mensagem localmente para feedback imediato
     const localMessage: Message = {
@@ -274,8 +259,8 @@ export function useChat(userId: number, userType: string, userName: string, serv
       return newMessages;
     });
     
-    // Forçar atualização das mensagens após 1 segundo
-    setTimeout(fetchMessagesHTTP, 1000);
+    // Não forçar busca HTTP - focar no Socket.IO
+    console.log("📝 [SEND] Mensagem enviada, aguardando resposta via Socket.IO...");
     
     return true;
   };

@@ -999,42 +999,35 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
               <p className="text-xs text-yellow-600 mb-2">🧪 Testes e Debug:</p>
               <div className="grid grid-cols-2 gap-1 text-xs">
                 <button 
-                  onClick={() => simulateMessage && simulateMessage("Olá! Estou a caminho!", true)}
-                  className="px-2 py-1 bg-blue-500 text-white rounded text-xs"
+                  onClick={() => {
+                    console.log('🎯 [SOCKET DEBUG] Informações do Socket.IO:');
+                    console.log('🔌 Conectado:', isConnected);
+                    console.log('📡 Service ID:', currentServiceId);
+                    console.log('💬 Mensagens:', chatMessages.length);
+                    console.log('🏃‍♂️ Prestador:', entregador?.name || 'N/A');
+                    console.log('🎧 Socket events: receive_message, new_message');
+                  }}
+                  className="px-2 py-1 bg-purple-500 text-white rounded text-xs"
                 >
-                  🚗 Simular Prestador
-                </button>
-                <button 
-                  onClick={() => refreshMessages && refreshMessages()}
-                  className="px-2 py-1 bg-green-500 text-white rounded text-xs"
-                >
-                  🔄 Buscar Mensagens
-                </button>
-                <button 
-                  onClick={() => simulateMessage && simulateMessage("Chegando em 5 min!", true)}
-                  className="px-2 py-1 bg-blue-500 text-white rounded text-xs"
-                >
-                  🕒 Chegando
+                  🔍 Socket Info
                 </button>
                 <button 
                   onClick={() => {
-                    console.log('📊 ESTADO COMPLETO DO CHAT:', {
-                      chatMessages: chatMessages,
-                      totalMensagens: chatMessages.length,
-                      isConnected,
-                      userId,
-                      currentServiceId,
-                      prestadorData: entregador,
-                      localStorage: {
-                        authToken: !!localStorage.getItem('authToken'),
-                        userId: localStorage.getItem('userId'),
-                        realUserId: localStorage.getItem('realUserId')
-                      }
-                    });
+                    console.log('📊 ESTADO COMPLETO DO SISTEMA:');
+                    console.log('💬 Chat Messages:', chatMessages);
+                    console.log('🔌 Socket Status:', isConnected ? 'CONECTADO' : 'DESCONECTADO');
+                    console.log('📍 Service:', { id: currentServiceId, status: service?.status });
+                    console.log('👤 User:', { id: userId, type: 'contratante' });
+                    
+                    // Testar se conseguimos simular uma mensagem do prestador
+                    console.log('🧪 [TEST] Tentando simular mensagem do prestador...');
+                    if (simulateMessage) {
+                      simulateMessage("Teste: mensagem do prestador via Socket!", true);
+                    }
                   }}
-                  className="px-2 py-1 bg-gray-500 text-white rounded text-xs"
+                  className="px-2 py-1 bg-indigo-500 text-white rounded text-xs"
                 >
-                  🔍 Debug Log
+                  📊 Debug & Test
                 </button>
               </div>
               <div className="mt-1 flex gap-1">
