@@ -102,9 +102,6 @@ const AddressSearch: React.FC<AddressSearchProps> = ({
                 <MapPin className="w-5 h-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-800 line-clamp-2">{result.address}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {result.lat.toFixed(6)}, {result.lng.toFixed(6)}
-                  </p>
                 </div>
               </div>
             </button>

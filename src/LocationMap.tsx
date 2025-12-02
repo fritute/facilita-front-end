@@ -137,7 +137,7 @@ const LocationMap: React.FC<LocationMapProps> = ({ onLocationSelect, onScreenCha
         console.log(`✅ Localização obtida: ${latitude}, ${longitude}`)
         
         setMapCenter([latitude, longitude])
-        setUserLocation({ lat: latitude, lng: longitude, address: `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}` })
+        setUserLocation({ lat: latitude, lng: longitude, address: 'Localização atual' })
         
         await getNearbyAddresses(latitude, longitude)
         setIsLocating(false)

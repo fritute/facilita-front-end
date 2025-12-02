@@ -913,8 +913,8 @@ function App() {
             
             setUserLocation({ lat, lng, address })
           } catch (error) {
-            notificationService.showWarning('Localização', 'Não foi possível obter o endereço completo. Usando coordenadas.')
-            setUserLocation({ lat, lng, address: `${lat.toFixed(4)}, ${lng.toFixed(4)}` })
+            notificationService.showWarning('Localização', 'Não foi possível obter o endereço completo.')
+            setUserLocation({ lat, lng, address: 'Localização obtida' })
           }
         },
         (error) => {
@@ -7064,13 +7064,7 @@ Usando ID temporário: ${tempId}`)
                 Aguarde enquanto encontramos um motorista disponível para aceitar seu serviço...
               </p>
 
-              {/* Info do serviço */}
-              {createdServiceId && (
-                <div className={`${themeClasses.bgSecondary} rounded-lg p-4 mb-6`}>
-                  <p className={`text-sm ${themeClasses.textSecondary} mb-2`}>ID do Serviço</p>
-                  <p className={`font-mono text-lg ${themeClasses.text}`}>{createdServiceId}</p>
-                </div>
-              )}
+
 
               {/* Botão cancelar */}
               <button

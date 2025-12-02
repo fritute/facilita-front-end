@@ -994,51 +994,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
               )}
             </div>
 
-            {/* Botões de teste e debug */}
-            <div className="p-2 bg-yellow-50 border-t border-yellow-200">
-              <p className="text-xs text-yellow-600 mb-2">🧪 Testes e Debug:</p>
-              <div className="grid grid-cols-2 gap-1 text-xs">
-                <button 
-                  onClick={() => {
-                    console.log('🎯 [SOCKET DEBUG] Informações do Socket.IO:');
-                    console.log('🔌 Conectado:', isConnected);
-                    console.log('📡 Service ID:', currentServiceId);
-                    console.log('💬 Mensagens:', chatMessages.length);
-                    console.log('🏃‍♂️ Prestador:', entregador?.name || 'N/A');
-                    console.log('🎧 Socket events: receive_message, new_message');
-                  }}
-                  className="px-2 py-1 bg-purple-500 text-white rounded text-xs"
-                >
-                  🔍 Socket Info
-                </button>
-                <button 
-                  onClick={() => {
-                    console.log('📊 ESTADO COMPLETO DO SISTEMA:');
-                    console.log('💬 Chat Messages:', chatMessages);
-                    console.log('🔌 Socket Status:', isConnected ? 'CONECTADO' : 'DESCONECTADO');
-                    console.log('📍 Service:', { id: currentServiceId, status: service?.status });
-                    console.log('👤 User:', { id: userId, type: 'contratante' });
-                    
-                    // Testar se conseguimos simular uma mensagem do prestador
-                    console.log('🧪 [TEST] Tentando simular mensagem do prestador...');
-                    if (simulateMessage) {
-                      simulateMessage("Teste: mensagem do prestador via Socket!", true);
-                    }
-                  }}
-                  className="px-2 py-1 bg-indigo-500 text-white rounded text-xs"
-                >
-                  📊 Debug & Test
-                </button>
-              </div>
-              <div className="mt-1 flex gap-1">
-                <span className={`text-xs px-2 py-1 rounded ${isConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {isConnected ? '🟢 Socket OK' : '🔴 Socket OFF'}
-                </span>
-                <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700">
-                  💬 {chatMessages.length} msgs
-                </span>
-              </div>
-            </div>
+
 
             {/* Input de mensagem */}
             <div className="p-4 border-t border-gray-200 bg-white">
