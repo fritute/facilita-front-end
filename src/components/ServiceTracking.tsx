@@ -396,7 +396,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     return () => clearInterval(statusInterval);
   }, [currentServiceId, onServiceCompleted]);
 
-  // Conectar ao WebSocket do chat quando necessário
+  // Conectar ao WebSocket do chat e polling para mensagens
   useEffect(() => {
     if (isChatOpen && currentServiceId) {
       console.log('💬 Ativando chat e carregando mensagens...');
@@ -406,7 +406,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       
       // Escutar novas mensagens via WebSocket principal
       onMessageReceived((message) => {
-        console.log('📨 Nova mensagem recebida:', message);
+        console.log('📨 Nova mensagem recebida via WebSocket:', message);
         
         // Converter formato do WebSocket para nosso formato
         const newMessage: ChatMessage = {
@@ -424,6 +424,16 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
         
         setChatMessages(prev => [...prev, newMessage]);
       });
+      
+      // Polling para garantir que mensagens sejam carregadas
+      const chatPolling = setInterval(() => {
+        console.log('🔄 Recarregando mensagens do chat...');
+        loadChatMessages();
+      }, 3000);
+      
+      return () => {
+        clearInterval(chatPolling);
+      };
     }
   }, [isChatOpen, currentServiceId, onMessageReceived]);
 

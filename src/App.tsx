@@ -1925,7 +1925,26 @@ function App() {
         return false
       }
 
-      const serviceValue = servicePrice > 0 ? servicePrice : 119.99
+      // USAR DADOS REAIS DO SERVIÇO - NÃO MOCKADOS
+      let serviceValue = servicePrice;
+      
+      // Se não há servicePrice, tentar buscar da API
+      if (!serviceValue || serviceValue <= 0) {
+        console.log('⚠️ ServicePrice não definido, buscando valor real da API...');
+        try {
+          const serviceResponse = await fetch(`${API_ENDPOINTS.SERVICES}/${serviceId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (serviceResponse.ok) {
+            const serviceData = await serviceResponse.json();
+            serviceValue = parseFloat(serviceData.data?.valor || serviceData.valor || '0');
+            console.log('✅ Valor obtido da API:', serviceValue);
+          }
+        } catch (error) {
+          console.error('❌ Erro ao buscar valor do serviço:', error);
+          serviceValue = 50; // Valor mínimo como fallback
+        }
+      }
 
       // Verificar saldo suficiente
       if (walletBalance < serviceValue) {
@@ -1935,10 +1954,9 @@ function App() {
 
       console.log('💳 Pagando serviço com carteira digital...')
       console.log('🆔 ID do serviço:', serviceId)
-      console.log('🔍 Tipo do ID:', typeof serviceId)
-      console.log('🔍 ID é válido?', serviceId !== null && serviceId !== undefined && !isNaN(serviceId))
-      console.log('💰 Valor:', serviceValue)
+      console.log('💰 Valor REAL do serviço:', serviceValue)
       console.log('💵 Saldo atual:', walletBalance)
+      console.log('🔍 ServicePrice original:', servicePrice)
 
       // Validar ID antes de enviar
       if (!serviceId || isNaN(serviceId) || serviceId <= 0) {
@@ -7104,15 +7122,25 @@ Usando ID temporário: ${tempId}`)
               <div className={`${themeClasses.border} border rounded-lg p-4 mb-4`}>
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <p className={`text-sm ${themeClasses.textSecondary}`}>Modalidade: Carro - Personalizado</p>
+                    <p className={`text-sm ${themeClasses.textSecondary}`}>
+                      Modalidade: {foundDriver?.veiculo?.tipo || 'Carro'} - {selectedServiceType || 'Personalizado'}
+                    </p>
                     <div className="flex items-center mt-2">
-                      <img src="https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg" alt="Driver" className="w-8 h-8 rounded-full mr-2" />
+                      <img 
+                        src={foundDriver?.usuario?.foto_perfil || "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg"} 
+                        alt={foundDriver?.nome || "Prestador"} 
+                        className="w-8 h-8 rounded-full mr-2" 
+                      />
                       <div>
-                        <p className={`font-semibold text-sm ${themeClasses.text}`}>RV9G33</p>
-                        <p className="text-xs text-blue-500">Entregador • Katiê Bueno</p>
+                        <p className={`font-semibold text-sm ${themeClasses.text}`}>
+                          {foundDriver?.veiculo?.placa || 'N/A'}
+                        </p>
+                        <p className="text-xs text-blue-500">
+                          Prestador • {foundDriver?.nome || foundDriver?.usuario?.nome || 'Prestador'}
+                        </p>
                         <div className="flex items-center">
                           <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                          <span className="text-xs ml-1">4.7</span>
+                          <span className="text-xs ml-1">{foundDriver?.avaliacao || '5.0'}</span>
                         </div>
                       </div>
                     </div>
