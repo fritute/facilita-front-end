@@ -13,9 +13,6 @@ import { useCall } from '../hooks/useCall';
 import facilitaVideoCallService from '../services/facilitaVideoCallService';
 import facilitaVoiceCallService from '../services/facilitaVoiceCallService';
 import CallInterface from './CallInterface';
-import { websocketService } from '../services/websocketService';
-import { io, Socket } from 'socket.io-client';
-import { WEBSOCKET_URL } from '../config/apiConfig'; // Importar a URL
 import { useChat } from '../hooks/useChat';
 
 // Fix para ícones do Leaflet
@@ -98,13 +95,7 @@ interface ServiceTrackingProps {
   };
 }
 
-interface Message {
-  servicoId: string;
-  mensagem: string;
-  sender: 'contratante' | 'prestador';
-  userInfo?: any;
-  timestamp: string;
-}
+
 
 const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   onBack,
@@ -129,7 +120,6 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   const [newMessage, setNewMessage] = useState('');
   const [isStartingCall, setIsStartingCall] = useState(false);
   
-  const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // Hook de chamadas - apenas usando funções necessárias
@@ -390,66 +380,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     return () => clearInterval(statusInterval);
   }, [currentServiceId, onServiceCompleted]);
 
-  // Conectar ao WebSocket do chat e polling para mensagens
-  useEffect(() => {
-    if (isChatOpen && currentServiceId) {
-      console.log('💬 Ativando chat e carregando mensagens...');
-      
-      // Carregar mensagens existentes imediatamente
-      loadChatMessages();
-      
-      // Polling HTTP para garantir que todas as mensagens sejam carregadas
-      // Isso captura mensagens enviadas via HTTP pelo prestador
-      const chatPolling = setInterval(() => {
-        loadChatMessages();
-      }, 2000); // Reduzido para 2 segundos para resposta mais rápida
-      
-      // Tentar conectar WebSocket (mas não depender dele)
-      if (!websocketService.getConnectionStatus()) {
-        websocketService.connect().then(() => {
-          const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-          const userType = localStorage.getItem('userType') || 'CONTRATANTE';
-          
-          websocketService.authenticateUser({
-            userId: userData.id || 1,
-            userType: userType.toLowerCase() === 'prestador' ? 'prestador' : 'contratante',
-            userName: userData.nome || 'Usuário'
-          });
-          
-          websocketService.joinService(currentServiceId);
-          console.log('✅ WebSocket conectado para chat em tempo real');
-        }).catch(err => {
-          console.warn('⚠️ WebSocket não disponível, usando apenas polling HTTP:', err);
-        });
-      }
-      
-      // Escutar mensagens em tempo real via WebSocket (complementar ao polling)
-      const messageHandler = (message: any) => {
-        console.log('📨 Mensagem em tempo real via WebSocket:', message);
-        
-        const newMessage: ChatMessage = {
-          id: Date.now(),
-          id_servico: parseInt(currentServiceId),
-          id_contratante: 0,
-          id_prestador: 0,
-          mensagem: message.mensagem,
-          tipo: 'texto',
-          url_anexo: null,
-          enviado_por: message.sender === 'contratante' ? 'contratante' : 'prestador',
-          lida: false,
-          data_envio: message.timestamp || new Date().toISOString()
-        };
-        
-        // Mensagens agora são gerenciadas pelo hook useChat
-      };
-      
-      websocketService.onMessageReceived(messageHandler);
-      
-      return () => {
-        clearInterval(chatPolling);
-      };
-    }
-  }, [isChatOpen, currentServiceId, onMessageReceived]);
+  // Chat agora é gerenciado pelo hook useChat em tempo real
 
   // Função para criar rota real usando OpenRouteService
   const createRealRoute = async (start: { lat: number; lng: number }, end: { lat: number; lng: number }) => {
@@ -698,79 +629,12 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     });
   };
 
-  // Conectar ao WebSocket quando o componente montar
+  // Auto scroll para última mensagem
   useEffect(() => {
-    if (serviceId) {
-      // Usar a URL do arquivo de configuração
-      const socket = io(WEBSOCKET_URL, {
-        transports: ['websocket'], // Forçar o uso de WebSocket
-        reconnection: true,
-        reconnectionAttempts: 5,
-      });
-      socketRef.current = socket;
-
-      // 1. Registrar usuário conectado
-      socket.on('connect', () => {
-        console.log('🔌 Conectado ao WebSocket com ID:', socket.id);
-        const payload = {
-          userId: loggedUser.userId,
-          userType: loggedUser.userType,
-          userName: loggedUser.userName,
-        };
-        socket.emit('user_connected', payload);
-        console.log('🚀 Evento user_connected enviado:', payload);
-
-        // 2. Entrar na sala do serviço
-        socket.emit('join_servico', serviceId);
-        console.log(`🚪 Entrando na sala do serviço: ${serviceId}`);
-      });
-
-      // 4. Ouvir por novas mensagens
-      socket.on('receive_message', (message: Omit<Message, 'timestamp'>) => {
-        console.log('📩 Mensagem recebida:', message);
-        const messageWithTimestamp = { ...message, timestamp: new Date().toISOString() };
-        setMessages((prevMessages) => [...prevMessages, messageWithTimestamp]);
-      });
-
-      socket.on('disconnect', () => {
-        console.log('🔌 Desconectado do WebSocket.');
-      });
-
-      // Limpeza ao desmontar o componente
-      return () => {
-        console.log('🛑 Desconectando WebSocket...');
-        socket.disconnect();
-      };
-    }
-  }, [serviceId]);
-
-  useEffect(() => {
-    // Rolar para a última mensagem
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [chatMessages]);
 
-  const handleSendMessage = () => {
-    if (newMessage.trim() && socketRef.current && serviceId) {
-      const messagePayload = {
-        servicoId: serviceId,
-        mensagem: newMessage,
-        sender: loggedUser.userType as 'contratante' | 'prestador',
-        targetUserId: entregador.id, // ID do prestador
-      };
 
-      // 3. Enviar mensagem
-      socketRef.current.emit('send_message', messagePayload);
-      console.log('✉️ Mensagem enviada:', messagePayload);
-
-      // Adicionar a própria mensagem à lista para exibição imediata
-      const selfMessage: Message = {
-        ...messagePayload,
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prevMessages) => [...prevMessages, selfMessage]);
-      setNewMessage('');
-    }
-  };
 
   return (
     <div className="relative h-screen bg-gray-100 overflow-hidden">
