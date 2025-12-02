@@ -7088,50 +7088,7 @@ Usando ID temporário: ${tempId}`)
 
 
 
-              {/* Debug: Verificar Status Manualmente */}
-              <div className="w-full mb-4 space-y-2">
-                <button
-                  onClick={async () => {
-                    console.log('🔍 [MANUAL] Verificando status do serviço:', createdServiceId)
-                    if (createdServiceId) {
-                      try {
-                        const response = await fetchWithAuth(API_ENDPOINTS.SERVICE_BY_ID(createdServiceId), {
-                          method: 'GET'
-                        })
-                        const data = await response.json()
-                        console.log('📦 [MANUAL] Resposta completa da API:', data)
-                        
-                        const servico = data.data || data.servico || data
-                        console.log('📋 [MANUAL] Serviço extraído:', servico)
-                        console.log('📊 [MANUAL] Status:', servico.status)
-                        console.log('👤 [MANUAL] ID Prestador:', servico.id_prestador)
-                        console.log('👥 [MANUAL] Prestador objeto:', servico.prestador)
-                        
-                        // Forçar redirecionamento se aceito
-                        if (servico.status === 'EM_ANDAMENTO' && servico.id_prestador) {
-                          console.log('🚀 [MANUAL] Forçando redirecionamento...')
-                          handleScreenTransition('service-tracking')
-                        }
-                      } catch (error) {
-                        console.error('❌ [MANUAL] Erro:', error)
-                      }
-                    }
-                  }}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors text-sm"
-                >
-                  🔍 Verificar Status
-                </button>
-                
-                <button
-                  onClick={() => {
-                    console.log('🚀 [FORCE] Forçando ir para service-tracking...')
-                    handleScreenTransition('service-tracking')
-                  }}
-                  className="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors text-sm"
-                >
-                  🚀 Ir para Tracking (Força)
-                </button>
-              </div>
+
 
               {/* Botão cancelar */}
               <button
