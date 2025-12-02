@@ -3841,11 +3841,20 @@ function App() {
           console.log('   - Tem ID prestador?', !!service.id_prestador)
           console.log('   - Prestador objeto:', service.prestador)
           
-          // Verificar se prestador aceitou (pode estar em diferentes status)
-          const prestadorAceitou = (service.status === 'EM_ANDAMENTO' || service.status === 'ACEITO') && service.id_prestador
+          // Verificar se prestador aceitou (verificação mais ampla de status)
+          const statusAceito = ['EM_ANDAMENTO', 'ACEITO', 'IN_PROGRESS', 'ACCEPTED'].includes(service.status?.toUpperCase())
+          const temPrestador = service.id_prestador || service.prestador_id || service.prestador?.id
+          const prestadorAceitou = statusAceito && temPrestador
           
-          console.log('🎯 VERIFICAÇÃO CRÍTICA:')
-          console.log('   - prestadorAceitou:', prestadorAceitou)
+          console.log('🎯 VERIFICAÇÃO CRÍTICA DETALHADA:')
+          console.log('   - Status original:', service.status)
+          console.log('   - Status em maiúscula:', service.status?.toUpperCase())
+          console.log('   - Status aceito?', statusAceito)
+          console.log('   - ID prestador (id_prestador):', service.id_prestador)
+          console.log('   - ID prestador (prestador_id):', service.prestador_id)
+          console.log('   - ID prestador (prestador.id):', service.prestador?.id)
+          console.log('   - Tem prestador?', !!temPrestador)
+          console.log('   - prestadorAceitou FINAL:', prestadorAceitou)
           console.log('   - shouldStopPolling atual:', shouldStopPolling)
           console.log('   - isSearchingProvider atual:', isSearchingProvider)
           console.log('   - currentScreen atual:', currentScreen)
@@ -5450,6 +5459,9 @@ const handleServiceCreate = async () => {
       // Iniciar busca de prestador com localização real
       startProviderSearch(serviceIdString)
       
+      // TAMBÉM iniciar o polling de status como backup
+      startServiceStatusPolling(serviceIdString)
+      
       console.log('🔍 Polling iniciado - aguardando prestador aceitar o serviço...')
       console.log('📋 ID do serviço sendo monitorado:', serviceIdString)
     } else {
@@ -5981,12 +5993,22 @@ const handleServiceCreate = async () => {
           setDriverLocation(driverData.localizacao)
           setShowDriverFoundModal(true)
           
-          // Após 3 segundos, ir para tela de tracking existente
-          setTimeout(() => {
-            setShowDriverFoundModal(false)
-            setCurrentScreen('service-tracking')
-            console.log('🗺️ Redirecionando para tela de service-tracking...')
-          }, 3000)
+          // Configurar destino se disponível
+          if (deliveryLocation) {
+            setSelectedDestination(deliveryLocation)
+          }
+          
+          // Parar todos os pollings primeiro
+          if (serviceStatusPolling) {
+            clearInterval(serviceStatusPolling)
+            setServiceStatusPolling(null)
+          }
+          setIsSearchingProvider(false)
+          
+          // Ir para tela de tracking IMEDIATAMENTE
+          console.log('🚀 REDIRECIONAMENTO IMEDIATO para service-tracking')
+          setShowDriverFoundModal(false)
+          handleScreenTransition('service-tracking')
           
           return true
         }
@@ -7066,6 +7088,51 @@ Usando ID temporário: ${tempId}`)
 
 
 
+              {/* Debug: Verificar Status Manualmente */}
+              <div className="w-full mb-4 space-y-2">
+                <button
+                  onClick={async () => {
+                    console.log('🔍 [MANUAL] Verificando status do serviço:', createdServiceId)
+                    if (createdServiceId) {
+                      try {
+                        const response = await fetchWithAuth(API_ENDPOINTS.SERVICE_BY_ID(createdServiceId), {
+                          method: 'GET'
+                        })
+                        const data = await response.json()
+                        console.log('📦 [MANUAL] Resposta completa da API:', data)
+                        
+                        const servico = data.data || data.servico || data
+                        console.log('📋 [MANUAL] Serviço extraído:', servico)
+                        console.log('📊 [MANUAL] Status:', servico.status)
+                        console.log('👤 [MANUAL] ID Prestador:', servico.id_prestador)
+                        console.log('👥 [MANUAL] Prestador objeto:', servico.prestador)
+                        
+                        // Forçar redirecionamento se aceito
+                        if (servico.status === 'EM_ANDAMENTO' && servico.id_prestador) {
+                          console.log('🚀 [MANUAL] Forçando redirecionamento...')
+                          handleScreenTransition('service-tracking')
+                        }
+                      } catch (error) {
+                        console.error('❌ [MANUAL] Erro:', error)
+                      }
+                    }
+                  }}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors text-sm"
+                >
+                  🔍 Verificar Status
+                </button>
+                
+                <button
+                  onClick={() => {
+                    console.log('🚀 [FORCE] Forçando ir para service-tracking...')
+                    handleScreenTransition('service-tracking')
+                  }}
+                  className="w-full bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-6 rounded-lg transition-colors text-sm"
+                >
+                  🚀 Ir para Tracking (Força)
+                </button>
+              </div>
+
               {/* Botão cancelar */}
               <button
                 onClick={() => {
@@ -7074,6 +7141,7 @@ Usando ID temporário: ${tempId}`)
                     clearInterval(serviceStatusPolling)
                     setServiceStatusPolling(null)
                   }
+                  setIsSearchingProvider(false)
                   handleScreenTransition('home')
                 }}
                 className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
