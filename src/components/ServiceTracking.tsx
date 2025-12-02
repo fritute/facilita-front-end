@@ -424,14 +424,8 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
         
         setChatMessages(prev => [...prev, newMessage]);
       });
-
-        return () => {
-          removeMessageListener();
-          chatService.disconnectFromChat();
-        };
-      }
     }
-  }, [isChatOpen, currentServiceId]);
+  }, [isChatOpen, currentServiceId, onMessageReceived]);
 
   // Função para criar rota real usando OpenRouteService
   const createRealRoute = async (start: { lat: number; lng: number }, end: { lat: number; lng: number }) => {
