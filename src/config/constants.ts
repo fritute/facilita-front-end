@@ -92,10 +92,10 @@ export const API_ENDPOINTS = {
   RATING_BY_PROVIDER: (prestadorId: string) => `${API_BASE_URL}/avaliacao/prestador/${prestadorId}`, // GET - Ver avaliações do prestador
   RATING_BY_SERVICE: (serviceId: string) => `${API_BASE_URL}/avaliacao/servico/${serviceId}`, // GET - Ver avaliação do serviço
   
-  // Chat - conforme documentação oficial (verificar se endpoints existem)
-  CHAT_SEND_MESSAGE: (serviceId: string) => `${API_BASE_URL}/chat/${serviceId}/mensagem`, // POST - Enviar mensagem
-  CHAT_GET_MESSAGES: (serviceId: string) => `${API_BASE_URL}/chat/${serviceId}/mensagens`, // GET - Buscar mensagens
-  CHAT_MARK_READ: (serviceId: string) => `${API_BASE_URL}/chat/${serviceId}/mensagens/marcar-lidas`, // PATCH - Marcar como lidas
+  // Chat - usando estrutura similar ao serviço
+  CHAT_SEND_MESSAGE: (serviceId: string) => `${API_BASE_URL}/servico/${serviceId}/mensagem`, // POST - Enviar mensagem
+  CHAT_GET_MESSAGES: (serviceId: string) => `${API_BASE_URL}/servico/${serviceId}/mensagens`, // GET - Buscar mensagens
+  CHAT_MARK_READ: (serviceId: string) => `${API_BASE_URL}/servico/${serviceId}/mensagens/marcar-lidas`, // PATCH - Marcar como lidas
   
   // Videochamada - conforme documentação oficial
   VIDEO_CALL: `${API_BASE_URL}/chamada/video`, // POST - Criar videochamada

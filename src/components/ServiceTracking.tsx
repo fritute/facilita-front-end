@@ -16,6 +16,7 @@ import CallInterface from './CallInterface';
 import { websocketService } from '../services/websocketService';
 import { io, Socket } from 'socket.io-client';
 import { WEBSOCKET_URL } from '../config/apiConfig'; // Importar a URL
+import { useChat } from '../hooks/useChat';
 
 // Fix para ícones do Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -125,12 +126,8 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   const [isServicePaid, setIsServicePaid] = useState(false);
   const [isFinishingService, setIsFinishingService] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isStartingCall, setIsStartingCall] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isChatVisible, setIsChatVisible] = useState(false);
   
   const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -193,44 +190,20 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     return null;
   };
 
-  // Função para carregar mensagens do chat
-  const loadChatMessages = async () => {
-    const chatServiceId = getCurrentServiceId();
-    if (!chatServiceId) {
-      console.warn('⚠️ Não há ID de serviço para carregar mensagens');
-      return;
-    }
+  // Obter dados do usuário para o chat
+  const userId = parseInt(localStorage.getItem('realUserId') || localStorage.getItem('userId') || '1');
+  const userName = localStorage.getItem('realUserName') || localStorage.getItem('loggedUser') || 'Usuário';
+  const currentServiceId = getCurrentServiceId();
+  
+  // Hook de chat em tempo real
+  const { messages: chatMessages, sendMessage, isConnected, clearMessages } = useChat(
+    userId,
+    'contratante',
+    userName,
+    parseInt(currentServiceId || '0')
+  );
 
-    try {
-      setIsLoadingMessages(true);
-      console.log('📥 Carregando mensagens do serviço:', chatServiceId);
-      
-      const result = await chatService.getMessages(chatServiceId);
-      
-      console.log('📦 Resultado do chat:', result);
-      
-      if (result.success && result.data) {
-        const messages = Array.isArray(result.data) ? result.data : [];
-        console.log(`✅ ${messages.length} mensagens carregadas`);
-        
-        // Atualizar apenas se houver mudanças
-        setChatMessages(prev => {
-          if (JSON.stringify(prev) !== JSON.stringify(messages)) {
-            return messages;
-          }
-          return prev;
-        });
-      } else {
-        console.warn('⚠️ Nenhuma mensagem encontrada ou erro:', result);
-      }
-    } catch (error) {
-      console.error('❌ Erro ao carregar mensagens:', error);
-    } finally {
-      setIsLoadingMessages(false);
-    }
-  };
-
-  // Função para enviar mensagem no chat via WebSocket
+  // Função para enviar mensagem via Socket.IO
   const sendChatMessage = async () => {
     if (!newMessage.trim()) return;
     
@@ -241,35 +214,21 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     }
 
     try {
-      console.log('📤 Enviando mensagem:', newMessage.trim());
+      console.log('📤 Enviando mensagem via Socket.IO:', newMessage.trim());
       
       // Obter ID do prestador
-      const prestadorId = localStorage.getItem('prestadorId') || '2';
+      const prestadorId = parseInt(localStorage.getItem('prestadorId') || localStorage.getItem('foundDriver') ? JSON.parse(localStorage.getItem('foundDriver') || '{}').id_prestador || '2' : '2');
       
-      // Usar websocketService para enviar mensagem
-      websocketService.sendMessage({
-        servicoId: parseInt(chatServiceId),
-        mensagem: newMessage.trim(),
-        sender: 'contratante',
-        targetUserId: parseInt(prestadorId)
-      });
+      // Usar hook useChat para enviar
+      const success = sendMessage(newMessage.trim(), prestadorId);
       
-      // Adicionar mensagem localmente
-      const localMessage: ChatMessage = {
-        id: Date.now(),
-        id_servico: parseInt(chatServiceId),
-        id_contratante: 0,
-        id_prestador: 0,
-        mensagem: newMessage.trim(),
-        tipo: 'texto',
-        url_anexo: null,
-        enviado_por: 'contratante',
-        lida: false,
-        data_envio: new Date().toISOString()
-      };
-      
-      setChatMessages(prev => [...prev, localMessage]);
-      setNewMessage('');
+      if (success) {
+        console.log('✅ Mensagem enviada via Socket.IO');
+        setNewMessage('');
+      } else {
+        console.error('❌ Erro ao enviar mensagem via Socket.IO');
+        notificationService.showError('Chat', 'Erro ao enviar mensagem');
+      }
       
     } catch (error) {
       console.error('❌ Erro ao enviar mensagem:', error);
@@ -362,18 +321,15 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     }
   };
   
-  const currentServiceId = getCurrentServiceId();
-  
-  // WebSocket hook - habilitando chat também
+  // WebSocket hook - habilitando tracking apenas (chat agora via useChat)
   const { 
     isConnected: isWebSocketConnected, 
     onLocationUpdate,
-    onMessageReceived,
-    sendMessage
+    onMessageReceived
   } = useWebSocket({
     serviceId: currentServiceId || undefined,
     enableTracking: true,
-    enableChat: true
+    enableChat: false // Desabilitar chat do WebSocket pois agora usamos useChat
   });
 
   // Inicializar sistema de chamadas
@@ -484,14 +440,7 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
           data_envio: message.timestamp || new Date().toISOString()
         };
         
-        // Adicionar apenas se não existir (evitar duplicatas)
-        setChatMessages(prev => {
-          const exists = prev.some(m => 
-            m.mensagem === newMessage.mensagem && 
-            m.data_envio === newMessage.data_envio
-          );
-          return exists ? prev : [...prev, newMessage];
-        });
+        // Mensagens agora são gerenciadas pelo hook useChat
       };
       
       websocketService.onMessageReceived(messageHandler);
@@ -1061,7 +1010,9 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
                 />
                 <div>
                   <h3 className="font-bold">{entregador.nome}</h3>
-                  <p className="text-xs opacity-90">Prestador</p>
+                  <p className="text-xs opacity-90">
+                    {isConnected ? '🟢 Online - Chat em tempo real' : '🔴 Desconectado'}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
@@ -1095,10 +1046,10 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
 
             {/* Área de mensagens */}
             <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
-              {isLoadingMessages ? (
+              {!isConnected ? (
                 <div className="text-center text-gray-500 mt-8">
                   <div className="w-8 h-8 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin mx-auto mb-2"></div>
-                  <p>Carregando mensagens...</p>
+                  <p>Conectando ao chat...</p>
                 </div>
               ) : chatMessages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-8">
@@ -1107,30 +1058,36 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {chatMessages.map((message) => (
-                    <div 
-                      key={message.id}
-                      className={`flex ${message.enviado_por === 'contratante' ? 'justify-end' : 'justify-start'}`}
-                    >
+                  {chatMessages.map((message, index) => {
+                    const isMyMessage = message.sender === 'contratante';
+                    return (
                       <div 
-                        className={`max-w-xs px-4 py-2 rounded-2xl ${
-                          message.enviado_por === 'contratante' 
-                            ? 'bg-green-500 text-white' 
-                            : 'bg-white border border-gray-200 text-gray-800'
-                        }`}
+                        key={`${message.servicoId}-${index}-${message.timestamp}`}
+                        className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}
                       >
-                        <p className="text-sm">{message.mensagem}</p>
-                        <p className={`text-xs mt-1 ${
-                          message.enviado_por === 'contratante' ? 'text-green-100' : 'text-gray-500'
-                        }`}>
-                          {new Date(message.data_envio).toLocaleTimeString('pt-BR', { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                        </p>
+                        <div 
+                          className={`max-w-xs px-4 py-2 rounded-2xl ${
+                            isMyMessage 
+                              ? 'bg-green-500 text-white' 
+                              : 'bg-white border border-gray-200 text-gray-800'
+                          }`}
+                        >
+                          <p className="text-sm">{message.mensagem}</p>
+                          <p className={`text-xs mt-1 ${
+                            isMyMessage ? 'text-green-100' : 'text-gray-500'
+                          }`}>
+                            {message.timestamp 
+                              ? new Date(message.timestamp).toLocaleTimeString('pt-BR', { 
+                                  hour: '2-digit', 
+                                  minute: '2-digit' 
+                                })
+                              : 'Agora'
+                            }
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

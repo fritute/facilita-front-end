@@ -228,7 +228,10 @@ class PaymentFlowService {
   async payServiceWithWallet(serviceId: string | number): Promise<PaymentFlowResult> {
     try {
       const paymentData = {
-        id_servico: Number(serviceId)
+        id_servico: Number(serviceId),
+        servico_id: Number(serviceId), // Fallback caso a API use este campo
+        metodo_pagamento: 'carteira',
+        tipo_pagamento: 'CARTEIRA_DIGITAL'
       }
       
       const response = await facilitaApi.payWithWallet(paymentData)

@@ -1,16 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Phone, PhoneCall, Video, Image } from 'lucide-react';
 import { API_BASE_URL, API_ENDPOINTS } from '../config/constants';
+import { useChat } from '../hooks/useChat';
 
 interface Message {
-  id: string;
-  text: string;
-  sender: 'user' | 'driver';
-  timestamp: Date;
-  type: 'text' | 'image';
+  servicoId: number;
+  mensagem: string;
+  sender: 'contratante' | 'prestador';
+  timestamp?: string;
+  userInfo?: {
+    userId: number;
+    userType: string;
+    userName: string;
+  };
+  type?: 'text' | 'image';
   imageUrl?: string;
-  enviado_por?: string;
-  mensagem?: string;
 }
 
 interface ChatModalProps {
@@ -19,9 +23,11 @@ interface ChatModalProps {
   driverName: string;
   driverPhone: string;
   serviceId: string;
+  userId: number;
+  userName: string;
+  targetUserId: number;
   onStartVoiceCall?: () => void;
   onStartVideoCall?: () => void;
-  isWebSocketConnected?: boolean;
   userType?: 'contratante' | 'prestador';
 }
 
@@ -31,79 +37,46 @@ const ChatModal: React.FC<ChatModalProps> = ({
   driverName,
   driverPhone,
   serviceId,
+  userId,
+  userName,
+  targetUserId,
   onStartVoiceCall,
   onStartVideoCall,
-  isWebSocketConnected = false,
   userType = 'contratante'
 }) => {
   const [newMessage, setNewMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Usar o hook de chat em tempo real
+  const { messages, sendMessage, isConnected, clearMessages } = useChat(
+    userId,
+    userType,
+    userName,
+    parseInt(serviceId)
+  );
 
   // Auto scroll para última mensagem
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Carregar mensagens quando o modal abrir
+  // Limpar mensagens quando fechar o modal
   useEffect(() => {
-    if (isOpen && serviceId) {
-      loadMessages();
+    if (!isOpen) {
+      clearMessages();
     }
-  }, [isOpen, serviceId]);
+  }, [isOpen, clearMessages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Carregar mensagens do serviço
-  const loadMessages = async () => {
-    if (!serviceId) return;
-
-    setIsLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      console.log('📥 Carregando mensagens do serviço:', serviceId);
-
-      const response = await fetch(API_ENDPOINTS.CHAT_GET_MESSAGES(serviceId), {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Mensagens carregadas:', data);
-
-        if (data.success && Array.isArray(data.mensagens)) {
-          const formattedMessages = data.mensagens.map((msg: any) => ({
-            id: msg.id || Date.now().toString(),
-            text: msg.mensagem || msg.text || '',
-            sender: msg.enviado_por === userType ? 'user' : 'driver',
-            timestamp: new Date(msg.created_at || msg.timestamp || Date.now()),
-            type: msg.tipo || 'text',
-            imageUrl: msg.url_anexo || msg.imageUrl
-          }));
-          setMessages(formattedMessages);
-        }
-      } else {
-        console.warn('⚠️ Erro ao carregar mensagens:', response.status);
-      }
-    } catch (error) {
-      console.error('❌ Erro ao carregar mensagens:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Enviar mensagem
+  // Enviar mensagem via Socket.IO
   const handleSendMessage = async () => {
     if (!newMessage.trim() && !selectedImage) return;
     if (!serviceId) return;
@@ -126,108 +99,19 @@ const ChatModal: React.FC<ChatModalProps> = ({
 
     const messageText = newMessage.trim() || 'Imagem enviada';
     
-    // Adicionar mensagem localmente (optimistic update)
-    const tempMessage: Message = {
-      id: Date.now().toString(),
-      text: messageText,
-      sender: 'user',
-      timestamp: new Date(),
-      type: selectedImage ? 'image' : 'text',
-      imageUrl: imageUrl || undefined
-    };
+    // Enviar via Socket.IO
+    const success = sendMessage(messageText, targetUserId);
     
-    setMessages(prev => [...prev, tempMessage]);
-
-    // Preparar dados para envio
-    const messageData = {
-      mensagem: messageText,
-      tipo: selectedImage ? 'imagem' : 'texto',
-      url_anexo: imageUrl || null,
-      id_servico: parseInt(serviceId),
-      enviado_por: userType
-    };
-
-    try {
-      const token = localStorage.getItem('token');
-      console.log('💬 Enviando mensagem via API...');
-      console.log('📊 Dados da mensagem:', messageData);
-
-      // Tentar via WebSocket primeiro se conectado
-      if (isWebSocketConnected) {
-        console.log('🔗 Tentando enviar via WebSocket...');
-        
-        // Obter dados do prestador para WebSocket
-        const foundDriver = JSON.parse(localStorage.getItem('foundDriver') || '{}');
-        const entregadorData = JSON.parse(localStorage.getItem('entregadorData') || '{}');
-        const targetUserId = foundDriver.id_prestador || entregadorData.id || 2;
-
-        console.log('🎯 Dados para envio WebSocket:', {
-          serviceId: parseInt(serviceId),
-          targetUserId,
-          message: messageText,
-          sender: userType
-        });
-
-        // Emitir via WebSocket (usando any para evitar erro TypeScript)
-        const websocketService = (window as any).websocketService;
-        if (websocketService && websocketService.emit) {
-          websocketService.emit('send_message', {
-            servicoId: parseInt(serviceId),
-            mensagem: messageText,
-            sender: userType,
-            targetUserId: targetUserId
-          });
-          console.log('✅ Mensagem enviada via WebSocket');
-        }
-      }
-
-      // Enviar via API REST (sempre como backup ou principal)
-      const response = await fetch(API_ENDPOINTS.CHAT_SEND_MESSAGE(serviceId), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(messageData)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Mensagem enviada com sucesso via API:', data);
-        
-        // Atualizar mensagem local com dados do servidor se necessário
-        if (data.success && data.mensagem) {
-          setMessages(prev => {
-            const newMessages = [...prev];
-            const lastIndex = newMessages.length - 1;
-            if (lastIndex >= 0) {
-              newMessages[lastIndex] = {
-                ...newMessages[lastIndex],
-                id: data.mensagem.id || newMessages[lastIndex].id
-              };
-            }
-            return newMessages;
-          });
-        }
-      } else {
-        const errorData = await response.text();
-        console.error('❌ Erro na API:', response.status, errorData);
-        
-        // Remover mensagem local em caso de erro
-        setMessages(prev => prev.slice(0, -1));
-        alert('Erro ao enviar mensagem. Tente novamente.');
-      }
-    } catch (error) {
-      console.error('❌ Erro ao enviar mensagem:', error);
-      // Remover mensagem local em caso de erro
-      setMessages(prev => prev.slice(0, -1));
-      alert('Erro de conexão. Verifique sua internet.');
+    if (success) {
+      console.log('✅ Mensagem enviada via Socket.IO');
+      // Limpar campos
+      setNewMessage('');
+      setSelectedImage(null);
+      setImagePreview(null);
+    } else {
+      console.error('❌ Erro ao enviar mensagem via Socket.IO');
+      alert('Erro ao enviar mensagem. Verifique a conexão.');
     }
-
-    // Limpar campos
-    setNewMessage('');
-    setSelectedImage(null);
-    setImagePreview(null);
   };
 
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -270,7 +154,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
             <div>
               <h3 className="font-semibold text-lg">{driverName}</h3>
               <p className="text-xs opacity-90">
-                {isWebSocketConnected ? '🟢 Online' : '🔴 Offline'}
+                {isConnected ? '🟢 Online - Chat em tempo real' : '🔴 Desconectado'}
               </p>
             </div>
           </div>
@@ -329,42 +213,45 @@ const ChatModal: React.FC<ChatModalProps> = ({
               <p className="text-xs mt-1">As mensagens aparecerão aqui</p>
             </div>
           ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
+            messages.map((message, index) => {
+              const isMyMessage = message.sender === userType;
+              return (
                 <div
-                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                    message.sender === 'user'
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-200 text-gray-800'
-                  }`}
+                  key={`${message.servicoId}-${index}-${message.timestamp}`}
+                  className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}
                 >
-                  {message.type === 'image' && message.imageUrl ? (
-                    <div className="space-y-2">
-                      <img
-                        src={message.imageUrl}
-                        alt="Imagem enviada"
-                        className="rounded-lg max-w-full h-auto"
-                      />
-                      {message.text && message.text !== 'Imagem enviada' && (
-                        <p className="text-sm">{message.text}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm">{message.text}</p>
-                  )}
-                  <p
-                    className={`text-xs mt-1 ${
-                      message.sender === 'user' ? 'text-blue-100' : 'text-gray-500'
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                      isMyMessage
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-200 text-gray-800'
                     }`}
                   >
-                    {formatTime(message.timestamp)}
-                  </p>
+                    {message.type === 'image' && message.imageUrl ? (
+                      <div className="space-y-2">
+                        <img
+                          src={message.imageUrl}
+                          alt="Imagem enviada"
+                          className="rounded-lg max-w-full h-auto"
+                        />
+                        {message.mensagem && message.mensagem !== 'Imagem enviada' && (
+                          <p className="text-sm">{message.mensagem}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm">{message.mensagem}</p>
+                    )}
+                    <p
+                      className={`text-xs mt-1 ${
+                        isMyMessage ? 'text-blue-100' : 'text-gray-500'
+                      }`}
+                    >
+                      {message.timestamp ? formatTime(new Date(message.timestamp)) : 'Agora'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
           <div ref={messagesEndRef} />
         </div>
@@ -445,10 +332,10 @@ const ChatModal: React.FC<ChatModalProps> = ({
 
           {/* Status da Conexão */}
           <div className="mt-2 text-xs text-center">
-            {isWebSocketConnected ? (
-              <span className="text-green-600">✅ Conectado - Mensagens em tempo real</span>
+            {isConnected ? (
+              <span className="text-green-600">✅ Conectado - Socket.IO ativo</span>
             ) : (
-              <span className="text-orange-600">⚠️ Modo offline - Mensagens via API</span>
+              <span className="text-red-600">❌ Desconectado - Tentando reconectar...</span>
             )}
           </div>
         </div>
