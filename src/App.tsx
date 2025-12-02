@@ -6795,32 +6795,38 @@ Usando ID temporário: ${tempId}`)
       setIsLoading(true)
       
       const serviceValue = servicePrice > 0 ? servicePrice : 119.99
-      const serviceId = typeof createdServiceId === 'string' ? createdServiceId : createdServiceId.toString()
+      console.log('💳 Simulando pagamento de R$', serviceValue.toFixed(2))
       
-      const result = await paymentFlowService.executeCompletePaymentFlow(serviceId, serviceValue)
-      
-      if (result.success) {
-        // Atualizar saldo local
-        const newBalance = paymentFlowService.getLocalBalance()
+      // SIMULAÇÃO: Sempre aprovar o pagamento e descontar da carteira
+      if (walletBalance >= serviceValue) {
+        // Descontar do saldo da carteira
+        const newBalance = walletBalance - serviceValue
         setWalletBalance(newBalance)
         
-        // Usar a função centralizada para pagamento confirmado
+        // Salvar novo saldo no localStorage
+        if (loggedUser?.id) {
+          localStorage.setItem(`walletBalance_${loggedUser.id}`, newBalance.toString())
+        }
+        
+        console.log('✅ Pagamento simulado com sucesso!')
+        console.log('💰 Novo saldo da carteira: R$', newBalance.toFixed(2))
+        
+        notificationService.showSuccess(
+          'Pagamento Aprovado!', 
+          `Pagamento de R$ ${serviceValue.toFixed(2)} realizado com sucesso! Novo saldo: R$ ${newBalance.toFixed(2)}`
+        )
+        
+        // Prosseguir com o serviço
         handlePaymentConfirmed()
-      } else if (result.requiresRecharge) {
+      } else {
+        // Saldo insuficiente - mostrar modal de recarga
+        const missingAmount = serviceValue - walletBalance
         notificationService.showWarning(
           'Saldo Insuficiente', 
-          `Você possui R$ ${walletBalance.toFixed(2)} e o serviço custa R$ ${serviceValue.toFixed(2)}. Por favor, recarregue sua carteira.`
+          `Você possui R$ ${walletBalance.toFixed(2)} e o serviço custa R$ ${serviceValue.toFixed(2)}. Faltam R$ ${missingAmount.toFixed(2)}.`
         )
         setShowRechargeModal(true)
-        setRechargeAmount(result.data?.missingAmount || serviceValue - walletBalance)
-      } else if (result.nextStep === 'create-wallet') {
-        notificationService.showWarning(
-          'Carteira necessária',
-          'Você precisa criar uma carteira digital para pagar serviços.'
-        )
-        setShowCreateWalletModal(true)
-      } else {
-        notificationService.showError('Erro no Pagamento', result.message || 'Não foi possível processar o pagamento. Tente novamente.')
+        setRechargeAmount(Math.ceil(missingAmount))
       }
     } catch (error) {
       console.error('❌ Erro no handlePaymentConfirmation:', error)

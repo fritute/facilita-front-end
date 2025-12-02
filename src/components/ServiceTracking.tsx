@@ -185,8 +185,17 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   const userName = localStorage.getItem('realUserName') || localStorage.getItem('loggedUser') || 'Usuário';
   const currentServiceId = getCurrentServiceId();
   
+  console.log('🔍 [SERVICE TRACKING] Dados para inicializar chat:', {
+    userId,
+    userName,
+    currentServiceId,
+    serviceIdProp: serviceId,
+    entregadorId: entregador?.id,
+    localStorage_keys: Object.keys(localStorage)
+  });
+  
   // Hook de chat em tempo real
-  const { messages: chatMessages, sendMessage, isConnected, clearMessages } = useChat(
+  const { messages: chatMessages, sendMessage, isConnected, clearMessages, simulateMessage } = useChat(
     userId,
     'contratante',
     userName,
@@ -206,8 +215,31 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     try {
       console.log('📤 Enviando mensagem via Socket.IO:', newMessage.trim());
       
-      // Obter ID do prestador
-      const prestadorId = parseInt(localStorage.getItem('prestadorId') || localStorage.getItem('foundDriver') ? JSON.parse(localStorage.getItem('foundDriver') || '{}').id_prestador || '2' : '2');
+      // Obter ID do prestador de várias fontes possíveis
+      let prestadorId = 2; // ID padrão como fallback
+      
+      try {
+        // Tentar obter do entregador prop
+        if (entregador?.id) {
+          prestadorId = entregador.id;
+          console.log('🎯 PrestadorId obtido do prop entregador:', prestadorId);
+        }
+        // Tentar obter do foundDriver
+        else if (localStorage.getItem('foundDriver')) {
+          const foundDriver = JSON.parse(localStorage.getItem('foundDriver') || '{}');
+          prestadorId = foundDriver.id_prestador || foundDriver.id || 2;
+          console.log('🎯 PrestadorId obtido do foundDriver:', prestadorId);
+        }
+        // Tentar obter direto do localStorage
+        else if (localStorage.getItem('prestadorId')) {
+          prestadorId = parseInt(localStorage.getItem('prestadorId') || '2');
+          console.log('🎯 PrestadorId obtido do localStorage:', prestadorId);
+        }
+      } catch (error) {
+        console.warn('⚠️ Erro ao obter prestadorId, usando padrão:', error);
+      }
+      
+      console.log('🎯 PrestadorId final usado:', prestadorId);
       
       // Usar hook useChat para enviar
       const success = sendMessage(newMessage.trim(), prestadorId);
@@ -954,6 +986,31 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
                   })}
                 </div>
               )}
+            </div>
+
+            {/* Botões de teste (apenas para desenvolvimento) */}
+            <div className="p-2 bg-yellow-50 border-t border-yellow-200">
+              <p className="text-xs text-yellow-600 mb-2">🧪 Testes de Chat:</p>
+              <div className="flex gap-2 text-xs">
+                <button 
+                  onClick={() => simulateMessage && simulateMessage("Olá! Estou a caminho!", true)}
+                  className="px-2 py-1 bg-blue-500 text-white rounded text-xs"
+                >
+                  Simular: Prestador
+                </button>
+                <button 
+                  onClick={() => simulateMessage && simulateMessage("Chegando em 5 min!", true)}
+                  className="px-2 py-1 bg-blue-500 text-white rounded text-xs"
+                >
+                  Simular: Chegando
+                </button>
+                <button 
+                  onClick={() => console.log('📊 Estado do chat:', { chatMessages: chatMessages.length, isConnected, userId, currentServiceId })}
+                  className="px-2 py-1 bg-gray-500 text-white rounded text-xs"
+                >
+                  Debug Log
+                </button>
+              </div>
             </div>
 
             {/* Input de mensagem */}
