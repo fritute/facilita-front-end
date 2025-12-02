@@ -2038,8 +2038,6 @@ function App() {
           errorMessage = errorText || errorMessage;
         }
         
-        alert(`Erro no pagamento: ${errorMessage}`);
-        
         // Se erro 500, usar dados mockados (modo sandbox)
         if (response.status === 500) {
           console.warn('⚠️ Erro 500 - Usando dados mockados (sandbox)')
@@ -2101,20 +2099,8 @@ function App() {
           return true
         }
         
-        // Outros erros
-        let errorMessage = 'Erro ao processar pagamento.'
-        try {
-          const errorData = JSON.parse(errorText)
-          if (response.status === 400) {
-            errorMessage = errorData.message || 'Dados inválidos.'
-          } else if (response.status === 404) {
-            errorMessage = 'Serviço não encontrado.'
-          } else {
-            errorMessage = errorData.message || 'Erro ao processar pagamento.'
-          }
-        } catch (e) {}
-        
-        alert(errorMessage)
+        // Outros erros - mostrar mensagem e retornar falso
+        alert(`Erro no pagamento: ${errorMessage}`)
         return false
       }
 
