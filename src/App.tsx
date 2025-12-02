@@ -1972,6 +1972,27 @@ function App() {
       }
       console.log('📤 Payload a ser enviado:', JSON.stringify(payload, null, 2))
 
+      // Verificar se carteira existe, senão criar
+      try {
+        const walletCheckResponse = await fetch(API_ENDPOINTS.MY_WALLET, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!walletCheckResponse.ok) {
+          console.log('💳 Carteira não existe, criando...');
+          await fetch(API_ENDPOINTS.MY_WALLET, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ saldo: walletBalance })
+          });
+        }
+      } catch (error) {
+        console.warn('⚠️ Erro ao verificar/criar carteira:', error);
+      }
+
       // Chamar API de pagamento
       const response = await fetch(API_ENDPOINTS.PAYMENT_WITH_WALLET, {
         method: 'POST',
@@ -6766,7 +6787,7 @@ Usando ID temporário: ${tempId}`)
   // Função para confirmar pagamento (serviço já foi criado)
   const handlePaymentConfirmation = async () => {
     if (!createdServiceId) {
-      showError('Erro', 'ID do serviço não encontrado. Tente criar o serviço novamente.')
+      notificationService.showError('Erro', 'ID do serviço não encontrado. Tente criar o serviço novamente.')
       return
     }
 
@@ -6774,7 +6795,7 @@ Usando ID temporário: ${tempId}`)
 
     // Verificar saldo suficiente
     if (walletBalance < serviceValue) {
-      showWarning(
+      notificationService.showWarning(
         'Saldo Insuficiente', 
         `Você possui R$ ${walletBalance.toFixed(2)} e o serviço custa R$ ${serviceValue.toFixed(2)}. Por favor, recarregue sua carteira.`
       )
@@ -6789,7 +6810,7 @@ Usando ID temporário: ${tempId}`)
       // Usar a função centralizada para pagamento confirmado
       handlePaymentConfirmed()
     } else {
-      showError('Erro no Pagamento', 'Não foi possível processar o pagamento. Tente novamente.')
+      notificationService.showError('Erro no Pagamento', 'Não foi possível processar o pagamento. Tente novamente.')
     }
   }
 

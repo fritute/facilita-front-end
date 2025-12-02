@@ -13,6 +13,7 @@ import { useCall } from '../hooks/useCall';
 import facilitaVideoCallService from '../services/facilitaVideoCallService';
 import facilitaVoiceCallService from '../services/facilitaVoiceCallService';
 import CallInterface from './CallInterface';
+import { websocketService } from '../services/websocketService';
 
 // Fix para ícones do Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -213,8 +214,13 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       // Obter ID do prestador
       const prestadorId = localStorage.getItem('prestadorId') || '2';
       
-      // Usar WebSocket principal para enviar mensagem
-      sendMessage(newMessage.trim(), parseInt(prestadorId));
+      // Usar websocketService para enviar mensagem
+      websocketService.sendMessage({
+        servicoId: parseInt(chatServiceId),
+        mensagem: newMessage.trim(),
+        sender: 'contratante',
+        targetUserId: parseInt(prestadorId)
+      });
       
       // Adicionar mensagem localmente
       const localMessage: ChatMessage = {
@@ -404,11 +410,32 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       // Carregar mensagens existentes
       loadChatMessages();
       
-      // Escutar novas mensagens via WebSocket principal
-      onMessageReceived((message) => {
-        console.log('📨 Nova mensagem recebida via WebSocket:', message);
+      // Usar websocketService diretamente para chat
+      
+      // Conectar ao WebSocket se não conectado
+      if (!websocketService.getConnectionStatus()) {
+        websocketService.connect().then(() => {
+          // Registrar usuário conectado
+          const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+          const userType = localStorage.getItem('userType') || 'CONTRATANTE';
+          
+          websocketService.authenticateUser({
+            userId: userData.id || 1,
+            userType: userType.toLowerCase() === 'prestador' ? 'prestador' : 'contratante',
+            userName: userData.nome || 'Usuário'
+          });
+          
+          // Entrar na sala do serviço
+          websocketService.joinService(currentServiceId);
+          
+          console.log('✅ WebSocket conectado e usuário registrado para chat');
+        });
+      }
+      
+      // Escutar mensagens recebidas
+      websocketService.onMessageReceived((message) => {
+        console.log('📨 Mensagem recebida via websocketService:', message);
         
-        // Converter formato do WebSocket para nosso formato
         const newMessage: ChatMessage = {
           id: Date.now(),
           id_servico: parseInt(currentServiceId),
