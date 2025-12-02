@@ -316,7 +316,7 @@ export class FacilitaApiService extends ApiService {
 
   // === PAGAMENTOS ===
   async payWithWallet(paymentData: any) {
-    return this.post(`${API_ENDPOINTS.SERVICES}/pagar`, paymentData)
+    return this.post(API_ENDPOINTS.PAYMENT_WITH_WALLET, paymentData)
   }
 
   async payWithPagBank(paymentData: any) {

@@ -70,6 +70,8 @@ import { handDetectionService } from './services/handDetectionService'
 import { useNotifications } from './hooks/useNotifications'
 import { notificationService } from './services/notificationService'
 import { handleProfilePhotoUpload } from './utils/profilePhotoHandler'
+import { paymentFlowService } from './services/paymentFlowService'
+import { chatService } from './services/chatService'
 
 //TELAS PARA TESTES E PARA MOVER
 type Screen = "landing" | "login" | "cadastro" | "success" | "recovery" | "location-select" | "service-tracking" | "supermarket-list" | "establishments-list" | "service-rating" | "verification" | "account-type" | "service-provider" | "profile-setup" | "home" | "service-create" | "waiting-driver" | "waiting-provider" | "payment" | "service-confirmed" | "profile" | "orders" | "change-password" | "wallet" | "reset-password"
@@ -1242,52 +1244,25 @@ function App() {
   const fetchWallet = async () => {
     try {
       setLoadingWallet(true)
-      const token = localStorage.getItem('authToken')
       
-      if (!token) {
-        console.warn('⚠️ Token não encontrado para buscar carteira')
-        setHasWallet(false)
-        return
-      }
-
       console.log('🔍 Buscando carteira do usuário...')
-      const response = await fetch(API_ENDPOINTS.MY_WALLET, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-
-      console.log('📥 Status da resposta:', response.status)
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log('✅ Dados da carteira recebidos:', data)
-        const wallet = data.data || data
+      const result = await paymentFlowService.getMyWallet(loggedUser?.id)
+      
+      if (result.success) {
+        console.log('✅ Dados da carteira recebidos:', result.data)
         
-        setWalletData(wallet)
-        const balance = parseFloat(wallet.saldo) || 0
+        setWalletData(result.data)
+        const balance = parseFloat(result.data.saldo) || 0
         setWalletBalance(balance)
         setHasWallet(true)
         
-        // Salvar no localStorage por usuário
-        saveUserWallet(loggedUser?.id, wallet, balance)
-        console.log('✅ Carteira carregada com sucesso! Saldo:', wallet.saldo)
-      } else if (response.status === 404) {
+        console.log('✅ Carteira carregada com sucesso! Saldo:', result.data.saldo)
+      } else {
         // Usuário não tem carteira ainda
-        console.log('⚠️ Usuário não possui carteira (404)')
+        console.log('⚠️ Usuário não possui carteira:', result.message)
         setHasWallet(false)
         setWalletBalance(0)
         setWalletData(null)
-      } else if (response.status === 500) {
-        console.warn('⚠️ Erro 500 ao buscar carteira - servidor indisponível')
-        setHasWallet(false)
-      } else if (response.status === 401 || response.status === 403) {
-        console.warn('⚠️ Token inválido ao buscar carteira')
-        setHasWallet(false)
-      } else {
-        console.warn('⚠️ Erro desconhecido ao buscar carteira:', response.status)
-        setHasWallet(false)
       }
     } catch (error) {
       console.warn('⚠️ Erro ao buscar carteira:', error)
@@ -1300,57 +1275,35 @@ function App() {
   const createWallet = async () => {
     try {
       setLoadingWallet(true)
-      const token = localStorage.getItem('authToken')
       
-      if (!token) {
-        alert('Você precisa estar logado para criar uma carteira')
-        handleScreenTransition('login')
-        return
-      }
-
       if (!walletFormData.chave_pagbank) {
         alert('Por favor, informe sua chave PagBank')
         return
       }
 
-      const response = await fetch(API_ENDPOINTS.WALLET, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          chave_pagbank: walletFormData.chave_pagbank,
-          saldo: walletFormData.saldo || 0
-        })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        console.log('✅ Carteira criada com sucesso:', data)
+      const result = await paymentFlowService.createWallet(
+        walletFormData.chave_pagbank,
+        walletFormData.saldo || 0
+      )
+      
+      if (result.success) {
+        console.log('✅ Carteira criada com sucesso:', result.data)
         
         setShowCreateWalletModal(false)
         setWalletFormData({ chave_pagbank: '', saldo: 0 })
         
-        alert('✅ Carteira criada com sucesso!')
+        // Atualizar estados da carteira
+        setHasWallet(true)
+        setWalletData(result.data)
+        setWalletBalance(result.data.saldo)
         
-        // Buscar carteira atualizada do servidor
-        await fetchWallet()
-      } else if (response.status === 400) {
-        const errorData = await response.json()
-        alert(`Erro ao criar carteira: ${errorData.message || 'Dados inválidos'}`)
-      } else if (response.status === 409) {
-        alert('Você já possui uma carteira cadastrada')
-        setShowCreateWalletModal(false)
-        setWalletFormData({ chave_pagbank: '', saldo: 0 })
-        // Buscar carteira existente
-        await fetchWallet()
-      } else if (response.status === 500) {
-        alert('Erro no servidor. Tente novamente mais tarde.')
+        notificationService.showSuccess('Carteira criada', 'Sua carteira digital foi criada com sucesso!')
       } else {
-        alert('Erro ao criar carteira. Tente novamente.')
+        console.error('❌ Erro ao criar carteira:', result.message)
+        notificationService.showError('Erro na carteira', result.message || 'Não foi possível criar sua carteira digital.')
       }
     } catch (error) {
+      console.error('❌ Erro no createWallet:', error)
       notificationService.showError('Erro na carteira', 'Não foi possível criar sua carteira digital. Verifique sua conexão e tente novamente.')
     } finally {
       setLoadingWallet(false)
@@ -1996,7 +1949,7 @@ function App() {
           if (createWalletResponse.ok) {
             console.log('✅ Carteira criada com sucesso');
             // Recarregar dados da carteira
-            await fetchWalletBalance();
+            await fetchWallet();
           } else {
             const errorText = await createWalletResponse.text();
             console.error('❌ Erro ao criar carteira:', errorText);
@@ -2189,19 +2142,49 @@ function App() {
   // Carregar saldo do servidor quando usuário logar
   useEffect(() => {
     if (loggedUser?.id) {
-      // Primeiro, carregar do localStorage para ter dados imediatos
-      const userData = loadUserWallet(loggedUser.id)
-      
-      if (userData.wallet) {
-        console.log('💾 Dados da carteira do usuário', loggedUser.id, 'carregados do localStorage (temporário)')
-        setWalletData(userData.wallet)
-        setWalletBalance(userData.balance)
-        setHasWallet(true)
+      // Inicializar carteira usando paymentFlowService
+      const initializeWallet = async () => {
+        try {
+          // Migrar dados antigos se necessário
+          paymentFlowService.migrateOldWalletData()
+          
+          // Verificar se tem carteira local
+          const hasLocal = paymentFlowService.hasLocalWallet(loggedUser.id)
+          
+          if (hasLocal) {
+            // Carregar dados locais
+            const localBalance = paymentFlowService.getLocalBalance()
+            setWalletBalance(localBalance)
+            setHasWallet(true)
+            
+            console.log('💰 Saldo carregado do localStorage:', localBalance)
+            
+            // Tentar sincronizar com servidor em background
+            try {
+              const walletResult = await paymentFlowService.getMyWallet(loggedUser.id)
+              if (walletResult.success) {
+                setWalletData(walletResult.data)
+                setWalletBalance(walletResult.data.saldo)
+                setHasWallet(true)
+              }
+            } catch (error) {
+              console.log('📱 Usando dados locais (servidor indisponível)')
+            }
+          } else {
+            // Buscar do servidor
+            const walletResult = await paymentFlowService.getMyWallet(loggedUser.id)
+            if (walletResult.success) {
+              setWalletData(walletResult.data)
+              setWalletBalance(walletResult.data.saldo)
+              setHasWallet(true)
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao inicializar carteira:', error)
+        }
       }
       
-      // Depois, buscar do servidor para garantir dados atualizados
-      console.log('📡 Buscando carteira atualizada do servidor...')
-      fetchWallet()
+      initializeWallet()
     }
   }, [loggedUser?.id])
 
@@ -6808,26 +6791,42 @@ Usando ID temporário: ${tempId}`)
       return
     }
 
-    const serviceValue = servicePrice > 0 ? servicePrice : 119.99
-
-    // Verificar saldo suficiente
-    if (walletBalance < serviceValue) {
-      notificationService.showWarning(
-        'Saldo Insuficiente', 
-        `Você possui R$ ${walletBalance.toFixed(2)} e o serviço custa R$ ${serviceValue.toFixed(2)}. Por favor, recarregue sua carteira.`
-      )
-      return
-    }
-    
-    // Pagar serviço com carteira digital
-    const serviceId = typeof createdServiceId === 'string' ? parseInt(createdServiceId) : createdServiceId
-    const paymentSuccess = await payServiceWithWallet(serviceId)
-    
-    if (paymentSuccess) {
-      // Usar a função centralizada para pagamento confirmado
-      handlePaymentConfirmed()
-    } else {
-      notificationService.showError('Erro no Pagamento', 'Não foi possível processar o pagamento. Tente novamente.')
+    try {
+      setIsLoading(true)
+      
+      const serviceValue = servicePrice > 0 ? servicePrice : 119.99
+      const serviceId = typeof createdServiceId === 'string' ? createdServiceId : createdServiceId.toString()
+      
+      const result = await paymentFlowService.executeCompletePaymentFlow(serviceId, serviceValue)
+      
+      if (result.success) {
+        // Atualizar saldo local
+        const newBalance = paymentFlowService.getLocalBalance()
+        setWalletBalance(newBalance)
+        
+        // Usar a função centralizada para pagamento confirmado
+        handlePaymentConfirmed()
+      } else if (result.requiresRecharge) {
+        notificationService.showWarning(
+          'Saldo Insuficiente', 
+          `Você possui R$ ${walletBalance.toFixed(2)} e o serviço custa R$ ${serviceValue.toFixed(2)}. Por favor, recarregue sua carteira.`
+        )
+        setShowRechargeModal(true)
+        setRechargeAmount(result.data?.missingAmount || serviceValue - walletBalance)
+      } else if (result.nextStep === 'create-wallet') {
+        notificationService.showWarning(
+          'Carteira necessária',
+          'Você precisa criar uma carteira digital para pagar serviços.'
+        )
+        setShowCreateWalletModal(true)
+      } else {
+        notificationService.showError('Erro no Pagamento', result.message || 'Não foi possível processar o pagamento. Tente novamente.')
+      }
+    } catch (error) {
+      console.error('❌ Erro no handlePaymentConfirmation:', error)
+      notificationService.showError('Erro no Pagamento', 'Falha no processamento do pagamento. Tente novamente.')
+    } finally {
+      setIsLoading(false)
     }
   }
 

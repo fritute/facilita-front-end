@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Phone, PhoneCall, Video, Image } from 'lucide-react';
-import { API_BASE_URL } from '../config/constants';
+import { API_BASE_URL, API_ENDPOINTS } from '../config/constants';
 
 interface Message {
   id: string;
@@ -70,7 +70,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
       const token = localStorage.getItem('token');
       console.log('📥 Carregando mensagens do serviço:', serviceId);
 
-      const response = await fetch(`${API_BASE_URL}/servico/${serviceId}/mensagens`, {
+      const response = await fetch(API_ENDPOINTS.CHAT_GET_MESSAGES(serviceId), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -182,7 +182,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
       }
 
       // Enviar via API REST (sempre como backup ou principal)
-      const response = await fetch(`${API_BASE_URL}/servico/${serviceId}/mensagem`, {
+      const response = await fetch(API_ENDPOINTS.CHAT_SEND_MESSAGE(serviceId), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
