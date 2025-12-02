@@ -17,6 +17,7 @@ export function useChat(userId: number, userType: string, userName: string, serv
   const [socket, setSocket] = useState<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [lastMessageId, setLastMessageId] = useState<number>(0);
   
   console.log("🚀 [CHAT INIT] Inicializando useChat com parâmetros:", {
     userId,
@@ -24,6 +25,44 @@ export function useChat(userId: number, userType: string, userName: string, serv
     userName,
     servicoId
   });
+
+  // Função para buscar mensagens via HTTP (fallback)
+  const fetchMessagesHTTP = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/servico/${servicoId}/mensagem`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📥 [HTTP FALLBACK] Mensagens recebidas:', data);
+        
+        if (data.success && Array.isArray(data.mensagens)) {
+          const httpMessages: Message[] = data.mensagens.map((msg: any) => ({
+            servicoId: parseInt(servicoId.toString()),
+            mensagem: msg.mensagem || msg.message || '',
+            sender: msg.enviado_por === 'contratante' ? 'contratante' : 'prestador',
+            timestamp: msg.data_envio || msg.created_at || new Date().toISOString(),
+            userInfo: {
+              userId: msg.enviado_por === 'contratante' ? userId : 999,
+              userType: msg.enviado_por || 'prestador',
+              userName: msg.enviado_por === 'contratante' ? userName : 'Prestador'
+            }
+          }));
+          
+          setMessages(httpMessages);
+          console.log(`📝 [HTTP] ${httpMessages.length} mensagens carregadas`);
+        }
+      }
+    } catch (error) {
+      console.error('❌ [HTTP FALLBACK] Erro ao buscar mensagens:', error);
+    }
+  };
 
   useEffect(() => {
     // Conectar ao servidor Socket.IO
@@ -121,8 +160,34 @@ export function useChat(userId: number, userType: string, userName: string, serv
       newSocket.disconnect();
     };
   }, [userId, userType, userName, servicoId]);
+  
+  // Polling HTTP agressivo para garantir recebimento de mensagens
+  useEffect(() => {
+    if (!servicoId || servicoId === 0) return;
+    
+    // Buscar mensagens imediatamente
+    fetchMessagesHTTP();
+    
+    // Polling mais frequente: a cada 2 segundos
+    const interval = setInterval(() => {
+      console.log('🔄 [POLLING] Buscando mensagens via HTTP...');
+      fetchMessagesHTTP();
+    }, 2000);
+    
+    // Polling adicional focado apenas em mensagens do prestador
+    const prestadorPolling = setInterval(() => {
+      console.log('👨‍🔧 [PRESTADOR POLLING] Verificando mensagens do prestador...');
+      fetchMessagesHTTP();
+    }, 1500);
+    
+    return () => {
+      clearInterval(interval);
+      clearInterval(prestadorPolling);
+      console.log('🛑 [POLLING] Parando todos os pollings HTTP');
+    };
+  }, [servicoId]);
 
-  const sendMessage = (mensagem: string, targetUserId: number) => {
+  const sendMessage = async (mensagem: string, targetUserId: number) => {
     console.log("🔍 [CHAT DEBUG] Tentando enviar mensagem:", {
       socketExists: !!socket,
       isConnected,
@@ -134,20 +199,48 @@ export function useChat(userId: number, userType: string, userName: string, serv
       userName
     });
     
-    if (!socket || !isConnected) {
-      console.warn("⚠️ Socket não conectado, não é possível enviar mensagem");
-      return false;
+    // Enviar via Socket.IO se conectado
+    if (socket && isConnected) {
+      const messageData = {
+        servicoId,
+        mensagem,
+        sender: userType as "contratante" | "prestador",
+        targetUserId
+      };
+      
+      console.log("📤 [SOCKET] Enviando via Socket.IO:", messageData);
+      socket.emit("send_message", messageData);
     }
     
-    const messageData = {
-      servicoId,
-      mensagem,
-      sender: userType as "contratante" | "prestador",
-      targetUserId
-    };
-    
-    console.log("📤 ENVIANDO MENSAGEM PARA SERVIDOR:", messageData);
-    socket.emit("send_message", messageData);
+    // SEMPRE enviar via HTTP como backup
+    try {
+      const token = localStorage.getItem('authToken');
+      const httpPayload = {
+        mensagem,
+        tipo: 'texto',
+        enviado_por: userType,
+        id_servico: servicoId
+      };
+      
+      console.log("📤 [HTTP] Enviando via HTTP:", httpPayload);
+      
+      const response = await fetch(`https://facilita-c6hhb9csgygudrdz.canadacentral-01.azurewebsites.net/v1/facilita/servico/${servicoId}/mensagem`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(httpPayload)
+      });
+      
+      if (response.ok) {
+        console.log("✅ [HTTP] Mensagem enviada com sucesso via HTTP");
+      } else {
+        console.error("❌ [HTTP] Erro ao enviar via HTTP:", response.status);
+      }
+    } catch (error) {
+      console.error("❌ [HTTP] Erro de rede ao enviar:", error);
+    }
     
     // Adicionar mensagem localmente para feedback imediato
     const localMessage: Message = {
@@ -162,12 +255,28 @@ export function useChat(userId: number, userType: string, userName: string, serv
       }
     };
     
-    console.log("📝 Adicionando mensagem local:", localMessage);
+    console.log("📝 [LOCAL] Adicionando mensagem local:", localMessage);
     setMessages(prev => {
+      // Evitar duplicatas
+      const exists = prev.some(m => 
+        m.mensagem === localMessage.mensagem && 
+        m.sender === localMessage.sender &&
+        Math.abs(new Date(m.timestamp || 0).getTime() - new Date(localMessage.timestamp || 0).getTime()) < 2000
+      );
+      
+      if (exists) {
+        console.log("📝 [LOCAL] Mensagem já existe, não duplicando");
+        return prev;
+      }
+      
       const newMessages = [...prev, localMessage];
-      console.log("📚 Total de mensagens após envio:", newMessages.length);
+      console.log("📚 [LOCAL] Total de mensagens:", newMessages.length);
       return newMessages;
     });
+    
+    // Forçar atualização das mensagens após 1 segundo
+    setTimeout(fetchMessagesHTTP, 1000);
+    
     return true;
   };
 
@@ -199,6 +308,7 @@ export function useChat(userId: number, userType: string, userName: string, serv
     isConnected, 
     clearMessages,
     socket,
-    simulateMessage
+    simulateMessage,
+    refreshMessages: fetchMessagesHTTP
   };
 }

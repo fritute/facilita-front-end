@@ -195,14 +195,14 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   });
   
   // Hook de chat em tempo real
-  const { messages: chatMessages, sendMessage, isConnected, clearMessages, simulateMessage } = useChat(
+  const { messages: chatMessages, sendMessage, isConnected, clearMessages, simulateMessage, refreshMessages } = useChat(
     userId,
     'contratante',
     userName,
     parseInt(currentServiceId || '0')
   );
 
-  // Função para enviar mensagem via Socket.IO
+  // Função para enviar mensagem via sistema híbrido (Socket.IO + HTTP)
   const sendChatMessage = async () => {
     if (!newMessage.trim()) return;
     
@@ -241,14 +241,19 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
       
       console.log('🎯 PrestadorId final usado:', prestadorId);
       
-      // Usar hook useChat para enviar
-      const success = sendMessage(newMessage.trim(), prestadorId);
+      // Usar hook useChat para enviar (agora é async)
+      const success = await sendMessage(newMessage.trim(), prestadorId);
       
       if (success) {
-        console.log('✅ Mensagem enviada via Socket.IO');
+        console.log('✅ Mensagem enviada (Socket.IO + HTTP)');
         setNewMessage('');
+        
+        // Forçar busca de mensagens após 2 segundos para garantir sincronização
+        setTimeout(() => {
+          refreshMessages && refreshMessages();
+        }, 2000);
       } else {
-        console.error('❌ Erro ao enviar mensagem via Socket.IO');
+        console.error('❌ Erro ao enviar mensagem');
         notificationService.showError('Chat', 'Erro ao enviar mensagem');
       }
       
@@ -950,7 +955,8 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
               ) : chatMessages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-8">
                   <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>Inicie uma conversa com o prestador</p>
+                  <p>Carregando mensagens...</p>
+                  <p className="text-xs mt-2">🔄 Buscando mensagens do prestador</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -988,28 +994,56 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
               )}
             </div>
 
-            {/* Botões de teste (apenas para desenvolvimento) */}
+            {/* Botões de teste e debug */}
             <div className="p-2 bg-yellow-50 border-t border-yellow-200">
-              <p className="text-xs text-yellow-600 mb-2">🧪 Testes de Chat:</p>
-              <div className="flex gap-2 text-xs">
+              <p className="text-xs text-yellow-600 mb-2">🧪 Testes e Debug:</p>
+              <div className="grid grid-cols-2 gap-1 text-xs">
                 <button 
                   onClick={() => simulateMessage && simulateMessage("Olá! Estou a caminho!", true)}
                   className="px-2 py-1 bg-blue-500 text-white rounded text-xs"
                 >
-                  Simular: Prestador
+                  🚗 Simular Prestador
+                </button>
+                <button 
+                  onClick={() => refreshMessages && refreshMessages()}
+                  className="px-2 py-1 bg-green-500 text-white rounded text-xs"
+                >
+                  🔄 Buscar Mensagens
                 </button>
                 <button 
                   onClick={() => simulateMessage && simulateMessage("Chegando em 5 min!", true)}
                   className="px-2 py-1 bg-blue-500 text-white rounded text-xs"
                 >
-                  Simular: Chegando
+                  🕒 Chegando
                 </button>
                 <button 
-                  onClick={() => console.log('📊 Estado do chat:', { chatMessages: chatMessages.length, isConnected, userId, currentServiceId })}
+                  onClick={() => {
+                    console.log('📊 ESTADO COMPLETO DO CHAT:', {
+                      chatMessages: chatMessages,
+                      totalMensagens: chatMessages.length,
+                      isConnected,
+                      userId,
+                      currentServiceId,
+                      prestadorData: entregador,
+                      localStorage: {
+                        authToken: !!localStorage.getItem('authToken'),
+                        userId: localStorage.getItem('userId'),
+                        realUserId: localStorage.getItem('realUserId')
+                      }
+                    });
+                  }}
                   className="px-2 py-1 bg-gray-500 text-white rounded text-xs"
                 >
-                  Debug Log
+                  🔍 Debug Log
                 </button>
+              </div>
+              <div className="mt-1 flex gap-1">
+                <span className={`text-xs px-2 py-1 rounded ${isConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {isConnected ? '🟢 Socket OK' : '🔴 Socket OFF'}
+                </span>
+                <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700">
+                  💬 {chatMessages.length} msgs
+                </span>
               </div>
             </div>
 
