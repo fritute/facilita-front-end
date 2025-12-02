@@ -197,8 +197,8 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     }
   };
 
-  // Função para enviar mensagem no chat via API
-  const sendMessage = async () => {
+  // Função para enviar mensagem no chat via WebSocket
+  const sendChatMessage = async () => {
     if (!newMessage.trim()) return;
     
     const chatServiceId = getCurrentServiceId();
@@ -208,17 +208,34 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     }
 
     try {
-      const result = await chatService.sendTextMessage(chatServiceId, newMessage.trim());
+      console.log('📤 Enviando mensagem:', newMessage.trim());
       
-      if (result.success) {
-        setNewMessage('');
-        await loadChatMessages();
-      } else {
-        notificationService.showError('Chat', result.message || 'Erro ao enviar mensagem');
-      }
+      // Obter ID do prestador
+      const prestadorId = localStorage.getItem('prestadorId') || '2';
+      
+      // Usar WebSocket principal para enviar mensagem
+      sendMessage(newMessage.trim(), parseInt(prestadorId));
+      
+      // Adicionar mensagem localmente
+      const localMessage: ChatMessage = {
+        id: Date.now(),
+        id_servico: parseInt(chatServiceId),
+        id_contratante: 0,
+        id_prestador: 0,
+        mensagem: newMessage.trim(),
+        tipo: 'texto',
+        url_anexo: null,
+        enviado_por: 'contratante',
+        lida: false,
+        data_envio: new Date().toISOString()
+      };
+      
+      setChatMessages(prev => [...prev, localMessage]);
+      setNewMessage('');
+      
     } catch (error) {
       console.error('❌ Erro ao enviar mensagem:', error);
-      notificationService.showError('Chat', 'Erro de conexão');
+      notificationService.showError('Chat', 'Erro ao enviar mensagem');
     }
   };
 
@@ -309,14 +326,16 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   
   const currentServiceId = getCurrentServiceId();
   
-  // WebSocket hook - apenas usando o necessário
+  // WebSocket hook - habilitando chat também
   const { 
     isConnected: isWebSocketConnected, 
-    onLocationUpdate
+    onLocationUpdate,
+    onMessageReceived,
+    sendMessage
   } = useWebSocket({
     serviceId: currentServiceId || undefined,
     enableTracking: true,
-    enableChat: false
+    enableChat: true
   });
 
   // Inicializar sistema de chamadas
@@ -380,13 +399,31 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   // Conectar ao WebSocket do chat quando necessário
   useEffect(() => {
     if (isChatOpen && currentServiceId) {
-      const userId = localStorage.getItem('userId');
-      if (userId) {
-        chatService.connectToChat(currentServiceId, userId);
+      console.log('💬 Ativando chat e carregando mensagens...');
+      
+      // Carregar mensagens existentes
+      loadChatMessages();
+      
+      // Escutar novas mensagens via WebSocket principal
+      onMessageReceived((message) => {
+        console.log('📨 Nova mensagem recebida:', message);
         
-        const removeMessageListener = chatService.onNewMessage((newMessage: ChatMessage) => {
-          setChatMessages(prev => [...prev, newMessage]);
-        });
+        // Converter formato do WebSocket para nosso formato
+        const newMessage: ChatMessage = {
+          id: Date.now(),
+          id_servico: parseInt(currentServiceId),
+          id_contratante: 0,
+          id_prestador: 0,
+          mensagem: message.mensagem,
+          tipo: 'texto',
+          url_anexo: null,
+          enviado_por: message.sender === 'contratante' ? 'contratante' : 'prestador',
+          lida: false,
+          data_envio: message.timestamp || new Date().toISOString()
+        };
+        
+        setChatMessages(prev => [...prev, newMessage]);
+      });
 
         return () => {
           removeMessageListener();
@@ -962,12 +999,12 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
                   placeholder="Digite sua mensagem..."
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
                 <button 
-                  onClick={sendMessage}
+                  onClick={sendChatMessage}
                   disabled={!newMessage.trim()}
                   className="bg-green-500 text-white p-2 rounded-full hover:bg-green-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
