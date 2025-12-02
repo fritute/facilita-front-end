@@ -181,15 +181,32 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
   // Função para carregar mensagens do chat
   const loadChatMessages = async () => {
     const chatServiceId = getCurrentServiceId();
-    if (!chatServiceId) return;
+    if (!chatServiceId) {
+      console.warn('⚠️ Não há ID de serviço para carregar mensagens');
+      return;
+    }
 
     try {
       setIsLoadingMessages(true);
+      console.log('📥 Carregando mensagens do serviço:', chatServiceId);
+      
       const result = await chatService.getMessages(chatServiceId);
+      
+      console.log('📦 Resultado do chat:', result);
       
       if (result.success && result.data) {
         const messages = Array.isArray(result.data) ? result.data : [];
-        setChatMessages(messages);
+        console.log(`✅ ${messages.length} mensagens carregadas`);
+        
+        // Atualizar apenas se houver mudanças
+        setChatMessages(prev => {
+          if (JSON.stringify(prev) !== JSON.stringify(messages)) {
+            return messages;
+          }
+          return prev;
+        });
+      } else {
+        console.warn('⚠️ Nenhuma mensagem encontrada ou erro:', result);
       }
     } catch (error) {
       console.error('❌ Erro ao carregar mensagens:', error);
@@ -407,15 +424,18 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
     if (isChatOpen && currentServiceId) {
       console.log('💬 Ativando chat e carregando mensagens...');
       
-      // Carregar mensagens existentes
+      // Carregar mensagens existentes imediatamente
       loadChatMessages();
       
-      // Usar websocketService diretamente para chat
+      // Polling HTTP para garantir que todas as mensagens sejam carregadas
+      // Isso captura mensagens enviadas via HTTP pelo prestador
+      const chatPolling = setInterval(() => {
+        loadChatMessages();
+      }, 2000); // Reduzido para 2 segundos para resposta mais rápida
       
-      // Conectar ao WebSocket se não conectado
+      // Tentar conectar WebSocket (mas não depender dele)
       if (!websocketService.getConnectionStatus()) {
         websocketService.connect().then(() => {
-          // Registrar usuário conectado
           const userData = JSON.parse(localStorage.getItem('userData') || '{}');
           const userType = localStorage.getItem('userType') || 'CONTRATANTE';
           
@@ -425,16 +445,16 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
             userName: userData.nome || 'Usuário'
           });
           
-          // Entrar na sala do serviço
           websocketService.joinService(currentServiceId);
-          
-          console.log('✅ WebSocket conectado e usuário registrado para chat');
+          console.log('✅ WebSocket conectado para chat em tempo real');
+        }).catch(err => {
+          console.warn('⚠️ WebSocket não disponível, usando apenas polling HTTP:', err);
         });
       }
       
-      // Escutar mensagens recebidas
-      websocketService.onMessageReceived((message) => {
-        console.log('📨 Mensagem recebida via websocketService:', message);
+      // Escutar mensagens em tempo real via WebSocket (complementar ao polling)
+      const messageHandler = (message: any) => {
+        console.log('📨 Mensagem em tempo real via WebSocket:', message);
         
         const newMessage: ChatMessage = {
           id: Date.now(),
@@ -449,14 +469,17 @@ const ServiceTracking: React.FC<ServiceTrackingProps> = ({
           data_envio: message.timestamp || new Date().toISOString()
         };
         
-        setChatMessages(prev => [...prev, newMessage]);
-      });
+        // Adicionar apenas se não existir (evitar duplicatas)
+        setChatMessages(prev => {
+          const exists = prev.some(m => 
+            m.mensagem === newMessage.mensagem && 
+            m.data_envio === newMessage.data_envio
+          );
+          return exists ? prev : [...prev, newMessage];
+        });
+      };
       
-      // Polling para garantir que mensagens sejam carregadas
-      const chatPolling = setInterval(() => {
-        console.log('🔄 Recarregando mensagens do chat...');
-        loadChatMessages();
-      }, 3000);
+      websocketService.onMessageReceived(messageHandler);
       
       return () => {
         clearInterval(chatPolling);

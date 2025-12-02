@@ -1974,23 +1974,41 @@ function App() {
 
       // Verificar se carteira existe, senão criar
       try {
+        console.log('🔍 Verificando se carteira existe...');
         const walletCheckResponse = await fetch(API_ENDPOINTS.MY_WALLET, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (!walletCheckResponse.ok) {
-          console.log('💳 Carteira não existe, criando...');
-          await fetch(API_ENDPOINTS.MY_WALLET, {
+          console.log('💳 Carteira não existe, criando nova carteira...');
+          const createWalletResponse = await fetch(API_ENDPOINTS.MY_WALLET, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ saldo: walletBalance })
+            body: JSON.stringify({ 
+              saldo: walletBalance || 0,
+              usuario_id: loggedUser?.id 
+            })
           });
+          
+          if (createWalletResponse.ok) {
+            console.log('✅ Carteira criada com sucesso');
+            // Recarregar dados da carteira
+            await fetchWalletBalance();
+          } else {
+            const errorText = await createWalletResponse.text();
+            console.error('❌ Erro ao criar carteira:', errorText);
+            throw new Error('Não foi possível criar a carteira');
+          }
+        } else {
+          console.log('✅ Carteira já existe');
         }
       } catch (error) {
-        console.warn('⚠️ Erro ao verificar/criar carteira:', error);
+        console.error('❌ Erro crítico ao verificar/criar carteira:', error);
+        alert('Erro ao verificar carteira. Por favor, verifique sua conexão e tente novamente.');
+        return false;
       }
 
       // Chamar API de pagamento
@@ -2008,6 +2026,19 @@ function App() {
       if (!response.ok) {
         const errorText = await response.text().catch(() => '')
         console.error('❌ Erro ao pagar serviço:', errorText)
+        console.error('❌ Status:', response.status)
+        console.error('❌ Detalhes do erro:', errorText)
+        
+        // Tentar parsear mensagem de erro
+        let errorMessage = 'Erro ao processar pagamento';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        
+        alert(`Erro no pagamento: ${errorMessage}`);
         
         // Se erro 500, usar dados mockados (modo sandbox)
         if (response.status === 500) {
